@@ -1,13 +1,9 @@
 fastapi
 uvicorn
-
-faster-whisper==1.0.0
+faster-whisper
 soundfile
 numpy
-
 gTTS
-
 python-multipart
-python-dotenv
-
 loguru
+python-dotenv
