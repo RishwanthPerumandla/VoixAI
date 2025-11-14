@@ -1,0 +1,103 @@
+# -----------------------------
+# Python
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.log
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.dll
+*.dylib
+
+# -----------------------------
+# FastAPI / Uvicorn / Build
+# -----------------------------
+*.db
+*.sqlite3
+*.pid
+
+# Local development
+.idea/
+.vscode/
+*.code-workspace
+
+# -----------------------------
+# Audio files (Whisper / TTS)
+# -----------------------------
+*.wav
+*.mp3
+*.ogg
+*.m4a
+*.flac
+*.aac
+audio/
+tts_cache/
+stt_cache/
+
+# Temp directories
+tmp/
+temp/
+cache/
+__temp__/
+
+# Uploaded files
+uploads/
+
+# -----------------------------
+# Logs
+# -----------------------------
+logs/
+*.log
+*.out
+*.err
+
+# -----------------------------
+# Docker
+# -----------------------------
+docker-data/
+docker-compose.override.yml
+
+# -----------------------------
+# OS-specific files
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Python environments
+# -----------------------------
+pip-wheel-metadata/
+pip-log.txt
+
+# -----------------------------
+# Environment Variables
+# -----------------------------
+.env
+.env.*
+*.env
+
+# -----------------------------
+# Local Python Tools
+# -----------------------------
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# -----------------------------
+# Cache
+# -----------------------------
+*.cache
+*.pytest_cache
+.cache/
+build/
+dist/
