@@ -1,0 +1,30 @@
+app:
+  name: "VoixAI"
+
+hardware:
+  device: "cpu"
+  sample_rate: 16000
+
+audio:
+  vad_threshold: 0.5
+  silence_duration_ms: 800
+  min_utterance_ms: 500
+
+stt:
+  model: "tiny.en"
+  compute_type: "int8"
+  language: "en"
+
+llm:
+  provider: "groq"
+  model: "llama-3.3-70b-versatile"
+  temperature: 0.3
+  max_tokens: 150
+
+tts:
+  voice: "af_bella"
+  speed: 1.1
+  sample_rate: 24000
+
+database:
+  path: "orders.db"
