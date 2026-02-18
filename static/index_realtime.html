@@ -204,9 +204,49 @@
             color: #888;
             font-size: 1.1rem;
         }
+        .start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 26, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .start-overlay.hidden {
+            display: none;
+        }
+        .start-button {
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            background: linear-gradient(135deg, #00b894, #00a085);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .start-button:hover {
+            transform: scale(1.05);
+        }
+        .start-text {
+            margin-top: 20px;
+            color: #888;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <div class="start-overlay" id="startOverlay">
+        <h1 style="font-size: 3rem; margin-bottom: 30px; background: linear-gradient(90deg, #00d4ff, #7b2cbf); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">VoixAI</h1>
+        <button class="start-button" id="startBtn">Click to Start</button>
+        <p class="start-text">Enable audio to hear Tasha's greeting</p>
+    </div>
+    
     <div class="container">
         <div class="header">
             <h1>VoixAI</h1>
@@ -265,6 +305,7 @@
         let audioContext = null;
         let processor = null;
         let isRecording = false;
+        let greetingAudio = null;  // Store greeting for playback after interaction
         
         function addMessage(text, role) {
             const msg = document.createElement('div');
@@ -293,7 +334,14 @@
         
         function playAudio(base64Data) {
             const audio = new Audio('data:audio/wav;base64,' + base64Data);
-            audio.play().catch(err => console.error('Audio error:', err));
+            audio.play().catch(err => {
+                console.error('Audio error:', err);
+                // If autoplay blocked, store for later
+                if (err.name === 'NotAllowedError') {
+                    console.log('Audio blocked - will retry after user interaction');
+                }
+            });
+            return audio;
         }
         
         function updateVolume(rms) {
@@ -419,7 +467,22 @@
                 const data = JSON.parse(event.data);
                 console.log('Received:', data.type);
                 
-                if (data.type === 'greeting' || data.type === 'response') {
+                if (data.type === 'greeting') {
+                    addMessage(data.text, 'assistant');
+                    if (data.audio) {
+                        // Check if start overlay is still visible
+                        const overlay = document.getElementById('startOverlay');
+                        if (overlay.classList.contains('hidden')) {
+                            // User already clicked start, play immediately
+                            playAudio(data.audio);
+                        } else {
+                            // Store for later playback
+                            greetingAudio = data.audio;
+                        }
+                    }
+                    if (data.order) updateOrder(data.order);
+                }
+                else if (data.type === 'response') {
                     addMessage(data.text, 'assistant');
                     if (data.audio) playAudio(data.audio);
                     if (data.order) updateOrder(data.order);
@@ -454,6 +517,23 @@
         
         document.getElementById('resetBtn').addEventListener('click', () => {
             if (ws) ws.send(JSON.stringify({command: 'reset'}));
+        });
+        
+        // Start button handler
+        document.getElementById('startBtn').addEventListener('click', () => {
+            // Hide overlay
+            document.getElementById('startOverlay').classList.add('hidden');
+            
+            // Initialize audio context (required for some browsers)
+            const tempAudio = new Audio();
+            tempAudio.play().catch(() => {});
+            
+            // Play stored greeting if available
+            if (greetingAudio) {
+                console.log('Playing stored greeting');
+                playAudio(greetingAudio);
+                greetingAudio = null;
+            }
         });
         
         connect();
