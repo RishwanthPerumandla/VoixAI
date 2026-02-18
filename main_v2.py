@@ -80,10 +80,11 @@ async def websocket_endpoint(websocket: WebSocket):
     print(f"\n[WS:{session_id}] ===== New Connection (Always Listening) =====")
     
     # Initialize per-connection state
+    audio_gain = CONFIG.get("audio", {}).get("audio_gain", 1.0)
     audio_buffer = AudioBuffer(
         sample_rate=CONFIG["hardware"]["sample_rate"],
         silence_ms=800,  # 800ms silence = end of utterance
-        vad_threshold=0.5,
+        vad_threshold=CONFIG.get("audio", {}).get("vad_threshold", 0.3),
         min_utterance_ms=500
     )
     
@@ -237,10 +238,26 @@ async def websocket_endpoint(websocket: WebSocket):
             if isinstance(message, bytes):
                 # Convert to numpy
                 int16_data = np.frombuffer(message, dtype=np.int16)
+                
+                # Apply gain amplification if audio is quiet
+                max_val = np.max(np.abs(int16_data))
+                if max_val < 1000:  # Very quiet audio
+                    gain = min(10.0, 3000.0 / max(max_val, 1))  # Auto gain
+                    int16_data = (int16_data.astype(np.float32) * gain).clip(-32768, 32767).astype(np.int16)
+                    if len(audio_chunks) % 50 == 0:
+                        print(f"[WS:{session_id}] Applied gain {gain:.1f}x (max was {max_val})")
+                
+                # Debug: log first few chunks
+                chunk_num = (len(audio_chunks) + 1)
+                if chunk_num <= 5 or chunk_num % 50 == 0:
+                    new_max = np.max(np.abs(int16_data))
+                    print(f"[WS:{session_id}] Audio chunk #{chunk_num}: {len(message)} bytes, max={max_val}->{new_max}")
+                
                 float_data = int16_data.astype(np.float32) / 32768.0
+                audio_chunks.append(float_data)
                 
                 # Feed to VAD
-                utterance = audio_buffer.add_chunk(message)
+                utterance = audio_buffer.add_chunk(int16_data.tobytes())
                 
                 # If VAD detected end of utterance, process it
                 if utterance is not None:

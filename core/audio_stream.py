@@ -56,7 +56,9 @@ class AudioBuffer:
         # Debug logging (every 20 chunks)
         debug = len(self.buffer) % (4096 * 20) < 4096
         if debug:
-            print(f"[VAD] prob={speech_prob:.2f}, speaking={self.is_speaking}, silence={self.silence_counter/16000:.2f}s, buf={len(self.buffer)/16000:.2f}s")
+            buffer_sec = len(self.buffer)/16000
+            rms = np.sqrt(np.mean(chunk_float32**2))
+            print(f"[VAD] prob={speech_prob:.2f}, speaking={self.is_speaking}, silence={self.silence_counter/16000:.2f}s, buf={buffer_sec:.2f}s, rms={rms:.4f}")
         
         # State machine for voice activity
         if speech_prob > self.vad_threshold:

@@ -123,6 +123,18 @@
             <div class="instructions">
                 Just speak naturally - no button needed. Pause when done speaking.
             </div>
+            
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">Microphone Level:</div>
+                <div style="width: 100%; height: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
+                    <div id="volumeBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00b894, #fdcb6e, #e74c3c); transition: width 0.1s;"></div>
+                </div>
+                <div id="volumeText" style="font-size: 0.75rem; color: #666; margin-top: 5px;">Waiting for audio...</div>
+            </div>
+            
+            <div id="debugLog" style="margin-top: 20px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto; color: #888;">
+                Debug logs will appear here...
+            </div>
         </div>
         
         <div class="side-panel">
@@ -150,6 +162,15 @@
         let ws = null;
         let audioContext = null;
         let processor = null;
+        
+        function debug(msg) {
+            console.log(msg);
+            const div = document.getElementById('debugLog');
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            div.appendChild(line);
+            div.scrollTop = div.scrollHeight;
+        }
         
         function setStatus(status) {
             statusDot.className = 'status-dot ' + status;
@@ -202,19 +223,56 @@
                 source.connect(processor);
                 processor.connect(audioContext.destination);
                 
+                let chunkCount = 0;
+                const volumeBar = document.getElementById('volumeBar');
+                const volumeText = document.getElementById('volumeText');
+                
                 processor.onaudioprocess = (e) => {
                     if (!ws || ws.readyState !== WebSocket.OPEN) return;
                     const inputData = e.inputBuffer.getChannelData(0);
+                    
+                    // Calculate audio level
+                    let maxVal = 0;
+                    let sumSquares = 0;
+                    for (let i = 0; i < inputData.length; i++) {
+                        maxVal = Math.max(maxVal, Math.abs(inputData[i]));
+                        sumSquares += inputData[i] * inputData[i];
+                    }
+                    const rms = Math.sqrt(sumSquares / inputData.length);
+                    
+                    // Update volume meter
+                    const volumePercent = Math.min(100, (rms * 100 * 3)).toFixed(0);
+                    volumeBar.style.width = volumePercent + '%';
+                    
+                    if (rms < 0.01) {
+                        volumeText.textContent = 'Too quiet - speak louder or check mic';
+                        volumeText.style.color = '#e74c3c';
+                    } else if (rms < 0.05) {
+                        volumeText.textContent = 'Quiet but detected';
+                        volumeText.style.color = '#fdcb6e';
+                    } else {
+                        volumeText.textContent = 'Good level';
+                        volumeText.style.color = '#00b894';
+                    }
+                    
+                    // Convert to int16
                     const int16Data = new Int16Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
                         int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
                     }
+                    
                     ws.send(int16Data.buffer);
+                    
+                    // Debug log every 50 chunks
+                    chunkCount++;
+                    if (chunkCount % 50 === 1) {
+                        debug(`Audio chunk #${chunkCount}, level: ${(rms*100).toFixed(1)}%`);
+                    }
                 };
                 
-                console.log('Audio initialized - always listening');
+                debug('Audio initialized - sending data');
             } catch (err) {
-                console.error('Audio init failed:', err);
+                debug('ERROR: Audio init failed - ' + err.message);
                 addMessage('Microphone access required', 'system');
             }
         }
@@ -222,16 +280,17 @@
         function connect() {
             if (ws) ws.close();
             
+            debug('Connecting...');
             ws = new WebSocket(WS_URL);
             
             ws.onopen = () => {
-                console.log('Connected - always listening mode');
+                debug('Connected - always listening mode');
                 setStatus('listening');
             };
             
             ws.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
-                console.log('Received:', data.type);
+                debug('Received: ' + data.type + (data.text ? ' - "' + data.text.substring(0, 30) + '..."' : ''));
                 
                 if (data.type === 'greeting' || data.type === 'response') {
                     addMessage(data.text, 'assistant');

@@ -6,9 +6,10 @@ hardware:
   sample_rate: 16000
 
 audio:
-  vad_threshold: 0.5
+  vad_threshold: 0.3
   silence_duration_ms: 800
   min_utterance_ms: 500
+  audio_gain: 5.0
 
 stt:
   model: "tiny.en"
