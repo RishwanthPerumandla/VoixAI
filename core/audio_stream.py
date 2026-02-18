@@ -6,15 +6,53 @@ import torch
 from typing import Optional
 
 
+def normalize_audio(audio: np.ndarray, target_rms: float = 0.1, 
+                   noise_gate: float = 0.01) -> np.ndarray:
+    """
+    Normalize audio to target RMS level.
+    
+    Args:
+        audio: Input audio array
+        target_rms: Target RMS level (0.1 = -20dB)
+        noise_gate: Minimum level to avoid amplifying silence
+    
+    Returns:
+        Normalized audio array
+    """
+    # Calculate current RMS
+    rms = np.sqrt(np.mean(audio ** 2))
+    
+    # If below noise gate, don't amplify (it's probably silence)
+    if rms < noise_gate:
+        return audio
+    
+    # Calculate gain needed
+    gain = target_rms / (rms + 1e-8)
+    
+    # Limit gain to avoid clipping (max 20x amplification)
+    gain = min(gain, 20.0)
+    
+    # Apply gain
+    normalized = audio * gain
+    
+    # Soft clipping to prevent hard distortion
+    normalized = np.tanh(normalized)
+    
+    return normalized
+
+
 class AudioBuffer:
     """Accumulates audio chunks and detects end of utterance using Silero VAD"""
     
-    def __init__(self, sample_rate: int = 16000, silence_ms: int = 800, 
-                 vad_threshold: float = 0.5, min_utterance_ms: int = 500):
+    def __init__(self, sample_rate: int = 16000, silence_ms: int = 1500, 
+                 vad_threshold: float = 0.4, min_utterance_ms: int = 800,
+                 normalization: bool = True, noise_gate: float = 0.01):
         self.sample_rate = sample_rate
         self.silence_samples = int(silence_ms * sample_rate / 1000)
         self.min_utterance_samples = int(min_utterance_ms * sample_rate / 1000)
         self.vad_threshold = vad_threshold
+        self.normalization = normalization
+        self.noise_gate = noise_gate
         
         # Load Silero VAD
         self.model, utils = torch.hub.load(
@@ -38,6 +76,12 @@ class AudioBuffer:
         # Convert Int16 bytes to float32 [-1, 1]
         chunk_int16 = np.frombuffer(chunk_bytes, dtype=np.int16)
         chunk_float32 = chunk_int16.astype(np.float32) / 32768.0
+        
+        # Apply normalization if enabled
+        if self.normalization:
+            chunk_float32 = normalize_audio(chunk_float32, 
+                                          target_rms=0.1, 
+                                          noise_gate=self.noise_gate)
         
         # Append to buffer
         self.buffer = np.concatenate([self.buffer, chunk_float32])
@@ -74,14 +118,20 @@ class AudioBuffer:
             
             # Check if silence duration exceeded
             if self.silence_counter >= self.silence_samples:
-                print(f"[VAD] Silence threshold reached! Buffer: {len(self.buffer)/16000:.2f}s, is_speaking was: {self.is_speaking}")
+                buffer_sec = len(self.buffer) / self.sample_rate
+                print(f"[VAD] Silence threshold reached! Buffer: {buffer_sec:.2f}s, is_speaking was: {self.is_speaking}")
                 # End of utterance detected
                 if len(self.buffer) >= self.min_utterance_samples:
                     utterance = self.buffer.copy()
+                    
+                    # Final normalization of full utterance
+                    if self.normalization:
+                        utterance = normalize_audio(utterance, target_rms=0.15, noise_gate=0.005)
+                    
                     self.reset()
                     return utterance
                 else:
-                    print(f"[VAD] Utterance too short ({len(self.buffer)/16000:.2f}s < {self.min_utterance_samples/16000:.2f}s), resetting")
+                    print(f"[VAD] Utterance too short ({buffer_sec:.2f}s < {self.min_utterance_samples/self.sample_rate:.2f}s), resetting")
                     self.reset()
                     
         return None
