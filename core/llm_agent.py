@@ -255,8 +255,11 @@ class ConversationAgent:
                         print(f"[Agent] Failed to parse tool arguments: {e}")
                         response_text = "Sorry, say that again?"
             
+            # Clean response - remove any function call syntax that leaked through
+            response_text = self._clean_response_text(response_text)
+            
             # Update state based on user intent if no tool call
-            elif not order_data:
+            if not message.tool_calls and not order_data:
                 user_lower = user_text.lower()
                 if any(x in user_lower for x in ["that's all", "that is all", "done", "finished", "complete"]):
                     order_data = {"items": [], "order_complete": True}
@@ -382,6 +385,34 @@ class ConversationAgent:
                 text = "Anything else for ya?"
                 break
         return text
+    
+    def _clean_response_text(self, text: str) -> str:
+        """Remove function call syntax and clean up response"""
+        if not text:
+            return text
+        
+        import re
+        
+        # Remove function call blocks: <function=...>...</function>
+        text = re.sub(r'<function=[^>]+>.*?</function>', '', text, flags=re.DOTALL)
+        
+        # Remove JSON-like function calls
+        text = re.sub(r'\{[^}]*"function"[^}]*\}', '', text)
+        text = re.sub(r'\{[^}]*"tool_calls"[^}]*\}', '', text)
+        
+        # Clean up whitespace
+        text = ' '.join(text.split())
+        
+        # If empty after cleaning, provide fallback
+        if not text.strip():
+            if self.state == ConversationState.TAKING_ITEMS:
+                return "Gotcha, anything else?"
+            elif self.state == ConversationState.CONFIRMING:
+                return "That look right?"
+            else:
+                return "What else can I getcha?"
+        
+        return text.strip()
     
     def get_order_summary(self) -> Dict:
         """Returns current order summary"""
