@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-faster-whisper
-soundfile
-numpy
-gTTS
-python-multipart
-loguru
-python-dotenv

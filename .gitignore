@@ -1,103 +1,71 @@
-# -----------------------------
 # Python
-# -----------------------------
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.pkl
-*.log
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Virtual environment
+# Virtual environments
 venv/
 env/
-.venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Byte-compiled / optimized / DLL files
-*.so
-*.dll
-*.dylib
-
-# -----------------------------
-# FastAPI / Uvicorn / Build
-# -----------------------------
-*.db
-*.sqlite3
-*.pid
-
-# Local development
-.idea/
+# IDEs
 .vscode/
-*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
 
-# -----------------------------
-# Audio files (Whisper / TTS)
-# -----------------------------
-*.wav
-*.mp3
-*.ogg
-*.m4a
-*.flac
-*.aac
-audio/
-tts_cache/
-stt_cache/
+# Environment variables
+.env
+.env.local
+.env.*.local
 
-# Temp directories
-tmp/
-temp/
-cache/
-__temp__/
+# Database
+*.db
+*.sqlite
+*.sqlite3
+orders.db
+orders-backup-*.db
+data/
 
-# Uploaded files
-uploads/
-
-# -----------------------------
 # Logs
-# -----------------------------
-logs/
 *.log
-*.out
-*.err
+logs/
 
-# -----------------------------
-# Docker
-# -----------------------------
-docker-data/
-docker-compose.override.yml
-
-# -----------------------------
-# OS-specific files
-# -----------------------------
+# OS
 .DS_Store
 Thumbs.db
 
-# -----------------------------
-# Python environments
-# -----------------------------
-pip-wheel-metadata/
-pip-log.txt
-
-# -----------------------------
-# Environment Variables
-# -----------------------------
-.env
-.env.*
-*.env
-
-# -----------------------------
-# Local Python Tools
-# -----------------------------
-.mypy_cache/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# -----------------------------
-# Cache
-# -----------------------------
-*.cache
-*.pytest_cache
+# Model caches
 .cache/
-build/
-dist/
+*.pth
+*.ckpt
+*.bin
+
+# Test files
+test_*.py
+*_test.py
+
+# Temporary files
+tmp/
+temp/
+*.tmp

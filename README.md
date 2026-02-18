@@ -1,211 +1,172 @@
-# 🎙️ VoixAI — AI Voice Ordering System (MVP Documentation)
+# VoixAI
 
----
+Real-time AI voice ordering system simulating a human Wingstop cashier named "Tasha".
 
-## 🧩 Project Overview
+## Overview
 
-The **VoixAI Voice Ordering System** aims to automate *call-in pickup orders* using an AI-powered conversational system that sounds human-like, understands natural language, and accurately places customer orders into a structured format.
+VoixAI is a voice-enabled conversational AI system for restaurant order taking. It processes natural speech input, extracts order details using function calling, and responds with synthesized speech using a consistent persona.
 
-The MVP (Minimum Viable Product) will:
+### Key Features
 
-* Handle real-time voice calls from customers.
-* Recognize and transcribe speech to text (STT).
-* Understand and parse the order using NLP.
-* Confirm the order verbally with a human-like AI voice (TTS).
-* Store the order in a local database for review.
+- Real-time voice conversation via WebSocket
+- Speech-to-Text using faster-whisper (tiny.en, CPU-optimized)
+- Large Language Model using Groq API (llama-3.3-70b-versatile)
+- Text-to-Speech using Kokoro (af_bella voice)
+- SQLite persistence for orders and conversation logs
+- Voice Activity Detection using Silero VAD
+- Function calling for structured order extraction
 
-The goal is to build and test this system locally (free or near-zero cost), prove functionality, and later integrate with Twilio or similar services for production.
+## Architecture
 
----
-
-## ⚙️ High-Level System Architecture (MVP)
-
-```text
-+------------------------------+
-|         Phone Caller         |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-|     Telephony Layer (Local)  |
-|  - Asterisk / SIP.js / WebRTC|
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Speech-to-Text (STT) Engine  |
-|  - Whisper (local) or AWS Transcribe |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-|  NLU + Order Parser (Core)   |
-|  - Intent + Entity Extraction|
-|  - Order Slot Filling        |
-|  - Menu & Quantity Handling  |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-|  Text-to-Speech (TTS) Engine |
-|  - ElevenLabs / Coqui / Polly|
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Local Database (SQLite)      |
-|  - Stores Orders & Metadata  |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-|   Developer Dashboard (CLI)  |
-|  - Monitor Orders / Logs     |
-+------------------------------+
+```
+Browser (16kHz PCM) 
+    -> WebSocket 
+    -> FastAPI 
+    -> AudioBuffer (VAD) 
+    -> Whisper (STT) 
+    -> Groq LLM (reasoning) 
+    -> Kokoro (TTS) 
+    -> WebSocket 
+    -> Browser Playback
 ```
 
----
+## Project Structure
 
-## ⚙️ Core Components Breakdown
+```
+.
+├── core/
+│   ├── __init__.py
+│   ├── audio_stream.py      # Audio buffer with VAD
+│   ├── stt_engine.py        # Speech-to-text (Whisper)
+│   ├── llm_agent.py         # Conversational AI (Groq)
+│   ├── tts_engine.py        # Text-to-speech (Kokoro)
+│   └── order_manager.py     # SQLite persistence
+├── static/
+│   └── index.html           # Web client
+├── main.py                  # FastAPI application entry
+├── config.yaml              # Configuration
+├── requirements.txt         # Python dependencies
+└── .env                     # Environment variables
+```
 
-### 1. Telephony Layer (Local Simulation)
+## Requirements
 
-* **Goal:** Simulate or receive calls locally.
-* **Tools:**
+- Python 3.10+
+- Intel i7 8th Gen or equivalent (CPU-only, no GPU required)
+- 16GB RAM
+- Microphone access for voice input
 
-  * **Option 1 (Local Testing):** Asterisk PBX or SIP.js with WebRTC frontend.
-  * **Option 2 (Production):** Twilio Voice, Vonage, or AWS Connect.
-* **Functionality:**
+## Installation
 
-  * Capture live audio stream.
-  * Forward stream to STT in near real-time.
+### 1. Clone and Setup
 
-### 2. Speech-to-Text (STT)
+```bash
+# Create virtual environment
+python -m venv venv
 
-* **Goal:** Convert the caller’s voice into text.
-* **Options:**
+# Activate (Windows)
+venv\Scripts\activate
 
-  * **Local:** OpenAI Whisper (via API or local inference).
-  * **Cloud:** AWS Transcribe (cheap pay-per-use).
-* **MVP Choice:** Whisper (local model for cost-free development).
+# Install PyTorch CPU first (required for faster-whisper and kokoro)
+pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
 
-### 3. Natural Language Understanding (NLU)
+# Install remaining dependencies
+pip install -r requirements.txt
+```
 
-* **Goal:** Understand customer intent and extract structured order details.
-* **Approach:**
+### 2. Configure API Keys
 
-  * Parse phrases like: *“I’d like 10 lemon pepper wings and a Coke.”*
-  * Extract:
+Create `.env` file:
 
-    * Item: `lemon pepper wings`
-    * Quantity: `10`
-    * Drink: `Coke`
-* **Tools:** SpaCy, Rasa NLU, or custom regex/LLM parser.
-* **MVP Choice:** Lightweight custom parser (regex + rule-based), later extend with Rasa or LLM.
+```properties
+GROQ_API_KEY=gsk_your_key_here
+```
 
-### 4. Text-to-Speech (TTS)
+Get your free API key at: https://console.groq.com
 
-* **Goal:** Reply with a natural, human-like voice.
-* **Options:**
+### 3. Run
 
-  * **Local/Free:** Coqui TTS (open-source).
-  * **Cloud:** ElevenLabs (most realistic) or AWS Polly.
-* **MVP Choice:** Coqui TTS for local testing, then switch to ElevenLabs for demo.
+```bash
+python main.py
+```
 
-### 5. Database & Order Storage
+Open browser: http://localhost:8000
 
-* **Goal:** Store all structured orders.
-* **Tech:** SQLite for local testing (PostgreSQL later for production).
-* **Schema Example:**
+## Usage
 
-  ```sql
-  orders (
-    id INTEGER PRIMARY KEY,
-    customer_name TEXT,
-    order_items JSON,
-    total_price REAL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-  ```
+1. Click and hold the microphone button
+2. Speak your order naturally (e.g., "I'd like 10 lemon pepper wings and a Coke")
+3. Release the button
+4. Tasha will confirm and ask if you need anything else
+5. Say "That's all" when finished, then "Yes" to confirm
 
-### 6. Developer Dashboard / CLI
+## Configuration
 
-* **Goal:** Monitor all interactions and orders.
-* **Functionality:**
+Edit `config.yaml` to adjust settings:
 
-  * Display recognized text and structured order.
-  * Show conversation flow.
-  * Allow order confirmation or replay.
+```yaml
+hardware:
+  device: "cpu"
+  sample_rate: 16000
 
----
+audio:
+  vad_threshold: 0.5
+  silence_duration_ms: 800
+  min_utterance_ms: 500
 
-## 🧰 Tech Stack Summary (MVP Focused)
+stt:
+  model: "tiny.en"
+  compute_type: "int8"
 
-| Layer                 | Tool/Tech                 | Mode  | Notes                           |
-| --------------------- | ------------------------- | ----- | ------------------------------- |
-| **Telephony**         | Asterisk / SIP.js / Twilio| Local | For call simulation             |
-| **STT**               | Whisper                   | Local | Free, accurate, runs on CPU/GPU |
-| **NLU**               | Python (Regex + SpaCy)    | Local | Extract intent/entities         |
-| **TTS**               | Coqui TTS                 | Local | Human-like free voice synthesis |
-| **DB**                | SQLite                    | Local | Store orders                    |
-| **Backend**           | FastAPI                   | Local | API for all modules             |
-| **Containerization**  | Docker                    | Local | One-command startup             |
-| **Logging/Debugging** | Python logging + Rich CLI | Local | Realtime conversation tracing   |
+llm:
+  provider: "groq"
+  model: "llama-3.3-70b-versatile"
+  temperature: 0.3
 
----
+tts:
+  voice: "af_bella"
+  speed: 1.1
+```
 
-## 🧪 Testing Strategy (MVP)
+## Database Schema
 
-| Phase       | Type       | Description                                                      |
-| ----------- | ---------- | ---------------------------------------------------------------- |
-| **Phase 1** | Manual     | Developer manually simulates calls using local microphone input. |
-| **Phase 2** | Controlled | Test using pre-recorded voice samples.                           |
-| **Phase 3** | Live       | Connect Twilio sandbox for real inbound call test.               |
+SQLite database (`orders.db`) contains two tables:
 
----
+### orders
+- id (INTEGER PRIMARY KEY)
+- session_id (TEXT)
+- items_json (TEXT)
+- total_items (INTEGER)
+- status (TEXT)
+- special_instructions (TEXT)
+- created_at (TIMESTAMP)
+- completed_at (TIMESTAMP)
 
-## 💰 Cost Optimization Plan
+### conversation_logs
+- id (INTEGER PRIMARY KEY)
+- order_id (INTEGER, FOREIGN KEY)
+- role (TEXT)
+- content (TEXT)
+- audio_ms (INTEGER)
+- timestamp (TIMESTAMP)
 
-* Use **local inference (Whisper + Coqui)** instead of paid APIs during MVP.
-* Deploy lightweight Docker containers.
-* Only use **AWS Polly/Transcribe** or **ElevenLabs** when demoing.
-* Keep call simulations local — no telephony cost initially.
+## Performance Metrics
 
----
+Typical latency breakdown:
+- STT: 0.5-1.5s
+- LLM: 0.3-0.8s (Groq)
+- TTS: 2-5s (Kokoro on CPU)
+- Total: 3-7s
 
-## 🚀 Future Enhancements
+Note: TTS latency is the primary bottleneck on CPU-only systems.
 
-1. **POS Integration:** Connect to restaurant POS or ordering APIs for automatic order injection.
-2. **Menu Adaptation System:** Upload JSON menu to auto-train intent parser.
-3. **Multi-Restaurant Support:** Generalize for SaaS use (e.g., Pizza Hut, Chipotle).
-4. **Payment Processing:** Add Stripe or Square for phone payments.
-5. **Analytics Dashboard:** Track total calls, order volume, and performance metrics.
+## Limitations
 
----
+- TTS generation is slow on CPU (consider GPU for production)
+- Single-session WebSocket (no multi-user support yet)
+- Limited to English language
+- No phone integration (browser-only)
 
-## 🧭 Next Steps
+## License
 
-1. **Phase 1 Setup (Local MVP):**
-
-   * Implement Whisper + Coqui + FastAPI base.
-   * Mock telephony input/output locally.
-   * Parse mock menu JSON for order extraction.
-2. **Phase 2 Integration:**
-
-   * Integrate Twilio or Asterisk call stream.
-   * Enable real-time speech loop (listen → understand → respond).
-3. **Phase 3 Demo:**
-
-   * Run live demo call simulation.
-   * Record conversation and show stored order in database.
-
----
-
-**Outcome:**
-A fully local, cost-efficient, AI-powered phone ordering prototype demonstrating real-world capability for automating Quick Service Restaurant (QSR) pickup orders.
-
----
-
-**Author:** Rishwanth Perumandla
-**Status:** MVP Planning Complete
-**Version:** 1.0
+MIT License
