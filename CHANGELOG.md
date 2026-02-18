@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-02-17
+
+### Added
+- **Multi-core audio processing** using ProcessPoolExecutor
+- **Kokoro ONNX TTS** for 3-5x faster synthesis
+- **Always-listening mode** (v2) with VAD auto-detection
+- **Drive-thru mode** (simple) with clear hold-to-speak UX
+- **Audio auto-gain** for quiet microphones
+- **Volume meter** in web interface for mic level feedback
+- **Process pool workers** for parallel STT/TTS processing
+
+### Changed
+- Restructured project with multiple server modes
+- Improved WebSocket message handling for binary audio
+- Updated documentation with performance tuning guide
+- Added model selection guide (tiny/base/small)
+
+### Performance
+- Single-core latency: 4-6s → Multi-core: 2-3s
+- TTS speed: 3-5s → 0.5-1s (ONNX)
+- CPU utilization: 25% → 75% (3 cores)
+
+### Fixed
+- WebSocket binary message handling bug
+- Audio chunks not being received in always-listening mode
+- Low microphone input detection and amplification
+
 ## [1.0.0] - 2025-02-17
 
 ### Added

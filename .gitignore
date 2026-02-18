@@ -60,6 +60,9 @@ Thumbs.db
 *.pth
 *.ckpt
 *.bin
+*.onnx
+voices*.bin
+*.onnx.json
 
 # Test files
 test_*.py

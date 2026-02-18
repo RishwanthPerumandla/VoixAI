@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mic Test</title>
+</head>
+<body>
+    <h1>Microphone Test</h1>
+    <button id="start">Start Mic</button>
+    <button id="stop">Stop</button>
+    <div id="log"></div>
+    
+    <script>
+        const log = (msg) => {
+            console.log(msg);
+            document.getElementById('log').innerHTML += '<br>' + msg;
+        };
+        
+        let audioContext, processor, stream;
+        
+        document.getElementById('start').onclick = async () => {
+            try {
+                log('Requesting mic...');
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { sampleRate: 16000, channelCount: 1 }
+                });
+                log('Mic granted!');
+                
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                let chunkCount = 0;
+                processor.onaudioprocess = (e) => {
+                    chunkCount++;
+                    const data = e.inputBuffer.getChannelData(0);
+                    let max = 0;
+                    for (let i = 0; i < data.length; i++) {
+                        max = Math.max(max, Math.abs(data[i]));
+                    }
+                    if (chunkCount % 10 === 1) {
+                        log(`Chunk ${chunkCount}: max=${(max*100).toFixed(1)}%`);
+                    }
+                };
+                
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                log('Recording... speak now!');
+                
+            } catch (err) {
+                log('ERROR: ' + err.message);
+            }
+        };
+        
+        document.getElementById('stop').onclick = () => {
+            if (processor) processor.disconnect();
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            log('Stopped');
+        };
+    </script>
+</body>
+</html>
