@@ -22,7 +22,12 @@ import uvicorn
 from core.audio_stream import AudioBuffer
 from core.stt_engine import STTEngine
 from core.llm_agent import ConversationAgent, ConversationState
-from core.tts_engine import TTSEngine
+try:
+    from core.tts_engine_onnx import TTSEngineONNX as TTSEngine
+    print("[INIT] Using ONNX TTS engine")
+except ImportError:
+    from core.tts_engine import TTSEngine
+    print("[INIT] Using standard TTS engine")
 from core.order_manager import OrderManager
 
 
