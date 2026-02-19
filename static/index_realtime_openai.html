@@ -328,8 +328,13 @@
             log('Audio capture started');
         }
         
+        let totalAudioBytes = 0;
+        
         async function queueAudio(audioData) {
+            totalAudioBytes += audioData.byteLength;
             audioQueue.push(audioData);
+            log(`Audio received: ${audioData.byteLength} bytes (total: ${totalAudioBytes})`, 'success');
+            
             if (!isPlaying) {
                 playNextAudio();
             }
@@ -352,6 +357,8 @@
                 for (let i = 0; i < int16Data.length; i++) {
                     floatData[i] = int16Data[i] / 32768;
                 }
+                
+                log(`Playing ${floatData.length} samples at 24000Hz`);
                 
                 // Create audio buffer at 24000Hz
                 const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
