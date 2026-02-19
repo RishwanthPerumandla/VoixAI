@@ -16,6 +16,7 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from core.order_manager import OrderManager
@@ -26,6 +27,16 @@ OPENAI_WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI(title="VoixAI - Realtime Full-Duplex")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Wingstop order context that we'll inject into the conversation
@@ -357,14 +368,23 @@ class OpenAIRealtimeAgent:
 async def root():
     return Path("static/index_realtime_openai.html").read_text(encoding='utf-8')
 
+@app.get("/realtime", response_class=HTMLResponse)
+async def realtime_page():
+    return Path("static/index_realtime_openai.html").read_text(encoding='utf-8')
+
 
 @app.websocket("/ws/realtime-openai")
 async def websocket_endpoint(websocket: WebSocket):
     """Full-duplex WebSocket endpoint"""
     await websocket.accept()
     
-    session_id = websocket.headers.get("x-session-id", str(datetime.now().timestamp()))[:8]
+    session_id = str(datetime.now().timestamp())[:8]
     print(f"\n[WS:{session_id}] === Realtime OpenAI Connection ===")
+    
+    if not OPENAI_API_KEY:
+        await websocket.send_json({"type": "error", "message": "OpenAI API key not configured"})
+        await websocket.close()
+        return
     
     order_manager = OrderManager()
     order_id = order_manager.create_order(session_id)
@@ -375,8 +395,22 @@ async def websocket_endpoint(websocket: WebSocket):
         await agent.handle_client(websocket)
     except Exception as e:
         print(f"[WS:{session_id}] Error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         print(f"[WS:{session_id}] === Closed ===\n")
+
+
+# Fallback for old endpoint - redirect to new
+@app.websocket("/ws/conversational")
+async def websocket_fallback(websocket: WebSocket):
+    """Fallback endpoint for backward compatibility"""
+    await websocket.accept()
+    await websocket.send_json({
+        "type": "error",
+        "message": "Please use /ws/realtime-openai endpoint. Access http://localhost:8000/realtime"
+    })
+    await websocket.close()
 
 
 if __name__ == "__main__":
