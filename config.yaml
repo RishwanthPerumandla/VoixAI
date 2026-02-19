@@ -14,10 +14,10 @@ audio:
   noise_gate: 0.01
 
 stt:
-  model: "base.en"
+  model: "tiny.en"
   compute_type: "int8"
   language: "en"
-  # Options: tiny.en (fastest, least accurate), base.en (balanced), small.en (slowest, most accurate)
+  # Options: tiny.en (fastest, ~100ms), base.en (balanced, ~300ms), small.en (slowest, ~1s)
 
 llm:
   provider: "groq"
@@ -27,7 +27,7 @@ llm:
 
 tts:
   voice: "af_bella"
-  speed: 1.1
+  speed: 1.3
   sample_rate: 24000
 
 database:
