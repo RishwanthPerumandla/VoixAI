@@ -255,7 +255,14 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except RuntimeError as e:
+                # Client disconnected
+                if "disconnect" in str(e).lower():
+                    print(f"[WS:{session_id}] Client disconnected")
+                    break
+                raise
             
             # Handle FastAPI wrapped messages
             if isinstance(message, dict) and message.get("type") == "websocket.receive":

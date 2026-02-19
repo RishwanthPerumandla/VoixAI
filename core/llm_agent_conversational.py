@@ -252,6 +252,10 @@ class ConversationalAgent:
                 self.state = DialogueState.CONFIRMING
                 return self._generate_confirmation(), self._get_order_data()
         
+        # Handle suggestion requests
+        if any(word in user_lower for word in ["suggest", "recommend", "what's good", "what do you like", "best flavor"]):
+            return self._get_suggestion_response(), self._get_order_data()
+        
         # State transitions
         self._update_state(user_lower)
         print(f"[Agent] New state: {self.state.value}")
@@ -469,10 +473,12 @@ class ConversationalAgent:
             return f"{self.order.wing_qty} wings, gotcha! Bone-in or boneless?"
         
         elif self.state == DialogueState.ASKING_FLAVOR:
-            return f"{self.order.wing_type}, nice! What flavors?"
+            name_part = f"{name}, " if name else ""
+            return f"{name_part}{self.order.wing_type}, nice! What flavors? Lemon Pepper's popular!"
         
         elif self.state == DialogueState.ASKING_COMBO:
-            return f"Want to make that a combo with fries and a drink?"
+            name_part = f"{name}, " if name else ""
+            return f"{name_part}want to make that a combo with fries and a drink?"
         
         elif self.state == DialogueState.ASKING_DRINK:
             return "What to drink? Coke, Diet, Sprite, lemonade?"
@@ -493,6 +499,22 @@ class ConversationalAgent:
             return f"Perfect! Ready in 15-20 mins, {name}. Total ${price:.2f}. See you then!"
         
         return ""  # Let LLM handle other cases
+    
+    def _get_suggestion_response(self) -> str:
+        """Get response when user asks for suggestions"""
+        name = self.order.customer_name or ""
+        name_part = f"{name}, " if name else ""
+        
+        if self.state == DialogueState.ASKING_FLAVOR:
+            return f"{name_part}Lemon Pepper's our #1 seller! Or try Atomic if you like spicy."
+        elif self.state == DialogueState.ASKING_MAIN_ITEM:
+            return f"{name_part}Can't go wrong with boneless! Easier to eat."
+        elif self.state == DialogueState.ASKING_COMBO:
+            return f"{name_part}Combo's a good deal - saves you about $3!"
+        elif self.state == DialogueState.ASKING_DRINK:
+            return f"{name_part}Our lemonade is fresh-squeezed!"
+        else:
+            return f"{name_part}Lemon Pepper's crazy popular, you gotta try it!"
     
     def _get_llm_response(self, user_text: str) -> str:
         """Get response from LLM"""
