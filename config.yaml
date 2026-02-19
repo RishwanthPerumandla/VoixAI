@@ -6,15 +6,18 @@ hardware:
   sample_rate: 16000
 
 audio:
-  vad_threshold: 0.3
-  silence_duration_ms: 800
-  min_utterance_ms: 500
-  audio_gain: 5.0
+  vad_threshold: 0.4
+  silence_duration_ms: 1500
+  min_utterance_ms: 800
+  audio_gain: 10.0
+  normalization: true
+  noise_gate: 0.01
 
 stt:
   model: "tiny.en"
   compute_type: "int8"
   language: "en"
+  # Options: tiny.en (fastest, ~100ms), base.en (balanced, ~300ms), small.en (slowest, ~1s)
 
 llm:
   provider: "groq"
@@ -24,7 +27,7 @@ llm:
 
 tts:
   voice: "af_bella"
-  speed: 1.1
+  speed: 1.3
   sample_rate: 24000
 
 database:

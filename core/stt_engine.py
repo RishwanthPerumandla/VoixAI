@@ -22,17 +22,25 @@ class STTEngine:
         
     def transcribe(self, audio: np.ndarray) -> str:
         """
-        Transcribe audio array to text.
+        Transcribe audio array to text - optimized for speed.
         Returns cleaned text string.
         """
         # faster-whisper expects audio as numpy array
+        # Optimized settings for lowest latency:
+        # - no VAD filter (saves time)
+        # - no previous text conditioning (saves time)
+        # - temperature=0 (greedy, faster)
         segments, info = self.model.transcribe(
             audio,
             language=self.language,
-            vad_filter=True,
-            condition_on_previous_text=True,
-            beam_size=1,  # Faster inference
-            best_of=1
+            vad_filter=False,  # Disabled for speed
+            condition_on_previous_text=False,  # Disabled for speed
+            beam_size=1,
+            best_of=1,
+            temperature=0.0,  # Greedy decoding
+            compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0,
+            no_speech_threshold=0.6
         )
         
         # Collect all segment text
