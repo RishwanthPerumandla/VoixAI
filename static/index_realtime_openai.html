@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wingstop - Tasha AI (Realtime)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+        .header h1 {
+            font-size: 2.8rem;
+            background: linear-gradient(90deg, #ff6b35, #f7931e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+        .badge {
+            display: inline-block;
+            background: #00b894;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        @media (max-width: 768px) {
+            .main-content { grid-template-columns: 1fr; }
+        }
+        .call-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+        }
+        .status-indicator {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        .status-indicator.idle {
+            background: rgba(255,255,255,0.1);
+            border: 3px solid #666;
+        }
+        .status-indicator.connecting {
+            background: rgba(253, 203, 110, 0.2);
+            border: 3px solid #fdcb6e;
+            animation: pulse 1.5s infinite;
+        }
+        .status-indicator.active {
+            background: rgba(0, 184, 148, 0.2);
+            border: 3px solid #00b894;
+            animation: pulse 1s infinite;
+        }
+        .status-indicator.speaking {
+            background: rgba(231, 76, 60, 0.3);
+            border: 3px solid #e74c3c;
+            transform: scale(1.1);
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(0, 184, 148, 0); }
+        }
+        .call-status {
+            font-size: 1.2rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .call-status.active {
+            color: #00b894;
+        }
+        .transcript {
+            width: 100%;
+            max-width: 500px;
+            height: 200px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .transcript-entry {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        .transcript-entry.user {
+            background: rgba(0, 184, 148, 0.2);
+            margin-left: 20px;
+        }
+        .transcript-entry.ai {
+            background: rgba(9, 132, 227, 0.2);
+            margin-right: 20px;
+        }
+        .transcript-entry .label {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-bottom: 3px;
+        }
+        .call-button {
+            padding: 15px 50px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .call-button.start {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            color: white;
+        }
+        .call-button.end {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+        .call-button:hover {
+            transform: scale(1.05);
+        }
+        .order-panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+        }
+        .order-panel h2 {
+            font-size: 1.3rem;
+            color: #ff6b35;
+            margin-bottom: 15px;
+        }
+        .info-text {
+            color: #888;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .duplex-indicator {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        .duplex-indicator span {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+        }
+        .duplex-indicator .listening {
+            background: rgba(0, 184, 148, 0.2);
+            color: #00b894;
+        }
+        .duplex-indicator .speaking {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍗 Wingstop</h1>
+            <span class="badge">Full-Duplex Realtime AI</span>
+        </div>
+        
+        <div class="main-content">
+            <div class="call-area">
+                <div class="status-indicator idle" id="statusIndicator">
+                    📞
+                </div>
+                <div class="call-status" id="callStatus">Ready to call</div>
+                
+                <div class="duplex-indicator" id="duplexIndicator" style="display: none;">
+                    <span class="listening">Listening</span>
+                    <span class="speaking">Speaking</span>
+                </div>
+                
+                <div class="transcript" id="transcript">
+                    <div style="color: #666; text-align: center; margin-top: 80px;">
+                        Tap "Start Call" to begin your order
+                    </div>
+                </div>
+                
+                <button class="call-button start" id="callButton" onclick="toggleCall()">
+                    Start Call
+                </button>
+                
+                <div class="info-text">
+                    <p>This is a <strong>full-duplex</strong> conversation. You can:</p>
+                    <p>• Interrupt Tasha anytime while she's speaking</p>
+                    <p>• Speak naturally - no button holding needed</p>
+                    <p>• Both talk simultaneously like a real phone call</p>
+                </div>
+            </div>
+            
+            <div class="order-panel">
+                <h2>Your Order</h2>
+                <div id="orderContent">
+                    <div style="color: #666; text-align: center; padding: 40px 0;">
+                        No order yet
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = `ws://${window.location.host}/ws/realtime-openai`;
+        
+        let ws = null;
+        let audioContext = null;
+        let inputStream = null;
+        let processor = null;
+        let isCallActive = false;
+        
+        const statusIndicator = document.getElementById('statusIndicator');
+        const callStatus = document.getElementById('callStatus');
+        const callButton = document.getElementById('callButton');
+        const transcript = document.getElementById('transcript');
+        const duplexIndicator = document.getElementById('duplexIndicator');
+        
+        function addTranscript(text, isUser) {
+            const div = document.createElement('div');
+            div.className = `transcript-entry ${isUser ? 'user' : 'ai'}`;
+            div.innerHTML = `
+                <div class="label">${isUser ? 'You' : 'Tasha'}</div>
+                <div>${text}</div>
+            `;
+            transcript.appendChild(div);
+            transcript.scrollTop = transcript.scrollHeight;
+        }
+        
+        async function startCall() {
+            isCallActive = true;
+            callButton.textContent = 'End Call';
+            callButton.className = 'call-button end';
+            statusIndicator.className = 'status-indicator connecting';
+            callStatus.textContent = 'Connecting...';
+            duplexIndicator.style.display = 'flex';
+            
+            transcript.innerHTML = '';
+            
+            try {
+                // Initialize audio context
+                audioContext = new AudioContext({ sampleRate: 24000 });
+                
+                // Get microphone access
+                inputStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 24000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                // Connect WebSocket
+                ws = new WebSocket(WS_URL);
+                ws.binaryType = 'arraybuffer';
+                
+                ws.onopen = () => {
+                    console.log('Connected to realtime agent');
+                    statusIndicator.className = 'status-indicator active';
+                    callStatus.textContent = 'Connected - Start speaking!';
+                    callStatus.className = 'call-status active';
+                    
+                    // Start sending audio
+                    startSendingAudio();
+                };
+                
+                ws.onmessage = async (event) => {
+                    if (event.data instanceof ArrayBuffer) {
+                        // Binary audio data from AI
+                        await playAudio(event.data);
+                    } else {
+                        // JSON event
+                        const data = JSON.parse(event.data);
+                        handleEvent(data);
+                    }
+                };
+                
+                ws.onclose = () => {
+                    console.log('Disconnected');
+                    endCall();
+                };
+                
+                ws.onerror = (err) => {
+                    console.error('WebSocket error:', err);
+                };
+                
+            } catch (err) {
+                console.error('Failed to start call:', err);
+                alert('Failed to start call: ' + err.message);
+                endCall();
+            }
+        }
+        
+        function startSendingAudio() {
+            const source = audioContext.createMediaStreamSource(inputStream);
+            processor = audioContext.createScriptProcessor(4096, 1, 1);
+            
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+            
+            processor.onaudioprocess = (e) => {
+                if (!isCallActive || !ws || ws.readyState !== WebSocket.OPEN) return;
+                
+                const inputData = e.inputBuffer.getChannelData(0);
+                
+                // Convert to 16-bit PCM
+                const pcmData = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                }
+                
+                // Send as binary
+                ws.send(pcmData.buffer);
+            };
+        }
+        
+        async function playAudio(audioData) {
+            const buffer = new Uint8Array(audioData);
+            
+            // Convert to float
+            const floatData = new Float32Array(buffer.length / 2);
+            const dataView = new DataView(buffer.buffer);
+            
+            for (let i = 0; i < floatData.length; i++) {
+                const int16 = dataView.getInt16(i * 2, true);
+                floatData[i] = int16 / 32768;
+            }
+            
+            // Create audio buffer
+            const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+            audioBuffer.copyToChannel(floatData, 0);
+            
+            // Play
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.start();
+            
+            // Visual feedback
+            statusIndicator.className = 'status-indicator speaking';
+            setTimeout(() => {
+                if (isCallActive) {
+                    statusIndicator.className = 'status-indicator active';
+                }
+            }, 100);
+        }
+        
+        function handleEvent(data) {
+            console.log('Event:', data.type);
+            
+            switch (data.type) {
+                case 'user_started_speaking':
+                    // User interrupted AI
+                    statusIndicator.className = 'status-indicator active';
+                    break;
+                    
+                case 'ai_response_complete':
+                    statusIndicator.className = 'status-indicator active';
+                    break;
+                    
+                case 'order_complete':
+                    updateOrderDisplay(data.order);
+                    break;
+            }
+        }
+        
+        function updateOrderDisplay(order) {
+            const div = document.getElementById('orderContent');
+            if (!order || !order.items || order.items.length === 0) {
+                div.innerHTML = '<div style="color: #666; text-align: center; padding: 40px 0;">No order yet</div>';
+                return;
+            }
+            
+            let html = '';
+            if (order.customer_name) {
+                html += `<div style="color: #00d4ff; font-weight: bold; margin-bottom: 10px;">Customer: ${order.customer_name}</div>`;
+            }
+            
+            html += '<div style="margin-bottom: 15px;">';
+            order.items.forEach(item => {
+                html += `<div style="padding: 8px; background: rgba(255,255,255,0.05); margin-bottom: 5px; border-radius: 5px;">
+                    <strong>${item.qty}x</strong> ${item.name}
+                </div>`;
+            });
+            html += '</div>';
+            
+            if (order.total) {
+                html += `<div style="padding: 10px; background: rgba(0,184,148,0.1); border-radius: 5px; text-align: center;">
+                    <strong style="color: #00b894; font-size: 1.2rem;">Total: $${order.total.toFixed(2)}</strong>
+                </div>`;
+            }
+            
+            div.innerHTML = html;
+        }
+        
+        function endCall() {
+            isCallActive = false;
+            
+            callButton.textContent = 'Start Call';
+            callButton.className = 'call-button start';
+            statusIndicator.className = 'status-indicator idle';
+            callStatus.textContent = 'Ready to call';
+            callStatus.className = 'call-status';
+            duplexIndicator.style.display = 'none';
+            
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+            
+            if (inputStream) {
+                inputStream.getTracks().forEach(t => t.stop());
+                inputStream = null;
+            }
+            
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+        }
+        
+        function toggleCall() {
+            if (isCallActive) {
+                endCall();
+            } else {
+                startCall();
+            }
+        }
+    </script>
+</body>
+</html>
