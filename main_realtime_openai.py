@@ -22,7 +22,7 @@ import uvicorn
 from core.order_manager import OrderManager
 
 
-OPENAI_WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17"
+OPENAI_WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI(title="VoixAI - Realtime Full-Duplex")
