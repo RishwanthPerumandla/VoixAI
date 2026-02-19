@@ -178,7 +178,22 @@ class OpenAIRealtimeAgent:
         }
         
         await self.openai_ws.send(json.dumps(session_config))
-        print(f"[WS:{self.session_id}] Connected to OpenAI Realtime API")
+        print(f"[WS:{self.session_id}] Session configured")
+        
+        # Wait for session.created confirmation
+        response = await self.openai_ws.recv()
+        event = json.loads(response)
+        print(f"[WS:{self.session_id}] Session event: {event.get('type')}")
+        
+        # Create initial response to start conversation
+        await self.openai_ws.send(json.dumps({
+            "type": "response.create",
+            "response": {
+                "modalities": ["audio", "text"],
+                "instructions": "Greet the customer warmly as Tasha from Wingstop. Ask for their name and how many wings they'd like to order."
+            }
+        }))
+        print(f"[WS:{self.session_id}] Sent initial greeting request")
     
     async def handle_client(self, client_ws: WebSocket):
         """Handle client WebSocket connection"""
@@ -228,11 +243,18 @@ class OpenAIRealtimeAgent:
                 event = json.loads(message)
                 event_type = event.get("type")
                 
+                # Log all events for debugging
+                if event_type not in ["response.audio.delta", "input_audio_buffer.committed"]:
+                    print(f"[WS:{self.session_id}] Event: {event_type}")
+                
                 # Handle different event types
                 if event_type == "response.audio.delta":
                     # Stream audio to client
                     audio_data = base64.b64decode(event["delta"])
                     await self.client_ws.send_bytes(audio_data)
+                
+                elif event_type == "response.audio.done":
+                    print(f"[WS:{self.session_id}] AI audio response complete")
                 
                 elif event_type == "response.audio_transcript.delta":
                     # Real-time transcription of what AI is saying

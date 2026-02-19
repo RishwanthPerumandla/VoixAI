@@ -97,35 +97,25 @@
         .call-status.active {
             color: #00b894;
         }
-        .transcript {
+        .debug-info {
             width: 100%;
             max-width: 500px;
-            height: 200px;
             background: rgba(0,0,0,0.3);
             border-radius: 10px;
             padding: 15px;
-            overflow-y: auto;
             margin: 20px 0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #888;
+            max-height: 150px;
+            overflow-y: auto;
         }
-        .transcript-entry {
-            margin-bottom: 10px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 0.95rem;
+        .debug-info .log {
+            margin-bottom: 5px;
         }
-        .transcript-entry.user {
-            background: rgba(0, 184, 148, 0.2);
-            margin-left: 20px;
-        }
-        .transcript-entry.ai {
-            background: rgba(9, 132, 227, 0.2);
-            margin-right: 20px;
-        }
-        .transcript-entry .label {
-            font-size: 0.75rem;
-            opacity: 0.7;
-            margin-bottom: 3px;
-        }
+        .debug-info .log.error { color: #e74c3c; }
+        .debug-info .log.success { color: #00b894; }
+        .debug-info .log.info { color: #0984e3; }
         .call-button {
             padding: 15px 50px;
             font-size: 1.2rem;
@@ -146,6 +136,13 @@
         .call-button:hover {
             transform: scale(1.05);
         }
+        .info-text {
+            color: #888;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin-top: 20px;
+            text-align: center;
+        }
         .order-panel {
             background: rgba(255,255,255,0.05);
             border-radius: 15px;
@@ -156,39 +153,13 @@
             color: #ff6b35;
             margin-bottom: 15px;
         }
-        .info-text {
-            color: #888;
-            font-size: 0.9rem;
-            line-height: 1.6;
-            margin-top: 20px;
-            text-align: center;
-        }
-        .duplex-indicator {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
-        }
-        .duplex-indicator span {
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-        }
-        .duplex-indicator .listening {
-            background: rgba(0, 184, 148, 0.2);
-            color: #00b894;
-        }
-        .duplex-indicator .speaking {
-            background: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🍗 Wingstop</h1>
-            <span class="badge">Full-Duplex Realtime AI</span>
+            <span class="badge">OpenAI Realtime API</span>
         </div>
         
         <div class="main-content">
@@ -198,15 +169,8 @@
                 </div>
                 <div class="call-status" id="callStatus">Ready to call</div>
                 
-                <div class="duplex-indicator" id="duplexIndicator" style="display: none;">
-                    <span class="listening">Listening</span>
-                    <span class="speaking">Speaking</span>
-                </div>
-                
-                <div class="transcript" id="transcript">
-                    <div style="color: #666; text-align: center; margin-top: 80px;">
-                        Tap "Start Call" to begin your order
-                    </div>
+                <div class="debug-info" id="debugInfo">
+                    <div class="log">Click "Start Call" to begin</div>
                 </div>
                 
                 <button class="call-button start" id="callButton" onclick="toggleCall()">
@@ -214,10 +178,8 @@
                 </button>
                 
                 <div class="info-text">
-                    <p>This is a <strong>full-duplex</strong> conversation. You can:</p>
-                    <p>• Interrupt Tasha anytime while she's speaking</p>
-                    <p>• Speak naturally - no button holding needed</p>
-                    <p>• Both talk simultaneously like a real phone call</p>
+                    <p>Full-duplex conversation with OpenAI Realtime API</p>
+                    <p>Speak naturally - interrupt anytime</p>
                 </div>
             </div>
             
@@ -233,29 +195,28 @@
     </div>
 
     <script>
-        const WS_URL = `ws://${window.location.host}/ws/realtime-openai?v=2`;
+        const WS_URL = `ws://${window.location.host}/ws/realtime-openai`;
         
         let ws = null;
         let audioContext = null;
         let inputStream = null;
-        let processor = null;
+        let workletNode = null;
         let isCallActive = false;
+        let audioQueue = [];
+        let isPlaying = false;
         
         const statusIndicator = document.getElementById('statusIndicator');
         const callStatus = document.getElementById('callStatus');
         const callButton = document.getElementById('callButton');
-        const transcript = document.getElementById('transcript');
-        const duplexIndicator = document.getElementById('duplexIndicator');
+        const debugInfo = document.getElementById('debugInfo');
         
-        function addTranscript(text, isUser) {
+        function log(msg, type = 'info') {
             const div = document.createElement('div');
-            div.className = `transcript-entry ${isUser ? 'user' : 'ai'}`;
-            div.innerHTML = `
-                <div class="label">${isUser ? 'You' : 'Tasha'}</div>
-                <div>${text}</div>
-            `;
-            transcript.appendChild(div);
-            transcript.scrollTop = transcript.scrollHeight;
+            div.className = `log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            debugInfo.appendChild(div);
+            debugInfo.scrollTop = debugInfo.scrollHeight;
+            console.log(msg);
         }
         
         async function startCall() {
@@ -264,43 +225,45 @@
             callButton.className = 'call-button end';
             statusIndicator.className = 'status-indicator connecting';
             callStatus.textContent = 'Connecting...';
-            duplexIndicator.style.display = 'flex';
             
-            transcript.innerHTML = '';
+            log('Initializing audio context...');
             
             try {
-                // Initialize audio context
-                audioContext = new AudioContext({ sampleRate: 24000 });
+                // Initialize audio context with default sample rate
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                log(`Audio context sample rate: ${audioContext.sampleRate}Hz`);
                 
                 // Get microphone access
                 inputStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        sampleRate: 24000,
                         channelCount: 1,
                         echoCancellation: true,
                         noiseSuppression: true,
                         autoGainControl: true
                     }
                 });
+                log('Microphone access granted');
                 
                 // Connect WebSocket
+                log('Connecting to server...');
                 ws = new WebSocket(WS_URL);
                 ws.binaryType = 'arraybuffer';
                 
                 ws.onopen = () => {
-                    console.log('Connected to realtime agent');
+                    log('WebSocket connected', 'success');
                     statusIndicator.className = 'status-indicator active';
-                    callStatus.textContent = 'Connected - Start speaking!';
+                    callStatus.textContent = 'Connected - Speak!';
                     callStatus.className = 'call-status active';
                     
                     // Start sending audio
-                    startSendingAudio();
+                    startAudioCapture();
                 };
                 
                 ws.onmessage = async (event) => {
                     if (event.data instanceof ArrayBuffer) {
                         // Binary audio data from AI
-                        await playAudio(event.data);
+                        log(`Received ${event.data.byteLength} bytes of audio`);
+                        await queueAudio(event.data);
                     } else {
                         // JSON event
                         const data = JSON.parse(event.data);
@@ -309,24 +272,23 @@
                 };
                 
                 ws.onclose = () => {
-                    console.log('Disconnected');
+                    log('WebSocket closed');
                     endCall();
                 };
                 
                 ws.onerror = (err) => {
-                    console.error('WebSocket error:', err);
+                    log('WebSocket error: ' + err.message, 'error');
                 };
                 
             } catch (err) {
-                console.error('Failed to start call:', err);
-                alert('Failed to start call: ' + err.message);
+                log('Failed to start: ' + err.message, 'error');
                 endCall();
             }
         }
         
-        function startSendingAudio() {
+        function startAudioCapture() {
             const source = audioContext.createMediaStreamSource(inputStream);
-            processor = audioContext.createScriptProcessor(4096, 1, 1);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
             
             source.connect(processor);
             processor.connect(audioContext.destination);
@@ -336,54 +298,88 @@
                 
                 const inputData = e.inputBuffer.getChannelData(0);
                 
+                // Resample if needed (browser native rate -> 24000)
+                const targetSampleRate = 24000;
+                const sourceSampleRate = audioContext.sampleRate;
+                
+                let resampled;
+                if (sourceSampleRate !== targetSampleRate) {
+                    // Simple resampling
+                    const ratio = targetSampleRate / sourceSampleRate;
+                    const newLength = Math.floor(inputData.length * ratio);
+                    resampled = new Float32Array(newLength);
+                    for (let i = 0; i < newLength; i++) {
+                        resampled[i] = inputData[Math.floor(i / ratio)];
+                    }
+                } else {
+                    resampled = inputData;
+                }
+                
                 // Convert to 16-bit PCM
-                const pcmData = new Int16Array(inputData.length);
-                for (let i = 0; i < inputData.length; i++) {
-                    pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                const pcmData = new Int16Array(resampled.length);
+                for (let i = 0; i < resampled.length; i++) {
+                    pcmData[i] = Math.max(-32768, Math.min(32767, resampled[i] * 32768));
                 }
                 
                 // Send as binary
                 ws.send(pcmData.buffer);
             };
+            
+            log('Audio capture started');
         }
         
-        async function playAudio(audioData) {
-            const buffer = new Uint8Array(audioData);
-            
-            // Convert to float
-            const floatData = new Float32Array(buffer.length / 2);
-            const dataView = new DataView(buffer.buffer);
-            
-            for (let i = 0; i < floatData.length; i++) {
-                const int16 = dataView.getInt16(i * 2, true);
-                floatData[i] = int16 / 32768;
+        async function queueAudio(audioData) {
+            audioQueue.push(audioData);
+            if (!isPlaying) {
+                playNextAudio();
+            }
+        }
+        
+        async function playNextAudio() {
+            if (audioQueue.length === 0 || !isCallActive) {
+                isPlaying = false;
+                return;
             }
             
-            // Create audio buffer
-            const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
-            audioBuffer.copyToChannel(floatData, 0);
+            isPlaying = true;
+            const audioData = audioQueue.shift();
             
-            // Play
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            source.start();
-            
-            // Visual feedback
-            statusIndicator.className = 'status-indicator speaking';
-            setTimeout(() => {
-                if (isCallActive) {
-                    statusIndicator.className = 'status-indicator active';
+            try {
+                // Convert PCM16 to float32
+                const int16Data = new Int16Array(audioData);
+                const floatData = new Float32Array(int16Data.length);
+                
+                for (let i = 0; i < int16Data.length; i++) {
+                    floatData[i] = int16Data[i] / 32768;
                 }
-            }, 100);
+                
+                // Create audio buffer at 24000Hz
+                const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+                audioBuffer.copyToChannel(floatData, 0);
+                
+                // Play
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                
+                source.onended = () => {
+                    playNextAudio();
+                };
+                
+                source.start();
+                statusIndicator.className = 'status-indicator speaking';
+                
+            } catch (err) {
+                log('Audio play error: ' + err.message, 'error');
+                playNextAudio();
+            }
         }
         
         function handleEvent(data) {
-            console.log('Event:', data.type);
+            log('Event: ' + data.type);
             
             switch (data.type) {
                 case 'user_started_speaking':
-                    // User interrupted AI
                     statusIndicator.className = 'status-indicator active';
                     break;
                     
@@ -393,6 +389,10 @@
                     
                 case 'order_complete':
                     updateOrderDisplay(data.order);
+                    break;
+                    
+                case 'error':
+                    log('Error: ' + data.message, 'error');
                     break;
             }
         }
@@ -428,18 +428,13 @@
         
         function endCall() {
             isCallActive = false;
+            audioQueue = [];
             
             callButton.textContent = 'Start Call';
             callButton.className = 'call-button start';
             statusIndicator.className = 'status-indicator idle';
             callStatus.textContent = 'Ready to call';
             callStatus.className = 'call-status';
-            duplexIndicator.style.display = 'none';
-            
-            if (processor) {
-                processor.disconnect();
-                processor = null;
-            }
             
             if (inputStream) {
                 inputStream.getTracks().forEach(t => t.stop());
@@ -455,6 +450,8 @@
                 audioContext.close();
                 audioContext = null;
             }
+            
+            log('Call ended');
         }
         
         function toggleCall() {
