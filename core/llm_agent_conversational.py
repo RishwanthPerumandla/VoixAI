@@ -256,6 +256,14 @@ class ConversationalAgent:
         if any(word in user_lower for word in ["suggest", "recommend", "what's good", "what do you like", "best flavor"]):
             return self._get_suggestion_response(), self._get_order_data()
         
+        # Handle "yes" to accept suggested flavor when in ASKING_FLAVOR
+        if self.state == DialogueState.ASKING_FLAVOR:
+            if any(phrase in user_lower for phrase in ["yes", "go with it", "sounds good", "perfect", "that's good", "do it"]):
+                # User accepted the suggested Lemon Pepper
+                if not self.order.flavors:
+                    self.order.flavors.append({'flavor': 'lemon pepper', 'qty': self.order.wing_qty})
+                    print(f"[Agent] User accepted suggestion: lemon pepper x{self.order.wing_qty}")
+        
         # State transitions
         self._update_state(user_lower)
         print(f"[Agent] New state: {self.state.value}")
@@ -304,26 +312,8 @@ class ConversationalAgent:
         elif 'bone-in' in text_lower or 'bone in' in text_lower:
             self.order.wing_type = 'bone-in'
         
-        # Extract flavors
-        for flavor in self.FLAVORS:
-            if flavor in text_lower:
-                # Check for qty before flavor
-                qty_match = re.search(rf'(\d+)\s+(?:of\s+)?{re.escape(flavor)}', text_lower)
-                if qty_match:
-                    flavor_qty = int(qty_match.group(1))
-                else:
-                    # Default split
-                    flavor_qty = self.order.wing_qty // max(1, len(self.order.flavors) + 1)
-                
-                existing = next((f for f in self.order.flavors if f['flavor'] == flavor), None)
-                if existing:
-                    existing['qty'] = flavor_qty
-                else:
-                    self.order.flavors.append({'flavor': flavor, 'qty': flavor_qty})
-                print(f"[Agent] Extracted flavor: {flavor} x{flavor_qty}")
-        
-        # Normalize flavor quantities
-        self._normalize_flavors()
+        # Extract flavors with fuzzy matching
+        self._extract_flavors_fuzzy(text_lower)
         
         # Extract combo preference
         if 'no combo' in text_lower or 'dont want a combo' in text_lower or "don't want a combo" in text_lower:
@@ -371,6 +361,61 @@ class ConversationalAgent:
             diff = self.order.wing_qty - total
             if self.order.flavors:
                 self.order.flavors[-1]['qty'] = max(1, self.order.flavors[-1]['qty'] + diff)
+    
+    def _extract_flavors_fuzzy(self, text_lower: str):
+        """Extract flavors with fuzzy matching for common misheard words"""
+        # Common STT mistakes and their corrections
+        fuzzy_mappings = {
+            'lemon clipper': 'lemon pepper',
+            'lemon paper': 'lemon pepper',
+            'lemon peper': 'lemon pepper',
+            'lemonpepper': 'lemon pepper',
+            'cajan': 'cajun',
+            'cajun spice': 'cajun',
+            'garlic parm': 'garlic parmesan',
+            'garlic parmesian': 'garlic parmesan',
+            'bbq': 'hickory smoked bbq',
+            'barbecue': 'hickory smoked bbq',
+            'buffalo hot': 'atomic',
+            'atomic hot': 'atomic',
+            'original': 'original hot',
+            'hot wings': 'original hot',
+            'korean': 'korean bbq',
+            'louisana': 'louisiana rub',
+            'louisianna': 'louisiana rub',
+        }
+        
+        # First try exact match
+        for flavor in self.FLAVORS:
+            if flavor in text_lower:
+                self._add_flavor(flavor, text_lower)
+                return
+        
+        # Then try fuzzy match
+        for misheard, correct in fuzzy_mappings.items():
+            if misheard in text_lower:
+                print(f"[Agent] Fuzzy match: '{misheard}' -> '{correct}'")
+                self._add_flavor(correct, text_lower)
+                return
+    
+    def _add_flavor(self, flavor: str, text_lower: str):
+        """Add a flavor to the order"""
+        # Check for qty before flavor
+        qty_match = re.search(rf'(\d+)\s+(?:of\s+)?{re.escape(flavor)}', text_lower)
+        if qty_match:
+            flavor_qty = int(qty_match.group(1))
+        else:
+            # Default split
+            flavor_qty = self.order.wing_qty // max(1, len(self.order.flavors) + 1)
+        
+        existing = next((f for f in self.order.flavors if f['flavor'] == flavor), None)
+        if existing:
+            existing['qty'] = flavor_qty
+        else:
+            self.order.flavors.append({'flavor': flavor, 'qty': flavor_qty})
+        
+        print(f"[Agent] Extracted flavor: {flavor} x{flavor_qty}")
+        self._normalize_flavors()
     
     def _update_state(self, user_lower: str):
         """Update state based on current state and extracted info"""
