@@ -43,7 +43,7 @@ source venv/bin/activate  # Linux/Mac
 
 pip install -r requirements.txt
 # Configure .env file
-python main.py
+python main_conversational.py
 ```
 
 ### Option 2: Docker Deployment
@@ -66,7 +66,7 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["python", "main.py"]
+CMD ["python", "main_conversational.py"]
 ```
 
 Build and run:
@@ -90,7 +90,7 @@ Type=simple
 User=voixai
 WorkingDirectory=/opt/voixai
 Environment=PATH=/opt/voixai/venv/bin
-ExecStart=/opt/voixai/venv/bin/python main.py
+ExecStart=/opt/voixai/venv/bin/python main_conversational.py
 Restart=always
 RestartSec=10
 
