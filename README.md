@@ -6,17 +6,17 @@ A production-ready conversational AI agent for Wingstop phone orders. Built with
 ![Python](https://img.shields.io/badge/python-3.11-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-## 🎯 What It Does
+## Overview
 
 VoixAI acts as "Tasha" - a friendly Wingstop cashier that:
-- **Takes phone orders** through natural conversation
-- **Collects customer names** for personalized service  
-- **Upsells naturally** - suggests combos for 6+ wings
-- **Handles complete menu** - wings, flavors, drinks, sides, dips
-- **Calculates prices** in real-time
-- **Confirms orders** before finalizing
+- Takes phone orders through natural conversation
+- Collects customer names for personalized service  
+- Upsells naturally - suggests combos for 6+ wings
+- Handles complete menu - wings, flavors, drinks, sides, dips
+- Calculates prices in real-time
+- Confirms orders before finalizing
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.11+
@@ -51,7 +51,7 @@ python main_conversational.py
 
 Open browser: **http://localhost:8000**
 
-## 📋 Example Conversation
+## Example Conversation
 
 ```
 Tasha: "Hey! Welcome to Wingstop! I'm Tasha. What's your name?"
@@ -81,7 +81,7 @@ User: "Yes"
 Tasha: "Perfect! Ready in 15-20 mins, Rishi. Total $12.90. See you then!"
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### State Machine Flow
 ```
@@ -116,7 +116,7 @@ VoixAI/
 └── requirements.txt           # Dependencies
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 Edit `config.yaml` to customize:
 
@@ -136,34 +136,34 @@ tts:
   speed: 1.3        # 1.0 = normal, 1.3 = faster
 ```
 
-## 🎨 Features
+## Features
 
 ### Conversational Intelligence
-- ✅ Natural dialogue flow
-- ✅ Handles interruptions gracefully
-- ✅ Remembers context (name, previous items)
-- ✅ Smart upselling (combos for 6+ wings)
+- Natural dialogue flow
+- Handles interruptions gracefully
+- Remembers context (name, previous items)
+- Smart upselling (combos for 6+ wings)
 
 ### Voice Quality
-- ✅ Fast response (~2s total latency)
-- ✅ Accurate STT (tiny.en optimized)
-- ✅ Natural TTS (Kokoro ONNX)
-- ✅ VAD-based auto-detection
+- Fast response (~2s total latency)
+- Accurate STT (tiny.en optimized)
+- Natural TTS (Kokoro ONNX)
+- VAD-based auto-detection
 
 ### Order Management
-- ✅ Customer name collection
-- ✅ Complete order tracking
-- ✅ Price calculation
-- ✅ Pickup time estimation
-- ✅ Order confirmation
+- Customer name collection
+- Complete order tracking
+- Price calculation
+- Pickup time estimation
+- Order confirmation
 
 ### Reliability
-- ✅ Hardcoded state responses (no hallucination)
-- ✅ Fuzzy matching for STT errors
-- ✅ Automatic retries
-- ✅ SQLite persistence
+- Hardcoded state responses (no hallucination)
+- Fuzzy matching for STT errors
+- Automatic retries
+- SQLite persistence
 
-## 🛠️ Advanced Usage
+## Advanced Usage
 
 ### Environment Variables
 ```bash
@@ -187,7 +187,7 @@ python -m pytest tests/
 python test_conversational_agent.py
 ```
 
-## 📊 Performance Metrics
+## Performance Metrics
 
 | Metric | Target | Achieved |
 |--------|--------|----------|
@@ -197,7 +197,7 @@ python test_conversational_agent.py
 | Total Response | < 3s | ~2s |
 | Order Completion | 95%+ | Working |
 
-## 🔄 Changelog
+## Changelog
 
 ### v1.0.0 (Current)
 - Conversational state machine with 9 states
@@ -208,7 +208,7 @@ python test_conversational_agent.py
 - Hardcoded responses for reliability
 - Fuzzy matching for STT corrections
 
-## 🗺️ Roadmap
+## Roadmap
 
 ### v1.1 (Planned)
 - Payment integration
@@ -220,7 +220,7 @@ python test_conversational_agent.py
 - Emotional voice modulation
 - Advanced upselling with ML
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch: `git checkout -b feature-name`
@@ -228,11 +228,11 @@ python test_conversational_agent.py
 4. Push: `git push origin feature-name`
 5. Submit pull request
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Groq](https://groq.com) for fast LLM inference
 - [Whisper](https://github.com/openai/whisper) for STT
@@ -241,4 +241,4 @@ MIT License - see [LICENSE](LICENSE) file
 
 ---
 
-**Made with ❤️ for Wingstop**
+**Made for Wingstop**
