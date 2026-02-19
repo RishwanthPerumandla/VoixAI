@@ -54,22 +54,15 @@ class OpenAIRealtimeAgent:
         print(f"[WS:{self.session_id}] Connecting to OpenAI...")
         self.openai_ws = await websockets.connect(OPENAI_WS_URL, extra_headers=headers)
         
-        # Simple session config
+        # Session config - minimal working version
         config = {
             "type": "session.update",
             "session": {
                 "modalities": ["audio", "text"],
-                "instructions": "You are Tasha, a friendly Wingstop cashier. Greet customers warmly, ask for their name, then take their wing order. Be conversational and enthusiastic.",
+                "instructions": "You are Tasha, a friendly Wingstop cashier. Greet customers warmly, ask for their name, then take their wing order.",
                 "voice": "alloy",
                 "input_audio_format": "pcm16",
-                "output_audio_format": "pcm16",
-                "input_audio_transcription": {"enabled": True, "model": "whisper-1"},
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.3,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 500
-                }
+                "output_audio_format": "pcm16"
             }
         }
         
@@ -79,11 +72,16 @@ class OpenAIRealtimeAgent:
         msg = await self.openai_ws.recv()
         event = json.loads(msg)
         print(f"[WS:{self.session_id}] Session: {event.get('type')}")
+        if event.get('type') == 'error':
+            print(f"[WS:{self.session_id}] Session error: {event}")
+            return
         
         # Wait for session.updated
         msg = await self.openai_ws.recv()
         event = json.loads(msg)
         print(f"[WS:{self.session_id}] Session: {event.get('type')}")
+        if event.get('type') == 'error':
+            print(f"[WS:{self.session_id}] Session update error: {event}")
         
         # Start the conversation with a user message to trigger response
         await self.openai_ws.send(json.dumps({
