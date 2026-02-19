@@ -178,22 +178,33 @@ class OpenAIRealtimeAgent:
         }
         
         await self.openai_ws.send(json.dumps(session_config))
-        print(f"[WS:{self.session_id}] Session configured")
+        print(f"[WS:{self.session_id}] Session config sent")
         
         # Wait for session.created confirmation
         response = await self.openai_ws.recv()
         event = json.loads(response)
         print(f"[WS:{self.session_id}] Session event: {event.get('type')}")
         
-        # Create initial response to start conversation
+        # Wait a bit for session to be ready
+        await asyncio.sleep(0.5)
+        
+        # Create initial response to start conversation - simpler approach
         await self.openai_ws.send(json.dumps({
-            "type": "response.create",
-            "response": {
-                "modalities": ["audio", "text"],
-                "instructions": "Greet the customer warmly as Tasha from Wingstop. Ask for their name and how many wings they'd like to order."
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Hello, I'd like to place an order"}]
             }
         }))
-        print(f"[WS:{self.session_id}] Sent initial greeting request")
+        print(f"[WS:{self.session_id}] Sent user message")
+        
+        await asyncio.sleep(0.2)
+        
+        await self.openai_ws.send(json.dumps({
+            "type": "response.create"
+        }))
+        print(f"[WS:{self.session_id}] Sent response.create")
     
     async def handle_client(self, client_ws: WebSocket):
         """Handle client WebSocket connection"""
@@ -243,22 +254,39 @@ class OpenAIRealtimeAgent:
                 event = json.loads(message)
                 event_type = event.get("type")
                 
-                # Log all events for debugging
+                # Log events
                 if event_type not in ["response.audio.delta", "input_audio_buffer.committed"]:
                     print(f"[WS:{self.session_id}] Event: {event_type}")
+                
+                # Check for errors
+                if event_type == "error":
+                    print(f"[WS:{self.session_id}] ERROR: {event}")
+                
+                # Count audio chunks
+                if event_type == "response.audio.delta":
+                    if not hasattr(self, '_audio_count'):
+                        self._audio_count = 0
+                        print(f"[WS:{self.session_id}] First audio chunk received!")
+                    self._audio_count += 1
                 
                 # Handle different event types
                 if event_type == "response.audio.delta":
                     # Stream audio to client
-                    audio_data = base64.b64decode(event["delta"])
-                    await self.client_ws.send_bytes(audio_data)
+                    try:
+                        audio_base64 = event.get("delta", "")
+                        if audio_base64:
+                            audio_data = base64.b64decode(audio_base64)
+                            await self.client_ws.send_bytes(audio_data)
+                    except Exception as e:
+                        print(f"[WS:{self.session_id}] Audio decode error: {e}")
                 
                 elif event_type == "response.audio.done":
-                    print(f"[WS:{self.session_id}] AI audio response complete")
+                    print(f"[WS:{self.session_id}] AI audio response complete ({getattr(self, '_audio_count', 0)} chunks)")
+                    self._audio_count = 0
                 
                 elif event_type == "response.audio_transcript.delta":
                     # Real-time transcription of what AI is saying
-                    print(f"[AI] {event['delta']}")
+                    print(f"[AI] {event.get('delta', '')}")
                 
                 elif event_type == "input_audio_buffer.speech_started":
                     # User started speaking (interrupt)
