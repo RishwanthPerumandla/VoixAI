@@ -4,71 +4,35 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+dist/
+build/
 *.egg
 
-# Virtual environments
+# Virtual environment
 venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+.env
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Data files
 orders.db
-orders-backup-*.db
-data/
+*.db
+*.wav
+*.mp3
+uploads/
+
+# Models (large files)
+*.onnx
+*.bin
 
 # Logs
 *.log
-logs/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Model caches
-.cache/
-*.pth
-*.ckpt
-*.bin
-*.onnx
-voices*.bin
-*.onnx.json
-
-# Test files
-test_*.py
-*_test.py
-
-# Temporary files
-tmp/
-temp/
-*.tmp

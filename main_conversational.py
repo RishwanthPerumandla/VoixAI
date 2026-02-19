@@ -66,7 +66,7 @@ def init_engines():
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return Path("static/index_conversational.html").read_text(encoding='utf-8')
+    return Path("static/index.html").read_text(encoding='utf-8')
 
 
 class AudioProcessor:
