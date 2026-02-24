@@ -5,11 +5,17 @@ import time
 import urllib.request
 import numpy as np
 import soundfile as sf
-from kokoro_onnx import Kokoro
 
 # Model URLs
 MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
-VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices.json"
+
+# Ensure UTF-8 encoding for file operations on Windows
+import sys
+if sys.platform == 'win32':
+    import locale
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
 
 
 def download_file(url: str, path: str):
@@ -21,6 +27,21 @@ def download_file(url: str, path: str):
     print(f"[TTS] Downloaded {path}")
 
 
+def create_voices_json_if_needed():
+    """Create voices.json if it doesn't exist (needed for Windows)"""
+    voices_json_path = "voices.json"
+    if not os.path.exists(voices_json_path):
+        voices = [
+            "af_bella", "af_sarah", "af_nicole", "af_sky",
+            "am_adam", "am_michael",
+            "bf_emma", "bf_isabella",
+            "bm_george", "bm_lewis"
+        ]
+        import json
+        with open(voices_json_path, 'w', encoding='utf-8') as f:
+            json.dump(voices, f)
+
+
 class TTSEngineONNX:
     """Kokoro ONNX-based TTS - optimized for speed"""
     
@@ -30,7 +51,7 @@ class TTSEngineONNX:
     
     # Common phrases to pre-cache
     COMMON_PHRASES = [
-        "Hey! Welcome to Wingstop! I'm Tasha. How many wings can I get started for you? Bone-in or boneless?",
+        "Hey! Welcome to Wingstop! I'm Tasha. How many wings can I get started for you?",
         "Gotcha. Bone-in or boneless?",
         "What flavors are we feeling?",
         "Make it a combo with fries and a drink?",
@@ -47,30 +68,69 @@ class TTSEngineONNX:
         self.speed = speed
         self.sample_rate = 24000
         
+        # Create voices.json if needed (Windows fix)
+        create_voices_json_if_needed()
+        
         # Download models if needed
         download_file(MODEL_URL, "kokoro-v1.0.onnx")
-        download_file(VOICES_URL, "voices-v1.0.bin")
+        download_file(VOICES_URL, "voices.json")
         
-        # Initialize Kokoro ONNX
+        # Initialize Kokoro ONNX with error handling
         print("[TTS] Loading Kokoro ONNX...")
         start = time.time()
-        self.kokoro = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
-        print(f"[TTS] Loaded in {time.time() - start:.2f}s")
+        
+        try:
+            from kokoro_onnx import Kokoro
+            self.kokoro = Kokoro("kokoro-v1.0.onnx", "voices.json")
+            print(f"[TTS] Loaded in {time.time() - start:.2f}s")
+        except Exception as e:
+            print(f"[TTS] Error loading Kokoro: {e}")
+            print("[TTS] Attempting fix with config.json...")
+            self._create_config_json()
+            from kokoro_onnx import Kokoro
+            self.kokoro = Kokoro("kokoro-v1.0.onnx", "voices.json")
+            print(f"[TTS] Loaded in {time.time() - start:.2f}s")
         
         # Pre-cache common phrases in background
         self._precache_common_phrases()
+    
+    def _create_config_json(self):
+        """Create config.json if missing"""
+        import json
+        config = {
+            "voices": [
+                {"name": "af_bella", "language": "en-us", "gender": "female"},
+                {"name": "af_sarah", "language": "en-us", "gender": "female"},
+                {"name": "af_nicole", "language": "en-us", "gender": "female"},
+                {"name": "af_sky", "language": "en-us", "gender": "female"},
+                {"name": "am_adam", "language": "en-us", "gender": "male"},
+                {"name": "am_michael", "language": "en-us", "gender": "male"},
+            ]
+        }
+        with open("config.json", "w", encoding='utf-8') as f:
+            json.dump(config, f)
     
     def _precache_common_phrases(self):
         """Pre-cache common phrases for instant response"""
         print("[TTS] Pre-caching common phrases...")
         for phrase in self.COMMON_PHRASES:
             try:
-                samples, sample_rate = self.kokoro.create(
+                result = self.kokoro.create(
                     phrase,
                     voice=self.voice,
                     speed=self.speed,
                     lang="en-us"
                 )
+                # Handle different return formats
+                if isinstance(result, tuple):
+                    samples, sample_rate = result
+                elif isinstance(result, dict):
+                    samples = result.get('audio')
+                    sample_rate = result.get('sample_rate', 24000)
+                else:
+                    samples = result
+                    sample_rate = 24000
+                    
                 audio_int16 = (samples * 32767).astype(np.int16)
                 wav_buffer = io.BytesIO()
                 sf.write(wav_buffer, audio_int16, sample_rate, format='WAV', subtype='PCM_16')
@@ -100,12 +160,22 @@ class TTSEngineONNX:
         print(f"[TTS] Synthesizing: '{text[:50]}...'")
         
         # Generate audio with Kokoro ONNX
-        samples, sample_rate = self.kokoro.create(
+        result = self.kokoro.create(
             text,
             voice=self.voice,
             speed=self.speed,
             lang="en-us"
         )
+        
+        # Handle different return formats
+        if isinstance(result, tuple):
+            samples, sample_rate = result
+        elif isinstance(result, dict):
+            samples = result.get('audio')
+            sample_rate = result.get('sample_rate', 24000)
+        else:
+            samples = result
+            sample_rate = 24000
         
         # Convert to int16
         audio_int16 = (samples * 32767).astype(np.int16)

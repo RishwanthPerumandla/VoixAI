@@ -1,0 +1,115 @@
+{
+  "store_info": {
+    "name": "Wingstop",
+    "hours": {
+      "monday_thursday": "10:30 AM - 12:00 AM",
+      "friday_saturday": "10:30 AM - 1:00 AM",
+      "sunday": "11:00 AM - 12:00 AM"
+    },
+    "phone": "555-WINGS",
+    "address": "123 Wing Street",
+    "delivery": false,
+    "pickup": true,
+    "estimated_prep_time_minutes": 20
+  },
+  "ordering": {
+    "min_wings": 6,
+    "max_wings": 100,
+    "max_flavors_per_order": 2,
+    "combo_savings": {
+      "6": 3.00,
+      "8": 3.00,
+      "10": 3.00,
+      "15": 6.50,
+      "20": 8.00,
+      "30": 10.00
+    },
+    "tax_rate": 0.08,
+    "payment_methods": ["cash", "card_at_pickup"]
+  },
+  "upsell_rules": {
+    "combo": {
+      "trigger": "wings_without_combo",
+      "priority": 1,
+      "script": "Make it a combo? Saves ${savings}, you get fries and a drink."
+    },
+    "drink": {
+      "trigger": "no_drink",
+      "priority": 2,
+      "script": "Want a drink with that?"
+    },
+    "side": {
+      "trigger": "no_side",
+      "priority": 3,
+      "script": "Add seasoned fries? They're fresh-cut daily."
+    }
+  },
+  "complaint_handling": {
+    "severity_levels": {
+      "low": {
+        "description": "Minor issue, customer not upset",
+        "response": "acknowledge_fix",
+        "offer": "small_discount"
+      },
+      "medium": {
+        "description": "Noticeable problem, customer frustrated",
+        "response": "empathy_action",
+        "offer": "free_side_or_discount"
+      },
+      "high": {
+        "description": "Serious issue, customer angry",
+        "response": "empathy_ticket_escalate",
+        "offer": "refund_or_remake",
+        "create_ticket": true
+      }
+    },
+    "common_issues": {
+      "wrong_order": "Apologize, remake immediately, offer free side",
+      "cold_food": "Apologize, remake, offer discount on next visit",
+      "missing_items": "Apologize, add to order immediately, offer free dip",
+      "quality_issues": "Apologize, create ticket, offer refund or remake",
+      "rude_staff": "Apologize, escalate to manager immediately"
+    }
+  },
+  "escalation": {
+    "auto_escalate_triggers": [
+      "food_poisoning",
+      "legal_threat",
+      "media_mention",
+      "discrimination_claim"
+    ],
+    "queue_priority": {
+      "urgent": 1,
+      "normal": 3
+    },
+    "estimated_wait": {
+      "urgent": "2-3 minutes",
+      "normal": "5-7 minutes"
+    }
+  },
+  "conversation": {
+    "max_turns": 50,
+    "response_style": "casual_friendly",
+    "max_response_words": 20,
+    "forbidden_phrases": [
+      "As an AI",
+      "I apologize for the inconvenience",
+      "Please hold while I",
+      "I will now",
+      "Furthermore",
+      "Moreover",
+      "However"
+    ],
+    "preferred_phrases": [
+      "Got it",
+      "No problem",
+      "My bad",
+      "Lemme",
+      "Gonna",
+      "Yeah",
+      "Nice"
+    ]
+  }
+}
+
+
