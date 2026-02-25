@@ -1,7 +1,6 @@
 """
-Menu Search Tool - Phase 1.6 (Basic)
-Simple keyword-based menu search for initial implementation
-Will be enhanced with vector search in Phase 2
+Menu Search Tool - Phase 2
+Enhanced with vector search (semantic) + keyword search (hybrid)
 """
 
 import json
@@ -77,34 +76,37 @@ class MenuSearchTool(BaseTool):
             ]
         }
     
-    async def execute(self, query: str, category: str = None) -> ToolResult:
-        """Search menu by keyword"""
+    async def execute(self, query: str, category: str = None, use_semantic: bool = True) -> ToolResult:
+        """Search menu using keyword + semantic search"""
         try:
-            menu = self._load_menu()
-            query_lower = query.lower()
-            results = []
+            # First try keyword search
+            keyword_results = self._keyword_search(query, category)
             
-            # Search through all categories
-            for cat, items in menu.items():
-                if category and cat != category:
-                    continue
-                
-                if isinstance(items, list):
-                    for item in items:
-                        item_str = json.dumps(item).lower()
-                        if query_lower in item_str:
-                            results.append({
-                                "category": cat,
-                                **item
-                            })
+            # If semantic search enabled and Qdrant available, try that too
+            semantic_results = []
+            if use_semantic:
+                try:
+                    from src.vector_db.qdrant_client import QdrantManager
+                    qdrant = QdrantManager()
+                    semantic_results = await qdrant.search(query, limit=5)
+                except Exception as e:
+                    print(f"[MenuSearch] Semantic search unavailable: {e}")
+            
+            # Combine and deduplicate results
+            all_results = self._merge_results(keyword_results, semantic_results)
+            
+            # Add explanation
+            explanation = self._generate_explanation(query, all_results)
             
             return ToolResult(
                 success=True,
                 data={
                     "query": query,
                     "category_filter": category,
-                    "results": results[:5],  # Limit to top 5
-                    "count": len(results)
+                    "results": all_results[:5],
+                    "count": len(all_results),
+                    "explanation": explanation,
+                    "used_semantic": len(semantic_results) > 0
                 }
             )
             
@@ -113,3 +115,72 @@ class MenuSearchTool(BaseTool):
                 success=False,
                 error=f"Menu search failed: {str(e)}"
             )
+    
+    def _keyword_search(self, query: str, category: str = None) -> list:
+        """Traditional keyword search"""
+        menu = self._load_menu()
+        query_lower = query.lower()
+        results = []
+        
+        for cat, items in menu.items():
+            if category and cat != category:
+                continue
+            
+            if isinstance(items, list):
+                for item in items:
+                    item_str = json.dumps(item).lower()
+                    if query_lower in item_str:
+                        results.append({
+                            "category": cat,
+                            "match_type": "keyword",
+                            **item
+                        })
+        
+        return results
+    
+    def _merge_results(self, keyword_results: list, semantic_results: list) -> list:
+        """Merge and deduplicate results from both methods"""
+        seen = set()
+        merged = []
+        
+        # Add semantic results first (higher priority)
+        for item in semantic_results:
+            name = item.get("name")
+            if name and name not in seen:
+                seen.add(name)
+                merged.append({
+                    "name": name,
+                    "category": item.get("category"),
+                    "price": item.get("price"),
+                    "description": item.get("description"),
+                    "match_type": "semantic",
+                    "score": item.get("score", 0)
+                })
+        
+        # Add keyword results
+        for item in keyword_results:
+            name = item.get("name")
+            if name and name not in seen:
+                seen.add(name)
+                merged.append(item)
+        
+        return merged
+    
+    def _generate_explanation(self, query: str, results: list) -> str:
+        """Generate human-friendly explanation of results"""
+        if not results:
+            return f"I couldn't find anything matching '{query}'. Try 'wings', 'sides', or 'drinks'."
+        
+        # Detect query intent
+        query_lower = query.lower()
+        
+        if any(word in query_lower for word in ["spicy", "hot", "mild"]):
+            return f"Here are some options based on your preference for '{query}':"
+        
+        if any(word in query_lower for word in ["boneless", "bone-in", "classic"]):
+            return f"Here are the wing styles you're looking for:"
+        
+        if any(word in query_lower for word in ["cheap", "deal", "combo", "value"]):
+            return f"Great choice! Here are some value options:"
+        
+        return f"Here are our {results[0].get('category', 'items')} that match '{query}':"
