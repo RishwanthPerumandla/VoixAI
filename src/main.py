@@ -141,10 +141,11 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection established")
     
+    # Create a connection handler
+    handler = WebSocketHandler(websocket, pipeline)
+    
     try:
-        # Set up message handler for this connection
-        await handle_websocket_messages(websocket)
-        
+        await handler.run()
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")
     except Exception as e:
@@ -155,109 +156,163 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection closed")
 
 
-async def handle_websocket_messages(websocket: WebSocket):
-    """Handle WebSocket messages with proper error handling"""
-    session_id = None
+class WebSocketHandler:
+    """Handles individual WebSocket connections"""
     
-    # Send connection confirmation
-    await websocket.send_text(json.dumps({
-        "type": "system",
-        "event": "connected",
-        "session_id": f"session-{asyncio.get_event_loop().time()}"
-    }))
+    def __init__(self, websocket, pipeline):
+        self.websocket = websocket
+        self.pipeline = pipeline
+        self.session_id = None
+        self.pending_transcript = None
+        
+        # Set up STT callback
+        if hasattr(self.pipeline.stt, 'on_transcript'):
+            self.pipeline.stt.on_transcript = self._on_stt_transcript
     
-    while True:
-        try:
-            # Receive message
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            msg_type = message.get("type")
-            
-            if msg_type == "start_conversation":
-                session_id = message.get("session_id") or f"session-{asyncio.get_event_loop().time()}"
-                await websocket.send_text(json.dumps({
-                    "type": "system",
-                    "event": "session_started",
-                    "session_id": session_id
+    async def run(self):
+        """Main message loop"""
+        # Send connection confirmation
+        await self.websocket.send_text(json.dumps({
+            "type": "system",
+            "event": "connected",
+            "session_id": f"session-{asyncio.get_event_loop().time()}"
+        }))
+        
+        while True:
+            try:
+                # Receive message
+                data = await self.websocket.receive_text()
+                message = json.loads(data)
+                
+                await self._handle_message(message)
+                
+            except WebSocketDisconnect:
+                raise
+            except Exception as e:
+                logger.error(f"Error handling message: {e}")
+                await self.websocket.send_text(json.dumps({
+                    "type": "error",
+                    "content": "Sorry, I had trouble processing that."
                 }))
-                
-            elif msg_type == "audio":
-                # Process audio from client
-                audio_b64 = message.get("data")
-                if audio_b64 and session_id:
-                    print("[WS] Received audio, processing...")
-                    
-                    # Decode audio
-                    try:
-                        audio_data = base64.b64decode(audio_b64)
-                        print(f"[WS] Audio size: {len(audio_data)} bytes")
-                        
-                        # Send to STT for transcription
-                        await pipeline.stt.process_audio(audio_data)
-                        
-                        # Note: In a real implementation, we'd wait for the transcript
-                        # For now, acknowledge receipt
-                        await websocket.send_text(json.dumps({
-                            "type": "system",
-                            "event": "audio_received"
-                        }))
-                        
-                    except Exception as e:
-                        print(f"[WS] Error processing audio: {e}")
-                        await websocket.send_text(json.dumps({
-                            "type": "error",
-                            "content": "Could not process audio. Please try again."
-                        }))
-                    
-            elif msg_type == "text":
-                # Process text message through pipeline
-                text = message.get("content", "")
-                if text and session_id:
-                    print(f"[WS] User: '{text}'")
-                    
-                    # Process through agent
-                    import time
-                    start_time = time.time()
-                    
-                    response = await pipeline.agent.process(text, session_id)
-                    
-                    latency_ms = (time.time() - start_time) * 1000
-                    print(f"[WS] Bot: '{response}' ({latency_ms:.0f}ms)")
-                    
-                    # Send text response
-                    await websocket.send_text(json.dumps({
-                        "type": "bot_text",
-                        "content": response,
-                        "latency_ms": latency_ms
-                    }))
-                    
-                    # If using real TTS, synthesize audio
-                    if hasattr(pipeline, 'tts') and not isinstance(pipeline.tts, type(pipeline.stt).__mro__[0]):
-                        try:
-                            # Synthesize and send audio
-                            audio_data = await pipeline.tts.synthesize(response)
-                            if audio_data:
-                                await websocket.send_text(json.dumps({
-                                    "type": "bot_audio",
-                                    "data": base64.b64encode(audio_data).decode('utf-8'),
-                                    "format": "pcm_f32le",
-                                    "sample_rate": 24000
-                                }))
-                        except Exception as e:
-                            print(f"[WS] TTS error: {e}")
-                    
-            elif msg_type == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
-                
-        except WebSocketDisconnect:
-            raise
-        except Exception as e:
-            logger.error(f"Error handling message: {e}")
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "content": "Sorry, I had trouble processing that."
+    
+    async def _handle_message(self, message: dict):
+        """Handle a single message"""
+        msg_type = message.get("type")
+        
+        if msg_type == "start_conversation":
+            self.session_id = message.get("session_id") or f"session-{asyncio.get_event_loop().time()}"
+            await self.websocket.send_text(json.dumps({
+                "type": "system",
+                "event": "session_started",
+                "session_id": self.session_id
             }))
+            
+        elif msg_type == "audio":
+            # Process audio from client
+            await self._handle_audio(message)
+            
+        elif msg_type == "text":
+            # Process text message
+            await self._handle_text(message)
+            
+        elif msg_type == "ping":
+            await self.websocket.send_text(json.dumps({"type": "pong"}))
+    
+    async def _handle_audio(self, message: dict):
+        """Handle audio message from client"""
+        audio_b64 = message.get("data")
+        if not audio_b64 or not self.session_id:
+            return
+        
+        print("[WS] Received audio, sending to Deepgram...")
+        
+        try:
+            # Decode audio
+            audio_data = base64.b64decode(audio_b64)
+            print(f"[WS] Audio size: {len(audio_data)} bytes")
+            
+            # Reset pending transcript
+            self.pending_transcript = None
+            
+            # Send to STT for transcription
+            await self.pipeline.stt.process_audio(audio_data)
+            
+            # Wait a bit for transcription (in production, this would be async)
+            await asyncio.sleep(2)
+            
+            # Check if we got a transcript
+            if hasattr(self.pipeline.stt, 'get_final_transcript'):
+                transcript = self.pipeline.stt.get_final_transcript()
+                if transcript:
+                    print(f"[WS] Transcript: '{transcript}'")
+                    await self._process_transcript(transcript)
+                    self.pipeline.stt.clear_buffer()
+                else:
+                    await self.websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": "I couldn't hear that. Please try again."
+                    }))
+            else:
+                # Mock STT - simulate
+                await self.websocket.send_text(json.dumps({
+                    "type": "system",
+                    "event": "audio_received"
+                }))
+            
+        except Exception as e:
+            print(f"[WS] Error processing audio: {e}")
+            await self.websocket.send_text(json.dumps({
+                "type": "error",
+                "content": "Could not process audio. Please try again."
+            }))
+    
+    async def _handle_text(self, message: dict):
+        """Handle text message from client"""
+        text = message.get("content", "")
+        if not text or not self.session_id:
+            return
+        
+        print(f"[WS] User: '{text}'")
+        await self._process_transcript(text)
+    
+    async def _process_transcript(self, transcript: str):
+        """Process transcript through agent and send response"""
+        import time
+        start_time = time.time()
+        
+        # Process through agent
+        response = await self.pipeline.agent.process(transcript, self.session_id)
+        
+        latency_ms = (time.time() - start_time) * 1000
+        print(f"[WS] Bot: '{response}' ({latency_ms:.0f}ms)")
+        
+        # Send text response
+        await self.websocket.send_text(json.dumps({
+            "type": "bot_text",
+            "content": response,
+            "latency_ms": latency_ms
+        }))
+        
+        # Generate audio response if using real TTS
+        if settings.cartesia_api_key:
+            try:
+                print("[WS] Synthesizing audio response...")
+                audio_data = await self.pipeline.tts.synthesize(response)
+                if audio_data:
+                    await self.websocket.send_text(json.dumps({
+                        "type": "bot_audio",
+                        "data": base64.b64encode(audio_data).decode('utf-8'),
+                        "format": "pcm_f32le",
+                        "sample_rate": 24000
+                    }))
+            except Exception as e:
+                print(f"[WS] TTS error: {e}")
+    
+    async def _on_stt_transcript(self, transcript: str, is_final: bool):
+        """Callback for STT transcript"""
+        if is_final:
+            self.pending_transcript = transcript
+            print(f"[STT Callback] Final: '{transcript}'")
 
 
 if __name__ == "__main__":
