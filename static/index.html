@@ -176,6 +176,10 @@
             animation: pulse 0.5s infinite;
         }
         
+        .mic-btn.error {
+            background: #666;
+        }
+        
         .connection-status {
             text-align: center;
             padding: 10px;
@@ -224,12 +228,28 @@
             text-align: center;
             padding: 10px;
             font-size: 0.85rem;
-            color: #4ecca3;
             min-height: 30px;
+        }
+        
+        .voice-indicator.ready {
+            color: #4ecca3;
         }
         
         .voice-indicator.recording {
             color: #e94560;
+        }
+        
+        .voice-indicator.error {
+            color: #ffa500;
+        }
+        
+        .error-box {
+            background: rgba(255, 100, 100, 0.2);
+            border: 1px solid rgba(255, 100, 100, 0.5);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
         }
     </style>
 </head>
@@ -246,9 +266,11 @@
     <div class="container">
         <div class="info-box">
             <h3>Welcome to VoixAI!</h3>
-            <p>I'm Tasha, your Wingstop cashier. <strong>Click the mic button</strong> to talk, or type your order.</p>
+            <p>I'm Tasha, your Wingstop cashier. <strong>Click and HOLD the mic button</strong> to talk, or type your order.</p>
             <p><strong>Try saying:</strong> "Hi, I'd like to order some wings"</p>
         </div>
+        
+        <div id="errorBox" class="error-box" style="display: none;"></div>
         
         <div class="chat-area" id="chatArea">
             <div class="message message-bot">
@@ -258,7 +280,7 @@
             </div>
         </div>
         
-        <div class="voice-indicator" id="voiceIndicator"></div>
+        <div class="voice-indicator ready" id="voiceIndicator">Click mic and hold to speak</div>
         <div class="connection-status" id="connectionStatus">Connecting...</div>
         
         <div class="input-area">
@@ -278,6 +300,7 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const modeIndicator = document.getElementById('modeIndicator');
+        const errorBox = document.getElementById('errorBox');
         
         let ws = null;
         let sessionId = null;
@@ -287,22 +310,41 @@
         // Web Speech API
         let recognition = null;
         let isRecording = false;
+        let speechSupported = false;
+        
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+            setTimeout(() => {
+                errorBox.style.display = 'none';
+            }, 5000);
+        }
         
         // Initialize Web Speech API
         function initSpeechRecognition() {
-            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                console.log('Web Speech API not supported');
+                voiceIndicator.textContent = 'Voice not supported. Please type.';
+                voiceIndicator.className = 'voice-indicator error';
+                micBtn.style.display = 'none';
+                return false;
+            }
+            
+            try {
                 recognition = new SpeechRecognition();
                 recognition.continuous = false;
                 recognition.interimResults = false;
                 recognition.lang = 'en-US';
+                recognition.maxAlternatives = 1;
                 
                 recognition.onstart = () => {
                     isRecording = true;
                     micBtn.classList.add('recording');
                     statusDot.classList.add('recording');
                     voiceIndicator.textContent = 'Listening... Speak now!';
-                    voiceIndicator.classList.add('recording');
+                    voiceIndicator.className = 'voice-indicator recording';
                 };
                 
                 recognition.onresult = (event) => {
@@ -317,18 +359,47 @@
                 
                 recognition.onerror = (event) => {
                     console.error('Speech recognition error:', event.error);
-                    voiceIndicator.textContent = 'Error: ' + event.error;
+                    
+                    let errorMsg = '';
+                    switch(event.error) {
+                        case 'network':
+                            errorMsg = 'Network error. Speech API requires internet connection. Please type instead.';
+                            break;
+                        case 'not-allowed':
+                            errorMsg = 'Microphone access denied. Please allow microphone permission.';
+                            break;
+                        case 'no-speech':
+                            errorMsg = 'No speech detected. Please try again.';
+                            break;
+                        case 'audio-capture':
+                            errorMsg = 'No microphone found. Please check your device.';
+                            break;
+                        default:
+                            errorMsg = 'Speech error: ' + event.error;
+                    }
+                    
+                    voiceIndicator.textContent = errorMsg;
+                    voiceIndicator.className = 'voice-indicator error';
+                    showError(errorMsg);
                     stopRecording();
                 };
                 
                 recognition.onend = () => {
                     stopRecording();
+                    if (!isRecording) {
+                        voiceIndicator.textContent = 'Click mic and hold to speak';
+                        voiceIndicator.className = 'voice-indicator ready';
+                    }
                 };
                 
+                speechSupported = true;
+                console.log('Web Speech API initialized');
                 return true;
-            } else {
-                console.log('Web Speech API not supported');
-                voiceIndicator.textContent = 'Speech API not supported. Use text input.';
+                
+            } catch (err) {
+                console.error('Error initializing speech recognition:', err);
+                voiceIndicator.textContent = 'Voice init failed. Please type.';
+                voiceIndicator.className = 'voice-indicator error';
                 micBtn.style.display = 'none';
                 return false;
             }
@@ -341,7 +412,8 @@
                 recognition.start();
             } catch (err) {
                 console.error('Error starting recognition:', err);
-                voiceIndicator.textContent = 'Error starting mic';
+                voiceIndicator.textContent = 'Error starting mic. Please type.';
+                voiceIndicator.className = 'voice-indicator error';
             }
         }
         
@@ -357,10 +429,6 @@
             isRecording = false;
             micBtn.classList.remove('recording');
             statusDot.classList.remove('recording');
-            voiceIndicator.classList.remove('recording');
-            setTimeout(() => {
-                voiceIndicator.textContent = '';
-            }, 1000);
         }
         
         // Connect to WebSocket
@@ -382,10 +450,11 @@
                 connectionStatus.textContent = 'Connected';
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
-                micBtn.disabled = false;
+                if (speechSupported) {
+                    micBtn.disabled = false;
+                }
                 messageInput.focus();
                 
-                // Start conversation
                 ws.send(JSON.stringify({
                     type: 'start_conversation'
                 }));
@@ -397,13 +466,10 @@
                 
                 if (data.type === 'system' && data.event === 'connected') {
                     sessionId = data.session_id;
-                    console.log('Session:', sessionId);
                 }
                 else if (data.type === 'system' && data.event === 'session_started') {
                     sessionId = data.session_id;
-                    console.log('Session started:', sessionId);
                     
-                    // Update mode indicator
                     fetch('/health')
                         .then(r => r.json())
                         .then(h => {
@@ -414,26 +480,20 @@
                 }
                 else if (data.type === 'bot_text') {
                     addMessage(data.content, 'bot', data.latency_ms);
-                    // Speak the response
                     speak(data.content);
-                }
-                else if (data.type === 'bot_audio') {
-                    // Play audio response if available
-                    playAudio(data.data);
                 }
                 else if (data.type === 'error') {
                     addMessage(data.content, 'bot');
                 }
             };
             
-            ws.onclose = (event) => {
-                console.log('WebSocket closed:', event.code, event.reason);
+            ws.onclose = () => {
+                console.log('WebSocket closed');
                 connectionStatus.textContent = `Disconnected - Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`;
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
                 micBtn.disabled = true;
                 
-                // Reconnect after delay
                 setTimeout(connect, 3000);
             };
             
@@ -443,50 +503,15 @@
             };
         }
         
-        // Play audio response
-        function playAudio(base64Data) {
-            try {
-                const audioData = atob(base64Data);
-                const arrayBuffer = new ArrayBuffer(audioData.length);
-                const view = new Uint8Array(arrayBuffer);
-                for (let i = 0; i < audioData.length; i++) {
-                    view[i] = audioData.charCodeAt(i);
-                }
-                
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    const source = audioContext.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(audioContext.destination);
-                    source.start();
-                    voiceIndicator.textContent = 'Playing response...';
-                    
-                    source.onended = () => {
-                        voiceIndicator.textContent = '';
-                    };
-                }, (err) => {
-                    console.error('Error decoding audio:', err);
-                    voiceIndicator.textContent = '';
-                });
-                
-            } catch (e) {
-                console.error('Error playing audio:', e);
-                voiceIndicator.textContent = '';
-            }
-        }
-        
         // Text-to-speech
         function speak(text) {
             if ('speechSynthesis' in window) {
-                // Cancel any ongoing speech
                 window.speechSynthesis.cancel();
                 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.rate = 1.2;
                 utterance.pitch = 1;
                 
-                // Try to find a good voice
                 const voices = window.speechSynthesis.getVoices();
                 const preferredVoice = voices.find(v => 
                     v.name.includes('Google US English') || 
@@ -539,6 +564,7 @@
             }));
             
             voiceIndicator.textContent = 'Thinking...';
+            voiceIndicator.className = 'voice-indicator ready';
         }
         
         // Event listeners
@@ -546,7 +572,6 @@
         micBtn.addEventListener('mouseup', stopRecording);
         micBtn.addEventListener('mouseleave', stopRecording);
         
-        // Touch events for mobile
         micBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             startRecording();
