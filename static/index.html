@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VoixAI v3.0 - Voice Ordering</title>
-    <script src="https://unpkg.com/@daily-co/daily-js@0.63.0/dist/daily-js.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -233,17 +232,12 @@
             color: #e94560;
         }
         
-        #daily-video {
-            width: 1px;
-            height: 1px;
-            position: absolute;
-            opacity: 0;
+        .voice-indicator.error {
+            color: #ffa500;
         }
     </style>
 </head>
 <body>
-    <div id="daily-video"></div>
-    
     <div class="header">
         <h1>VoixAI v3.0</h1>
         <div class="status">
@@ -256,7 +250,7 @@
     <div class="container">
         <div class="info-box">
             <h3>Welcome to VoixAI!</h3>
-            <p>I'm Tasha, your Wingstop cashier. <strong>Click the mic button</strong> to talk, or type your order.</p>
+            <p>I'm Tasha, your Wingstop cashier. <strong>Click and HOLD the mic button</strong> to talk, or type your order.</p>
             <p><strong>Try saying:</strong> "Hi, I'd like to order some wings"</p>
         </div>
         
@@ -268,11 +262,11 @@
             </div>
         </div>
         
-        <div class="voice-indicator" id="voiceIndicator">Ready - Click mic to speak</div>
+        <div class="voice-indicator" id="voiceIndicator">Initializing...</div>
         <div class="connection-status" id="connectionStatus">Connecting...</div>
         
         <div class="input-area">
-            <button class="mic-btn" id="micBtn" disabled title="Click to talk">🎤</button>
+            <button class="mic-btn" id="micBtn" disabled title="Hold to talk">🎤</button>
             <input type="text" id="messageInput" placeholder="Type your message..." disabled>
             <button id="sendBtn" disabled>Send</button>
         </div>
@@ -293,96 +287,61 @@
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
         
-        // Daily.co call object
-        let callObject = null;
+        // Audio recording
+        let mediaRecorder = null;
+        let audioChunks = [];
         let isRecording = false;
+        let voiceReady = false;
         
-        // Initialize Daily.co for audio
-        async function initDaily() {
+        // Initialize audio
+        async function initAudio() {
             try {
-                // Create room via API
-                const response = await fetch('/daily/create-room');
-                const roomData = await response.json();
-                
-                if (!roomData.url) {
-                    throw new Error('Failed to create room');
+                // Check if MediaRecorder is supported
+                if (!window.MediaRecorder) {
+                    throw new Error('MediaRecorder not supported');
                 }
                 
-                console.log('Daily room:', roomData.url);
+                // Test microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
                 
-                // Create Daily call object
-                callObject = window.Daily.createCallObject({
-                    url: roomData.url,
-                    audioSource: true,
-                    videoSource: false,
-                    dailyConfig: {
-                        micAudioMode: 'music',
-                        experimentalChromeAudioIso: false
-                    }
-                });
-                
-                // Set up event handlers
-                callObject.on('joined-meeting', () => {
-                    console.log('Joined Daily room');
-                    micBtn.disabled = false;
-                    voiceIndicator.textContent = 'Ready - Click mic to speak';
-                });
-                
-                callObject.on('error', (e) => {
-                    console.error('Daily error:', e);
-                    voiceIndicator.textContent = 'Voice error. Use text instead.';
-                });
-                
-                callObject.on('track-started', (e) => {
-                    console.log('Track started:', e.track.kind);
-                });
-                
-                // Join the room
-                await callObject.join();
-                
-                // Set up audio recording
-                setupAudioRecording();
+                voiceReady = true;
+                voiceIndicator.textContent = 'Ready - Hold mic to speak';
+                console.log('Audio initialized successfully');
                 
             } catch (err) {
-                console.error('Failed to init Daily:', err);
-                voiceIndicator.textContent = 'Voice unavailable. Use text instead.';
+                console.error('Audio init error:', err);
+                voiceReady = false;
+                voiceIndicator.textContent = 'Voice unavailable: ' + err.message;
+                voiceIndicator.className = 'voice-indicator error';
                 micBtn.style.display = 'none';
             }
         }
         
-        // Set up audio recording from Daily
-        function setupAudioRecording() {
-            // We'll use a simpler approach - record audio chunks and send to server
-            // For now, use MediaRecorder as a backup since Daily audio extraction is complex
-            
-            micBtn.addEventListener('click', toggleRecording);
-        }
-        
-        // Fallback to MediaRecorder with WAV format
-        let mediaRecorder = null;
-        let audioChunks = [];
-        
-        async function toggleRecording() {
-            if (isRecording) {
-                stopRecording();
-            } else {
-                startRecording();
-            }
-        }
-        
+        // Start recording
         async function startRecording() {
+            if (isRecording || !voiceReady) return;
+            
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
-                        sampleRate: 16000,
                         channelCount: 1,
+                        sampleRate: 16000,
                         echoCancellation: true,
                         noiseSuppression: true
                     } 
                 });
                 
-                // Use WAV format if supported, otherwise WebM
-                const mimeType = 'audio/webm;codecs=opus';
+                // Try different mime types
+                let mimeType = 'audio/webm;codecs=opus';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'audio/webm';
+                }
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'audio/mp4';
+                }
+                
+                console.log('Using mime type:', mimeType);
                 
                 mediaRecorder = new MediaRecorder(stream, { mimeType });
                 audioChunks = [];
@@ -394,25 +353,28 @@
                 };
                 
                 mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    console.log('Recording stopped, processing...');
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
                     await sendAudio(audioBlob);
                     stream.getTracks().forEach(track => track.stop());
                 };
                 
-                mediaRecorder.start(100); // Collect data every 100ms
+                mediaRecorder.start(100);
                 isRecording = true;
                 
                 micBtn.classList.add('recording');
                 statusDot.classList.add('recording');
-                voiceIndicator.textContent = 'Recording... Click again to stop';
+                voiceIndicator.textContent = 'Recording... Release to send';
                 voiceIndicator.classList.add('recording');
                 
             } catch (err) {
-                console.error('Error accessing microphone:', err);
-                voiceIndicator.textContent = 'Mic access denied. Check permissions.';
+                console.error('Recording error:', err);
+                voiceIndicator.textContent = 'Mic error: ' + err.message;
+                voiceIndicator.className = 'voice-indicator error';
             }
         }
         
+        // Stop recording
         function stopRecording() {
             if (!isRecording || !mediaRecorder) return;
             
@@ -425,6 +387,7 @@
             voiceIndicator.textContent = 'Processing...';
         }
         
+        // Send audio to server
         async function sendAudio(audioBlob) {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 voiceIndicator.textContent = 'Not connected';
@@ -436,18 +399,18 @@
                 reader.onloadend = () => {
                     const base64Audio = reader.result.split(',')[1];
                     
+                    console.log('Sending audio:', base64Audio.length, 'chars');
+                    
                     ws.send(JSON.stringify({
                         type: 'audio',
                         data: base64Audio,
                         format: 'webm'
                     }));
-                    
-                    console.log('Audio sent:', base64Audio.length, 'chars');
                 };
                 reader.readAsDataURL(audioBlob);
                 
             } catch (err) {
-                console.error('Error sending audio:', err);
+                console.error('Send audio error:', err);
                 voiceIndicator.textContent = 'Error sending audio';
             }
         }
@@ -471,12 +434,12 @@
                 connectionStatus.textContent = 'Connected';
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
+                if (voiceReady) {
+                    micBtn.disabled = false;
+                }
                 messageInput.focus();
                 
                 ws.send(JSON.stringify({ type: 'start_conversation' }));
-                
-                // Init Daily after WS connects
-                initDaily();
             };
             
             ws.onmessage = (event) => {
@@ -494,13 +457,13 @@
                             modeIndicator.className = 'mode-indicator ' + (isReal ? 'mode-real' : 'mode-mock');
                         });
                 }
+                else if (data.type === 'user_transcript') {
+                    addMessage(data.content, 'user');
+                }
                 else if (data.type === 'bot_text') {
                     addMessage(data.content, 'bot', data.latency_ms);
                     speak(data.content);
-                    voiceIndicator.textContent = 'Ready - Click mic to speak';
-                }
-                else if (data.type === 'user_transcript') {
-                    addMessage(data.content, 'user');
+                    voiceIndicator.textContent = 'Ready - Hold mic to speak';
                 }
                 else if (data.type === 'error') {
                     addMessage(data.content, 'bot');
@@ -513,7 +476,6 @@
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
                 micBtn.disabled = true;
-                
                 setTimeout(connect, 3000);
             };
             
@@ -574,6 +536,14 @@
             voiceIndicator.textContent = 'Thinking...';
         }
         
+        // Event listeners
+        micBtn.addEventListener('mousedown', startRecording);
+        micBtn.addEventListener('mouseup', stopRecording);
+        micBtn.addEventListener('mouseleave', stopRecording);
+        
+        micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+        micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
+        
         sendBtn.addEventListener('click', () => {
             const text = messageInput.value.trim();
             if (text) {
@@ -587,7 +557,8 @@
             if (e.key === 'Enter') sendBtn.click();
         });
         
-        // Start
+        // Start everything
+        initAudio();
         connect();
     </script>
 </body>

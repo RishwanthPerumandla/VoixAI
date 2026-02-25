@@ -16,7 +16,7 @@ import base64
 import aiohttp
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 
 from src.config import settings
@@ -24,11 +24,8 @@ from src.pipeline.conversation_pipeline import ConversationPipeline, MockPipelin
 from src.audio_utils import convert_audio_to_pcm
 
 app = FastAPI(title="VoixAI v3.0", version="3.0.0")
-
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Global pipeline
 pipeline = None
 
 
@@ -37,10 +34,7 @@ async def lifespan(app: FastAPI):
     global pipeline
     
     use_real = bool(settings.deepgram_api_key)
-    if not use_real:
-        pipeline = MockPipeline()
-    else:
-        pipeline = ConversationPipeline(use_mock_stt=False, use_mock_tts=False)
+    pipeline = ConversationPipeline(use_mock_stt=not use_real, use_mock_tts=not use_real) if use_real else MockPipeline()
     
     await pipeline.start()
     print(f"[Server] Started with {'Real' if use_real else 'Mock'} APIs")
@@ -69,7 +63,7 @@ async def health():
 
 @app.post("/daily/create-room")
 async def create_daily_room():
-    """Create a Daily.co room for WebRTC audio"""
+    """Create a Daily.co room"""
     try:
         async with aiohttp.ClientSession() as session:
             headers = {"Authorization": f"Bearer {settings.daily_api_key}"}
@@ -77,8 +71,7 @@ async def create_daily_room():
                 "privacy": "public",
                 "properties": {
                     "start_audio_off": False,
-                    "start_video_off": True,
-                    "enable_screenshare": False
+                    "start_video_off": True
                 }
             }
             
@@ -92,17 +85,12 @@ async def create_daily_room():
                     return {"url": room_data["url"], "name": room_data["name"]}
                 else:
                     error = await resp.text()
-                    print(f"[Daily] Error creating room: {error}")
-                    return JSONResponse(
-                        status_code=500,
-                        content={"error": "Failed to create room"}
-                    )
+                    print(f"[Daily] Error: {error}")
+                    return JSONResponse(status_code=500, content={"error": error})
+                    
     except Exception as e:
         print(f"[Daily] Exception: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
-        )
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @app.websocket("/ws")
@@ -127,78 +115,53 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 
             elif msg_type == "audio":
-                # Handle audio from client
                 audio_b64 = message.get("data")
                 if audio_b64 and session_id:
                     try:
-                        print("[WS] Received audio, processing...")
+                        print("[WS] Processing audio...")
                         
-                        # Decode base64 audio
+                        # Decode audio
                         audio_data = base64.b64decode(audio_b64)
-                        print(f"[WS] Audio size: {len(audio_data)} bytes")
+                        print(f"[WS] Raw audio: {len(audio_data)} bytes")
                         
                         # Convert to PCM
                         pcm_audio = convert_audio_to_pcm(audio_data)
-                        print(f"[WS] PCM size: {len(pcm_audio)} bytes")
+                        print(f"[WS] PCM audio: {len(pcm_audio)} bytes")
                         
-                        # Send to Deepgram for transcription
-                        if hasattr(pipeline.stt, 'connection') and pipeline.stt.connection:
-                            # Send audio chunk
-                            await pipeline.stt.connection.send(pcm_audio)
-                            print("[WS] Sent to Deepgram")
+                        # Send to Deepgram and wait for transcript
+                        transcript = await process_audio_with_deepgram(pcm_audio)
+                        
+                        if transcript:
+                            print(f"[WS] Transcript: '{transcript}'")
                             
-                            # Wait for transcript (simplified - in production use callback)
-                            await asyncio.sleep(2)
+                            # Send transcript to client
+                            await websocket.send_json({
+                                "type": "user_transcript",
+                                "content": transcript
+                            })
                             
-                            transcript = pipeline.stt.get_final_transcript()
-                            if transcript:
-                                print(f"[WS] Transcript: '{transcript}'")
-                                pipeline.stt.clear_buffer()
-                                
-                                # Show user transcript
-                                await websocket.send_json({
-                                    "type": "user_transcript",
-                                    "content": transcript
-                                })
-                                
-                                # Process through agent
-                                import time
-                                start = time.time()
-                                response = await pipeline.agent.process(transcript, session_id)
-                                latency = (time.time() - start) * 1000
-                                
-                                # Send response
-                                await websocket.send_json({
-                                    "type": "bot_text",
-                                    "content": response,
-                                    "latency_ms": latency
-                                })
-                                
-                                # Generate TTS audio
-                                if settings.cartesia_api_key:
-                                    try:
-                                        audio_response = await pipeline.tts.synthesize(response)
-                                        if audio_response:
-                                            await websocket.send_json({
-                                                "type": "bot_audio",
-                                                "data": base64.b64encode(audio_response).decode()
-                                            })
-                                    except Exception as e:
-                                        print(f"[WS] TTS error: {e}")
-                            else:
-                                await websocket.send_json({
-                                    "type": "error",
-                                    "content": "I couldn't hear that. Please try again."
-                                })
+                            # Process through agent
+                            import time
+                            start = time.time()
+                            response = await pipeline.agent.process(transcript, session_id)
+                            latency = (time.time() - start) * 1000
+                            
+                            print(f"[WS] Response: '{response}' ({latency:.0f}ms)")
+                            
+                            await websocket.send_json({
+                                "type": "bot_text",
+                                "content": response,
+                                "latency_ms": latency
+                            })
+                            
                         else:
-                            # Fallback: use text mode
                             await websocket.send_json({
                                 "type": "error",
-                                "content": "Voice processing unavailable. Please type."
+                                "content": "I couldn't hear that. Please try again."
                             })
                             
                     except Exception as e:
-                        print(f"[WS] Audio processing error: {e}")
+                        print(f"[WS] Audio error: {e}")
                         import traceback
                         traceback.print_exc()
                         await websocket.send_json({
@@ -232,6 +195,45 @@ async def websocket_endpoint(websocket: WebSocket):
         traceback.print_exc()
 
 
+async def process_audio_with_deepgram(pcm_audio: bytes) -> str:
+    """Send audio to Deepgram and get transcript"""
+    # For now, use a simpler approach - accumulate audio and use Deepgram's REST API
+    # or use the existing streaming connection
+    
+    # Try sending to the existing connection
+    if hasattr(pipeline.stt, 'connection') and pipeline.stt.connection:
+        try:
+            # Clear any previous transcript
+            if hasattr(pipeline.stt, 'clear_buffer'):
+                pipeline.stt.clear_buffer()
+            
+            # Send audio
+            await pipeline.stt.connection.send(pcm_audio)
+            print("[Deepgram] Audio sent")
+            
+            # Wait for transcription (with timeout)
+            max_wait = 10  # seconds
+            waited = 0
+            while waited < max_wait:
+                await asyncio.sleep(0.5)
+                waited += 0.5
+                
+                if hasattr(pipeline.stt, 'get_final_transcript'):
+                    transcript = pipeline.stt.get_final_transcript()
+                    if transcript:
+                        return transcript
+            
+            print("[Deepgram] Timeout waiting for transcript")
+            return None
+            
+        except Exception as e:
+            print(f"[Deepgram] Error: {e}")
+            return None
+    else:
+        print("[Deepgram] No connection available")
+        return None
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("src.main:app", host="0.0.0.0", port=settings.port, reload=True)
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)
