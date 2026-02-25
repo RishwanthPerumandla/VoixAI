@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     deepgram_api_key: str = Field(alias="DEEPGRAM_API_KEY")
     cartesia_api_key: str = Field(alias="CARTESIA_API_KEY")
     daily_api_key: str = Field(alias="DAILY_API_KEY")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     
     # --------------------------------------------
     # Local Services

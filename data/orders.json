@@ -1,0 +1,19 @@
+[
+  {
+    "id": "f1808f9d-2568-4ec7-a3c6-8cc382c7715c",
+    "customer_name": "Test Customer",
+    "items": [
+      {
+        "name": "Boneless Wings",
+        "quantity": 10,
+        "price": 11.99
+      }
+    ],
+    "subtotal": 119.9,
+    "tax": 9.89,
+    "total": 129.79,
+    "status": "pending",
+    "conversation_id": null,
+    "created_at": "2026-02-25T10:20:28.794216"
+  }
+]

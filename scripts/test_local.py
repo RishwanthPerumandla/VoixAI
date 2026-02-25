@@ -18,7 +18,7 @@ from src.tools.registry import ToolRegistry
 
 async def test_tools():
     """Test tool registry"""
-    print("\n🧪 Testing Tool Registry...")
+    print("\n[TEST] Testing Tool Registry...")
     
     registry = ToolRegistry().create_default_registry()
     
@@ -49,7 +49,7 @@ async def test_tools():
 
 async def test_memory():
     """Test memory systems"""
-    print("\n🧪 Testing Memory Systems...")
+    print("\n[TEST] Testing Memory Systems...")
     
     # Working memory
     print("\n   Testing WorkingMemory...")
@@ -85,7 +85,7 @@ async def test_memory():
 
 async def test_agent():
     """Test ReAct agent"""
-    print("\n🧪 Testing ReAct Agent...")
+    print("\n[TEST] Testing ReAct Agent...")
     
     try:
         agent = ReActAgent()
@@ -114,7 +114,7 @@ async def test_agent():
 async def main():
     """Run all tests"""
     print("=" * 60)
-    print("🧪 VoixAI v3.0 - Local Testing")
+    print("VoixAI v3.0 - Local Testing")
     print("=" * 60)
     
     try:
@@ -123,11 +123,11 @@ async def main():
         await test_agent()
         
         print("\n" + "=" * 60)
-        print("✅ Tests completed!")
+        print("Tests completed!")
         print("=" * 60)
         
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
