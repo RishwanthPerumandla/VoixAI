@@ -284,17 +284,83 @@
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
         
-        // Audio recording
-        let mediaRecorder = null;
-        let audioChunks = [];
+        // Web Speech API
+        let recognition = null;
         let isRecording = false;
-        let audioContext = null;
         
-        // Initialize audio context
-        function initAudio() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Initialize Web Speech API
+        function initSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = () => {
+                    isRecording = true;
+                    micBtn.classList.add('recording');
+                    statusDot.classList.add('recording');
+                    voiceIndicator.textContent = 'Listening... Speak now!';
+                    voiceIndicator.classList.add('recording');
+                };
+                
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    console.log('Speech recognized:', transcript);
+                    voiceIndicator.textContent = 'Got it!';
+                    
+                    // Send transcript to server
+                    addMessage(transcript, 'user');
+                    sendMessage(transcript);
+                };
+                
+                recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    voiceIndicator.textContent = 'Error: ' + event.error;
+                    stopRecording();
+                };
+                
+                recognition.onend = () => {
+                    stopRecording();
+                };
+                
+                return true;
+            } else {
+                console.log('Web Speech API not supported');
+                voiceIndicator.textContent = 'Speech API not supported. Use text input.';
+                micBtn.style.display = 'none';
+                return false;
             }
+        }
+        
+        function startRecording() {
+            if (!recognition || isRecording) return;
+            
+            try {
+                recognition.start();
+            } catch (err) {
+                console.error('Error starting recognition:', err);
+                voiceIndicator.textContent = 'Error starting mic';
+            }
+        }
+        
+        function stopRecording() {
+            if (!recognition || !isRecording) return;
+            
+            try {
+                recognition.stop();
+            } catch (err) {
+                console.error('Error stopping recognition:', err);
+            }
+            
+            isRecording = false;
+            micBtn.classList.remove('recording');
+            statusDot.classList.remove('recording');
+            voiceIndicator.classList.remove('recording');
+            setTimeout(() => {
+                voiceIndicator.textContent = '';
+            }, 1000);
         }
         
         // Connect to WebSocket
@@ -352,7 +418,7 @@
                     speak(data.content);
                 }
                 else if (data.type === 'bot_audio') {
-                    // Play audio response
+                    // Play audio response if available
                     playAudio(data.data);
                 }
                 else if (data.type === 'error') {
@@ -377,85 +443,6 @@
             };
         }
         
-        // Start recording
-        async function startRecording() {
-            if (isRecording) return;
-            
-            try {
-                initAudio();
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
-                };
-                
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    sendAudio(audioBlob);
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                
-                mediaRecorder.start();
-                isRecording = true;
-                
-                // Update UI
-                micBtn.classList.add('recording');
-                statusDot.classList.add('recording');
-                voiceIndicator.textContent = 'Listening... Speak now!';
-                voiceIndicator.classList.add('recording');
-                
-            } catch (err) {
-                console.error('Error accessing microphone:', err);
-                alert('Could not access microphone. Please allow microphone access.');
-            }
-        }
-        
-        // Stop recording
-        function stopRecording() {
-            if (!isRecording || !mediaRecorder) return;
-            
-            mediaRecorder.stop();
-            isRecording = false;
-            
-            // Update UI
-            micBtn.classList.remove('recording');
-            statusDot.classList.remove('recording');
-            voiceIndicator.textContent = 'Processing...';
-            voiceIndicator.classList.remove('recording');
-        }
-        
-        // Send audio to server
-        async function sendAudio(audioBlob) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                voiceIndicator.textContent = 'Not connected';
-                return;
-            }
-            
-            try {
-                // Convert blob to base64
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64Audio = reader.result.split(',')[1];
-                    
-                    ws.send(JSON.stringify({
-                        type: 'audio',
-                        data: base64Audio,
-                        format: 'wav'
-                    }));
-                    
-                    voiceIndicator.textContent = 'Sent! Waiting for response...';
-                };
-                reader.readAsDataURL(audioBlob);
-                
-            } catch (err) {
-                console.error('Error sending audio:', err);
-                voiceIndicator.textContent = 'Error sending audio';
-            }
-        }
-        
         // Play audio response
         function playAudio(base64Data) {
             try {
@@ -466,9 +453,8 @@
                     view[i] = audioData.charCodeAt(i);
                 }
                 
-                initAudio();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 
-                // Decode and play
                 audioContext.decodeAudioData(arrayBuffer, (buffer) => {
                     const source = audioContext.createBufferSource();
                     source.buffer = buffer;
@@ -490,19 +476,25 @@
             }
         }
         
-        // Text-to-speech fallback
+        // Text-to-speech
         function speak(text) {
             if ('speechSynthesis' in window) {
-                // Use browser's TTS as fallback
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+                
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.rate = 1.2;
                 utterance.pitch = 1;
                 
-                // Try to find a female voice
+                // Try to find a good voice
                 const voices = window.speechSynthesis.getVoices();
-                const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha'));
-                if (femaleVoice) {
-                    utterance.voice = femaleVoice;
+                const preferredVoice = voices.find(v => 
+                    v.name.includes('Google US English') || 
+                    v.name.includes('Samantha') ||
+                    v.name.includes('Victoria')
+                );
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
                 }
                 
                 window.speechSynthesis.speak(utterance);
@@ -537,19 +529,15 @@
             return div.innerHTML;
         }
         
-        // Send text message
-        function sendMessage() {
-            const text = messageInput.value.trim();
+        // Send message
+        function sendMessage(text) {
             if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
-            
-            addMessage(text, 'user');
             
             ws.send(JSON.stringify({
                 type: 'text',
                 content: text
             }));
             
-            messageInput.value = '';
             voiceIndicator.textContent = 'Thinking...';
         }
         
@@ -568,20 +556,23 @@
             stopRecording();
         });
         
-        sendBtn.addEventListener('click', sendMessage);
-        
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
+        sendBtn.addEventListener('click', () => {
+            const text = messageInput.value.trim();
+            if (text) {
+                addMessage(text, 'user');
+                sendMessage(text);
+                messageInput.value = '';
             }
         });
         
-        // Load voices for TTS
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.getVoices();
-        }
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        });
         
-        // Connect on load
+        // Initialize
+        initSpeechRecognition();
         connect();
     </script>
 </body>

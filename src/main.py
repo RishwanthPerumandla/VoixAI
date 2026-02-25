@@ -25,6 +25,7 @@ from contextlib import asynccontextmanager
 
 from src.config import settings
 from src.pipeline.conversation_pipeline import ConversationPipeline, MockPipeline
+from src.audio_utils import convert_audio_to_pcm
 
 # Configure structured logging
 structlog.configure(
@@ -224,20 +225,24 @@ class WebSocketHandler:
         if not audio_b64 or not self.session_id:
             return
         
-        print("[WS] Received audio, sending to Deepgram...")
+        print("[WS] Received audio, converting format...")
         
         try:
-            # Decode audio
+            # Decode audio from base64
             audio_data = base64.b64decode(audio_b64)
-            print(f"[WS] Audio size: {len(audio_data)} bytes")
+            print(f"[WS] Raw audio size: {len(audio_data)} bytes")
+            
+            # Convert to PCM format for Deepgram
+            pcm_audio = convert_audio_to_pcm(audio_data, "wav")
+            print(f"[WS] PCM audio size: {len(pcm_audio)} bytes")
             
             # Reset pending transcript
             self.pending_transcript = None
             
             # Send to STT for transcription
-            await self.pipeline.stt.process_audio(audio_data)
+            await self.pipeline.stt.process_audio(pcm_audio)
             
-            # Wait a bit for transcription (in production, this would be async)
+            # Wait for transcription
             await asyncio.sleep(2)
             
             # Check if we got a transcript
