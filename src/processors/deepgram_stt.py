@@ -47,22 +47,16 @@ class DeepgramSTTProcessor:
     async def start(self):
         """Start the STT connection"""
         try:
-            # Create live transcription connection
-            self.connection = await self.client.listen.asynclive.v("1")
-            
-            # Register event handlers
-            self.connection.on(self.connection.event.CLOSE, lambda _: self._handle_close())
-            self.connection.on(self.connection.event.TRANSCRIPT_RECEIVED, self._handle_transcript)
-            
-            # Start with options
-            await self.connection.start({
-                "smart_format": True,
-                "interim_results": True,
-                "language": "en-US",
-                "model": "nova-2",
-                "punctuate": True,
-                "endpointing": 300,
-            })
+            # Connect to live transcription - use async with for context manager
+            self._connection_ctx = self.client.listen.v1.connect(
+                model="nova-2",
+                language="en-US",
+                smart_format="true",
+                interim_results="true",
+                punctuate="true",
+                endpointing="300",
+            )
+            self.connection = await self._connection_ctx.__aenter__()
             
             self._is_listening = True
             print("[DeepgramSTT] Started listening")
@@ -70,19 +64,62 @@ class DeepgramSTTProcessor:
                 
         except Exception as e:
             print(f"[DeepgramSTT] Error starting: {e}")
+            import traceback
+            traceback.print_exc()
             if self.on_error:
                 await self.on_error(e)
             return False
+    
+    async def _listen(self):
+        """Listen for transcripts in background"""
+        try:
+            async for msg in self.connection:
+                self._handle_message(msg)
+        except Exception as e:
+            print(f"[DeepgramSTT] Listen error: {e}")
+    
+    def _handle_message(self, msg):
+        """Handle message from Deepgram"""
+        try:
+            if hasattr(msg, 'type') and msg.type == "Results":
+                # Extract transcript
+                channel = msg.channel if hasattr(msg, 'channel') else {}
+                alternatives = channel.alternatives if hasattr(channel, 'alternatives') else []
+                
+                if alternatives:
+                    alt = alternatives[0]
+                    transcript = alt.transcript if hasattr(alt, 'transcript') else ""
+                    is_final = msg.is_final if hasattr(msg, 'is_final') else False
+                    
+                    if transcript.strip():
+                        if is_final:
+                            self._final_buffer += " " + transcript
+                            print(f"[DeepgramSTT] Final: '{transcript}'")
+                        else:
+                            print(f"[DeepgramSTT] Interim: '{transcript}'")
+                        
+                        # Call callback
+                        if self.on_transcript:
+                            asyncio.create_task(
+                                self._async_callback(transcript, is_final)
+                            )
+        except Exception as e:
+            print(f"[DeepgramSTT] Error handling message: {e}")
     
     async def stop(self):
         """Stop the STT connection"""
         self._is_listening = False
         if self.connection:
             try:
-                await self.connection.finish()
+                await self.connection.close()
             except:
                 pass
             self.connection = None
+        if hasattr(self, '_connection_ctx'):
+            try:
+                await self._connection_ctx.__aexit__(None, None, None)
+            except:
+                pass
         print("[DeepgramSTT] Stopped")
     
     async def process_audio(self, audio_data: bytes):
@@ -94,52 +131,14 @@ class DeepgramSTTProcessor:
         """
         if self._is_listening and self.connection:
             try:
-                self.connection.send(audio_data)
+                await self.connection.send(audio_data)
             except Exception as e:
                 print(f"[DeepgramSTT] Error sending audio: {e}")
-    
-    def _handle_transcript(self, result):
-        """Handle transcript from Deepgram"""
-        try:
-            # Parse result
-            if isinstance(result, str):
-                data = json.loads(result)
-            else:
-                data = result
-            
-            # Extract transcript
-            channel = data.get("channel", {})
-            alternatives = channel.get("alternatives", [])
-            
-            if alternatives:
-                transcript = alternatives[0].get("transcript", "")
-                is_final = data.get("is_final", False)
-                
-                if transcript.strip():
-                    if is_final:
-                        self._final_buffer += " " + transcript
-                        print(f"[DeepgramSTT] Final: '{transcript}'")
-                    else:
-                        print(f"[DeepgramSTT] Interim: '{transcript}'")
-                    
-                    # Call callback
-                    if self.on_transcript:
-                        asyncio.create_task(
-                            self._async_callback(transcript, is_final)
-                        )
-                    
-        except Exception as e:
-            print(f"[DeepgramSTT] Error handling transcript: {e}")
     
     async def _async_callback(self, transcript: str, is_final: bool):
         """Async wrapper for callback"""
         if self.on_transcript:
             await self.on_transcript(transcript, is_final)
-    
-    def _handle_close(self):
-        """Handle connection close"""
-        print("[DeepgramSTT] Connection closed")
-        self._is_listening = False
     
     def get_final_transcript(self) -> str:
         """Get accumulated final transcripts"""
