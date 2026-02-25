@@ -32,5 +32,22 @@
     "status": "pending",
     "conversation_id": null,
     "created_at": "2026-02-25T10:31:19.876153"
+  },
+  {
+    "id": "a7fe491f-90ae-4ded-b861-997ba270a6a5",
+    "customer_name": "Test Customer",
+    "items": [
+      {
+        "name": "Boneless Wings",
+        "quantity": 10,
+        "price": 11.99
+      }
+    ],
+    "subtotal": 119.9,
+    "tax": 9.89,
+    "total": 129.79,
+    "status": "pending",
+    "conversation_id": null,
+    "created_at": "2026-02-25T10:43:22.559529"
   }
 ]

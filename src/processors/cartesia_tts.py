@@ -1,16 +1,12 @@
 """
-Cartesia Text-to-Speech Processor
+Cartesia Text-to-Speech Processor - Real Implementation
 Streaming voice synthesis using Cartesia Sonic
 """
 
 import asyncio
+import base64
 from typing import Callable, Optional
-try:
-    from cartesia import Cartesia
-    CARTESIA_AVAILABLE = True
-except ImportError:
-    Cartesia = None
-    CARTESIA_AVAILABLE = False
+from cartesia import Cartesia
 
 from src.config import settings
 
@@ -26,17 +22,15 @@ class CartesiaTTSProcessor:
     """
     
     def __init__(self, api_key: str = None):
-        if not CARTESIA_AVAILABLE:
-            raise ImportError("Cartesia SDK not installed")
-        
         self.api_key = api_key or settings.cartesia_api_key
         self.client = Cartesia(api_key=self.api_key)
         
         # Voice settings
-        self.voice_id = "c2ac25f9-ecc4-4f56-909e-6c5bdd3a40da"  # Default voice (change to Tasha later)
+        # Default: "c2ac25f9-ecc4-4f56-909e-6c5bdd3a40da" - British Reading Lady
+        # You can change this to a different voice
+        self.voice_id = "c2ac25f9-ecc4-4f56-909e-6c5bdd3a40da"
         self.model_id = "sonic-english"
         self.sample_rate = 24000
-        self.speed = 1.2
         
         # Callbacks
         self.on_audio: Optional[Callable[[bytes], None]] = None
@@ -73,11 +67,16 @@ class CartesiaTTSProcessor:
                     "sample_rate": self.sample_rate,
                 },
             ):
-                audio_chunks.append(chunk["audio"])
-                
-                # Stream audio as it comes in
-                if self.on_audio:
-                    await self._async_audio_callback(chunk["audio"])
+                audio_data = chunk.get("audio", b"")
+                if audio_data:
+                    # Decode base64 audio
+                    if isinstance(audio_data, str):
+                        audio_data = base64.b64decode(audio_data)
+                    audio_chunks.append(audio_data)
+                    
+                    # Stream audio as it comes in
+                    if self.on_audio:
+                        await self._async_audio_callback(audio_data)
             
             # Combine all chunks
             full_audio = b"".join(audio_chunks)
@@ -118,8 +117,11 @@ class CartesiaTTSProcessor:
                 },
             ):
                 chunk_count += 1
-                if self.on_audio:
-                    await self._async_audio_callback(chunk["audio"])
+                audio_data = chunk.get("audio", b"")
+                if audio_data and self.on_audio:
+                    if isinstance(audio_data, str):
+                        audio_data = base64.b64decode(audio_data)
+                    await self._async_audio_callback(audio_data)
             
             self._is_speaking = False
             print(f"[CartesiaTTS] Streamed {chunk_count} chunks")

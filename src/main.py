@@ -19,7 +19,8 @@ import json
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
+from contextlib import asynccontextmanager
 
 from src.config import settings
 from src.pipeline.conversation_pipeline import ConversationPipeline, MockPipeline
@@ -44,15 +45,58 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
+# Global pipeline instance
+pipeline = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    global pipeline
+    
+    # Startup
+    settings.ensure_data_dir()
+    
+    # Initialize pipeline with real APIs if keys are available
+    use_real_stt = bool(settings.deepgram_api_key)
+    use_real_tts = bool(settings.cartesia_api_key)
+    
+    if not use_real_stt and not use_real_tts:
+        logger.info("Starting in MOCK mode")
+        pipeline = MockPipeline()
+    else:
+        logger.info(f"Starting with Real APIs - STT: {use_real_stt}, TTS: {use_real_tts}")
+        pipeline = ConversationPipeline(
+            use_mock_stt=not use_real_stt,
+            use_mock_tts=not use_real_tts
+        )
+    
+    # Start pipeline
+    if not await pipeline.start():
+        logger.error("Failed to start pipeline")
+        raise Exception("Pipeline startup failed")
+    
+    logger.info(
+        "VoixAI v3.0 started",
+        environment=settings.environment,
+        mock_mode=not (use_real_stt or use_real_tts)
+    )
+    
+    yield
+    
+    # Shutdown
+    if pipeline:
+        await pipeline.stop()
+    logger.info("VoixAI v3.0 shutdown")
+
+
 # Create FastAPI app
 app = FastAPI(
     title="VoixAI v3.0",
     description="AI Voice Agent for Restaurant Ordering",
-    version="3.0.0"
+    version="3.0.0",
+    lifespan=lifespan
 )
-
-# Global pipeline instance
-pipeline = None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -68,7 +112,9 @@ async def health_check():
         "status": "healthy",
         "version": "3.0.0",
         "environment": settings.environment,
-        "pipeline_running": pipeline.is_running() if pipeline else False
+        "pipeline_running": pipeline.is_running() if pipeline else False,
+        "real_stt": bool(settings.deepgram_api_key),
+        "real_tts": bool(settings.cartesia_api_key)
     }
 
 
@@ -102,7 +148,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 def get_html_client():
-    """Return HTML client for testing"""
+    """Return HTML client with voice support"""
     return """
     <!DOCTYPE html>
     <html lang="en">
@@ -111,11 +157,7 @@ def get_html_client():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>VoixAI v3.0 - Voice Ordering</title>
         <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -179,6 +221,7 @@ def get_html_client():
                 overflow-y: auto;
                 margin-bottom: 20px;
                 min-height: 300px;
+                max-height: 500px;
             }
             
             .message {
@@ -191,13 +234,8 @@ def get_html_client():
                 to { opacity: 1; transform: translateY(0); }
             }
             
-            .message-user {
-                text-align: right;
-            }
-            
-            .message-bot {
-                text-align: left;
-            }
+            .message-user { text-align: right; }
+            .message-bot { text-align: left; }
             
             .message-bubble {
                 display: inline-block;
@@ -222,6 +260,7 @@ def get_html_client():
             .input-area {
                 display: flex;
                 gap: 10px;
+                flex-wrap: wrap;
             }
             
             input[type="text"] {
@@ -233,6 +272,7 @@ def get_html_client():
                 color: #eee;
                 font-size: 1rem;
                 outline: none;
+                min-width: 200px;
             }
             
             input[type="text"]::placeholder {
@@ -261,6 +301,22 @@ def get_html_client():
                 transform: none;
             }
             
+            .mic-btn {
+                background: #4ecca3;
+                padding: 15px;
+                border-radius: 50%;
+                width: 56px;
+                height: 56px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .mic-btn.recording {
+                background: #e94560;
+                animation: pulse 1s infinite;
+            }
+            
             .connection-status {
                 text-align: center;
                 padding: 10px;
@@ -286,6 +342,24 @@ def get_html_client():
                 color: #e94560;
                 margin-bottom: 10px;
             }
+            
+            .mode-indicator {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 0.8rem;
+                margin-left: 10px;
+            }
+            
+            .mode-real {
+                background: #4ecca3;
+                color: #1a1a2e;
+            }
+            
+            .mode-mock {
+                background: #ffa500;
+                color: #1a1a2e;
+            }
         </style>
     </head>
     <body>
@@ -294,13 +368,14 @@ def get_html_client():
             <div class="status">
                 <span class="status-dot"></span>
                 <span>Online</span>
+                <span id="modeIndicator" class="mode-indicator mode-mock">Mock</span>
             </div>
         </div>
         
         <div class="container">
             <div class="info-box">
                 <h3>Welcome to VoixAI!</h3>
-                <p>I'm Tasha, your Wingstop cashier. Type your order below or use voice (coming soon).</p>
+                <p>I'm Tasha, your Wingstop cashier. Type your order below.</p>
                 <p><strong>Try saying:</strong> "Hi, I'd like to order some wings"</p>
             </div>
             
@@ -325,6 +400,7 @@ def get_html_client():
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
             const connectionStatus = document.getElementById('connectionStatus');
+            const modeIndicator = document.getElementById('modeIndicator');
             
             let ws = null;
             let sessionId = null;
@@ -354,9 +430,22 @@ def get_html_client():
                     if (data.type === 'system' && data.event === 'connected') {
                         sessionId = data.session_id;
                         console.log('Session:', sessionId);
+                        
+                        // Update mode indicator based on health check
+                        fetch('/health')
+                            .then(r => r.json())
+                            .then(h => {
+                                const isReal = h.real_stt || h.real_tts;
+                                modeIndicator.textContent = isReal ? 'Real Voice' : 'Mock';
+                                modeIndicator.className = 'mode-indicator ' + (isReal ? 'mode-real' : 'mode-mock');
+                            });
                     }
                     else if (data.type === 'bot_text') {
                         addMessage(data.content, 'bot', data.latency_ms);
+                    }
+                    else if (data.type === 'bot_audio') {
+                        // Play audio if supported
+                        playAudio(data.data);
                     }
                     else if (data.type === 'error') {
                         addMessage(data.content, 'bot');
@@ -377,6 +466,28 @@ def get_html_client():
                     console.error('WebSocket error:', error);
                     connectionStatus.textContent = 'Connection error';
                 };
+            }
+            
+            // Play audio (if browser supports it)
+            function playAudio(base64Data) {
+                try {
+                    const audioData = atob(base64Data);
+                    const arrayBuffer = new ArrayBuffer(audioData.length);
+                    const view = new Uint8Array(arrayBuffer);
+                    for (let i = 0; i < audioData.length; i++) {
+                        view[i] = audioData.charCodeAt(i);
+                    }
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(audioContext.destination);
+                        source.start();
+                    });
+                } catch (e) {
+                    console.log('Audio playback not supported:', e);
+                }
             }
             
             // Add message to chat
@@ -437,47 +548,6 @@ def get_html_client():
     </body>
     </html>
     """
-
-
-@app.on_event("startup")
-async def startup():
-    """Startup event"""
-    global pipeline
-    
-    settings.ensure_data_dir()
-    
-    # Initialize pipeline
-    # Use mock mode if API keys are not set
-    use_mock = not (settings.deepgram_api_key and settings.cartesia_api_key)
-    
-    if use_mock:
-        logger.info("Starting in MOCK mode (API keys not set)")
-        pipeline = MockPipeline()
-    else:
-        logger.info("Starting in PRODUCTION mode")
-        pipeline = ConversationPipeline()
-    
-    # Start pipeline
-    if not await pipeline.start():
-        logger.error("Failed to start pipeline")
-        raise Exception("Pipeline startup failed")
-    
-    logger.info(
-        "VoixAI v3.0 started",
-        environment=settings.environment,
-        mock_mode=use_mock
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Shutdown event"""
-    global pipeline
-    
-    if pipeline:
-        await pipeline.stop()
-    
-    logger.info("VoixAI v3.0 shutdown")
 
 
 if __name__ == "__main__":

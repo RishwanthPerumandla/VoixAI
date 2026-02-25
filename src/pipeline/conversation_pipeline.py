@@ -4,19 +4,12 @@ Connects STT -> Agent -> TTS in a streaming pipeline
 """
 
 import asyncio
+import time
 from typing import Optional
 
 from src.agent.react_agent import ReActAgent
-try:
-    from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor, DEEPGRAM_SDK_V6
-except ImportError:
-    from src.processors.deepgram_stt import MockSTTProcessor
-    DEEPGRAM_SDK_V6 = False
-try:
-    from src.processors.cartesia_tts import CartesiaTTSProcessor, MockTTSProcessor, CARTESIA_AVAILABLE
-except ImportError:
-    from src.processors.cartesia_tts import MockTTSProcessor
-    CARTESIA_AVAILABLE = False
+from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor
+from src.processors.cartesia_tts import CartesiaTTSProcessor, MockTTSProcessor
 from src.transports.daily_transport import SimpleWebSocketTransport
 from src.config import settings
 
@@ -41,12 +34,12 @@ class ConversationPipeline:
         # Transport
         self.transport = SimpleWebSocketTransport()
         
-        # STT
-        if use_mock_stt or not settings.deepgram_api_key or not DEEPGRAM_SDK_V6:
+        # STT - Use real Deepgram if API key is available
+        if use_mock_stt or not settings.deepgram_api_key:
             print("[Pipeline] Using Mock STT")
             self.stt = MockSTTProcessor()
         else:
-            print("[Pipeline] Using Deepgram STT")
+            print("[Pipeline] Using Deepgram STT (Real)")
             try:
                 self.stt = DeepgramSTTProcessor()
             except Exception as e:
@@ -56,12 +49,12 @@ class ConversationPipeline:
         # Agent
         self.agent = ReActAgent()
         
-        # TTS
-        if use_mock_tts or not settings.cartesia_api_key or not CARTESIA_AVAILABLE:
+        # TTS - Use real Cartesia if API key is available
+        if use_mock_tts or not settings.cartesia_api_key:
             print("[Pipeline] Using Mock TTS")
             self.tts = MockTTSProcessor()
         else:
-            print("[Pipeline] Using Cartesia TTS")
+            print("[Pipeline] Using Cartesia TTS (Real)")
             try:
                 self.tts = CartesiaTTSProcessor()
             except Exception as e:
@@ -126,15 +119,15 @@ class ConversationPipeline:
         
         # Generate session ID if not set
         if not self.session_id:
-            self.session_id = f"session-{asyncio.get_event_loop().time()}"
+            self.session_id = f"session-{time.time()}"
         
         # Process with agent
-        start_time = asyncio.get_event_loop().time()
+        start_time = time.time()
         
         try:
             response = await self.agent.process(transcript, self.session_id)
             
-            llm_latency = (asyncio.get_event_loop().time() - start_time) * 1000
+            llm_latency = (time.time() - start_time) * 1000
             self.latency_metrics["llm_ms"] = llm_latency
             
             print(f"[Pipeline] Agent response: '{response}' (LLM: {llm_latency:.0f}ms)")
@@ -147,15 +140,15 @@ class ConversationPipeline:
             })
             
             # Synthesize speech
-            tts_start = asyncio.get_event_loop().time()
+            tts_start = time.time()
             
             # Stream TTS audio
             await self.tts.synthesize_streaming(response)
             
-            tts_latency = (asyncio.get_event_loop().time() - tts_start) * 1000
+            tts_latency = (time.time() - tts_start) * 1000
             self.latency_metrics["tts_ms"] = tts_latency
             
-            total_latency = (asyncio.get_event_loop().time() - start_time) * 1000
+            total_latency = (time.time() - start_time) * 1000
             self.latency_metrics["total_ms"] = total_latency
             
             print(f"[Pipeline] TTS complete: {tts_latency:.0f}ms, Total: {total_latency:.0f}ms")
@@ -169,15 +162,21 @@ class ConversationPipeline:
     
     async def _on_audio_chunk(self, audio_data: bytes):
         """Handle audio chunk from TTS"""
-        # Send audio to transport
-        await self.transport.send_audio(audio_data)
+        # Send audio to transport (base64 encoded for WebSocket)
+        import base64
+        await self.transport.send_text({
+            "type": "bot_audio",
+            "data": base64.b64encode(audio_data).decode('utf-8'),
+            "format": "pcm_f32le",
+            "sample_rate": 24000
+        })
     
     async def _on_transport_message(self, message: dict, websocket):
         """Handle message from transport"""
         msg_type = message.get("type")
         
         if msg_type == "start_conversation":
-            self.session_id = message.get("session_id") or f"session-{asyncio.get_event_loop().time()}"
+            self.session_id = message.get("session_id") or f"session-{time.time()}"
             await self.transport.send_text({
                 "type": "system",
                 "event": "connected",
@@ -185,9 +184,11 @@ class ConversationPipeline:
             }, websocket)
             
         elif msg_type == "audio":
-            # Audio data from client
-            audio_data = message.get("data")
-            if audio_data:
+            # Audio data from client (base64 encoded)
+            audio_b64 = message.get("data")
+            if audio_b64:
+                import base64
+                audio_data = base64.b64decode(audio_b64)
                 # Send to STT
                 await self.stt.process_audio(audio_data)
                 
@@ -241,7 +242,7 @@ class MockPipeline:
             return
         
         if not self.session_id:
-            self.session_id = f"session-{asyncio.get_event_loop().time()}"
+            self.session_id = f"session-{time.time()}"
         
         print(f"[MockPipeline] User: '{transcript}'")
         
@@ -258,3 +259,9 @@ class MockPipeline:
     async def simulate_user_message(self, text: str):
         """Simulate user message for testing"""
         await self.stt.simulate_transcript(text)
+    
+    def is_running(self) -> bool:
+        return self._running
+    
+    def get_metrics(self) -> dict:
+        return {"stt_ms": 0, "llm_ms": 0, "tts_ms": 0, "total_ms": 0}
