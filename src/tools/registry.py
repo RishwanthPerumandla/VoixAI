@@ -70,6 +70,7 @@ class ToolRegistry:
         from src.tools.order_creation import OrderCreationTool
         from src.tools.price_calculator import PriceCalculatorTool
         from src.tools.order_modification import OrderModificationTool
+        from src.tools.order_validation import OrderValidationTool
         from src.tools.upsell_engine import UpsellEngineTool
         from src.tools.policy_checker import PolicyCheckerTool
         from src.tools.ticket_creator import TicketCreatorTool
@@ -79,6 +80,7 @@ class ToolRegistry:
         self.register(OrderCreationTool())
         self.register(PriceCalculatorTool())
         self.register(OrderModificationTool())
+        self.register(OrderValidationTool())
         self.register(UpsellEngineTool())
         self.register(PolicyCheckerTool())
         self.register(TicketCreatorTool())
