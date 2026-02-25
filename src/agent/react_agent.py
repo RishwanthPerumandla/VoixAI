@@ -1,11 +1,13 @@
 """
-ReAct Agent - Fixed conversation flow
+Proper ReAct Agent
+Uses LLM for reasoning, tool selection, and response generation
 """
 
 import json
 import re
 from typing import Any, Dict, List, Optional
 from groq import Groq
+from dataclasses import dataclass, field
 
 from src.config import settings
 from src.tools.registry import ToolRegistry
@@ -13,283 +15,325 @@ from src.memory.working_memory import WorkingMemory
 from src.memory.short_term_memory import ShortTermMemory
 
 
+@dataclass
+class ConversationState:
+    """Track conversation state"""
+    customer_name: Optional[str] = None
+    items: List[Dict] = field(default_factory=list)
+    order_type: Optional[str] = None  # pickup/delivery
+    stage: str = "greeting"  # greeting, ordering, confirming, completed
+    confirmed: bool = False
+
+
 class ReActAgent:
-    """ReAct Agent with proper order flow"""
+    """
+    True ReAct Agent:
+    1. OBSERVE: Get user input + context
+    2. REASON: Use LLM to understand intent and plan
+    3. ACT: Execute tools if needed
+    4. GENERATE: Use LLM to create natural response
+    """
     
     def __init__(self):
         self.llm = Groq(api_key=settings.groq_api_key)
         self.tools = ToolRegistry().create_default_registry()
-        self.working_memory = WorkingMemory(capacity=15)
+        self.working_memory = WorkingMemory(capacity=20)
         self.short_term_memory = ShortTermMemory()
     
     async def process(self, user_message: str, session_id: str) -> str:
-        """Process message with full context"""
+        """Main ReAct loop"""
         
+        # Load session
         await self.load_session(session_id)
+        
+        # Add to memory
         self.working_memory.add_turn("user", user_message)
         
-        # Extract ALL info from message
-        await self._extract_all_info(user_message)
+        # REASON: Understand intent and extract entities
+        understanding = await self._understand(user_message)
+        print(f"[Agent] Understanding: {understanding}")
         
-        # Generate appropriate response
-        response = await self._generate_response(user_message)
+        # Update state based on understanding
+        self._update_state(understanding)
         
+        # ACT: Use tools if needed
+        tool_results = await self._act(understanding)
+        
+        # GENERATE: Create response
+        response = await self._generate(understanding, tool_results)
+        
+        # Save to memory
         self.working_memory.add_turn("assistant", response)
         await self._persist_session(session_id)
         
         return response
     
-    async def _extract_all_info(self, message: str):
-        """Extract all possible info from message"""
-        msg_lower = message.lower().strip()
-        customer = self.working_memory.get_customer_info() or {}
-        order = self.working_memory.get_current_order() or {"items": []}
+    async def _understand(self, message: str) -> Dict:
+        """
+        REASON step: Use LLM to understand user intent
+        """
+        state = self._get_state()
+        context = self._get_context()
         
-        # Extract name
-        if not customer.get("name"):
-            name = self._extract_name(message)
-            if name:
-                customer["name"] = name
-                self.working_memory.set_customer_info(customer)
+        prompt = f"""You are analyzing a customer service conversation for Wingstop.
+
+CURRENT CONVERSATION STATE:
+{json.dumps(state, indent=2)}
+
+CONVERSATION HISTORY:
+{context}
+
+USER JUST SAID: "{message}"
+
+Analyze this message and extract:
+1. Intent (greeting, provide_name, order_items, ask_question, modify_order, confirm, decline, complete_order)
+2. Entities extracted (name, items, quantities, flavors, preferences)
+3. What information is being conveyed
+4. What might be missing
+
+Respond in JSON format:
+{{
+    "intent": "...",
+    "entities": {{
+        "name": "...",
+        "items": [{{"name": "...", "quantity": N, "modifiers": {{}}}}],
+        "preferences": [],
+        "questions": []
+    }},
+    "information_conveyed": "...",
+    "missing_info": ["..."],
+    "confidence": 0.0-1.0
+}}"""
         
-        # Check for completion/done signals
-        done_signals = ["that's it", "thats it", "that is it", "done", "complete", 
-                       "nothing else", "no thanks", "no thank you", "nithing", "nothing",
-                       "that's all", "thats all", "all done", "im good", "i'm good"]
-        if any(signal in msg_lower for signal in done_signals):
-            order["customer_done"] = True
+        try:
+            response = self.llm.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a conversation analyzer. Extract intent and entities accurately."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            
+            return json.loads(response.choices[0].message.content)
+            
+        except Exception as e:
+            print(f"[Agent] Understanding error: {e}")
+            return {
+                "intent": "unknown",
+                "entities": {},
+                "confidence": 0.5
+            }
+    
+    async def _act(self, understanding: Dict) -> List[Dict]:
+        """
+        ACT step: Execute tools based on understanding
+        """
+        results = []
+        intent = understanding.get("intent", "")
+        entities = understanding.get("entities", {})
         
-        # Check for "just" items (e.g., "just a ranch", "just fries")
-        just_match = re.search(r'just\s+(?:a\s+)?(.+)', msg_lower)
-        if just_match:
-            item_name = just_match.group(1).strip()
-            # Add as a new item
-            order["items"].append({
-                "name": item_name.capitalize(),
-                "quantity": 1,
-                "type": "add-on"
+        # Use tools based on intent
+        if intent == "order_items" and entities.get("items"):
+            # Calculate price
+            items = entities["items"]
+            for item in items:
+                item["unit_price"] = self._get_item_price(item.get("name", ""))
+            
+            price_result = await self.tools.execute("calculate_price", {
+                "items": items,
+                "apply_combo_discount": True
             })
+            results.append({"tool": "calculate_price", "result": price_result})
+            
+            # Check for upsells
+            upsell_result = await self.tools.execute("suggest_upsell", {
+                "current_items": items
+            })
+            results.append({"tool": "suggest_upsell", "result": upsell_result})
         
-        # Extract wing quantity
-        qty_patterns = [
-            r'(\d+)\s*(?:wing|wings|piece|pieces|pc)',
-            r'(\d+)\s+(?:wing|wings)',
-        ]
-        for pattern in qty_patterns:
-            match = re.search(pattern, msg_lower)
-            if match:
-                qty = int(match.group(1))
-                # Update or create wing item
-                wing_item = self._find_wing_item(order)
-                if wing_item:
-                    wing_item["quantity"] = qty
-                else:
-                    order["items"].append({
-                        "name": "Wings",
-                        "quantity": qty,
-                        "type": None,
-                        "flavor": None
-                    })
-                break
+        if intent == "ask_question" and "menu" in str(entities.get("questions", [])).lower():
+            # Search menu
+            query = " ".join(entities.get("questions", []))
+            menu_result = await self.tools.execute("search_menu", {
+                "query": query,
+                "use_semantic": True
+            })
+            results.append({"tool": "search_menu", "result": menu_result})
         
-        # Extract wing type
-        if "boneless" in msg_lower:
-            wing = self._find_wing_item(order)
-            if wing:
-                wing["name"] = "Boneless Wings"
-                wing["type"] = "boneless"
-        elif "classic" in msg_lower or "bone-in" in msg_lower:
-            wing = self._find_wing_item(order)
-            if wing:
-                wing["name"] = "Classic Bone-In Wings"
-                wing["type"] = "bone-in"
+        if intent == "complete_order":
+            # Validate order
+            order = self._get_state()
+            validate_result = await self.tools.execute("validate_order", {
+                "order": order
+            })
+            results.append({"tool": "validate_order", "result": validate_result})
         
-        # Extract flavor
-        flavors = ["lemon pepper", "buffalo", "mango habanero", "garlic parmesan", 
-                   "atomic", "hickory smoked bbq", "honey mustard", "cajun", 
-                   "original hot", "spicy korean", " Louisiana Rub"]
-        for flavor in flavors:
-            if flavor in msg_lower:
-                wing = self._find_wing_item(order)
-                if wing:
-                    wing["flavor"] = flavor.title()
-                break
+        return results
+    
+    async def _generate(self, understanding: Dict, tool_results: List[Dict]) -> str:
+        """
+        GENERATE step: Use LLM to create natural response
+        """
+        state = self._get_state()
+        context = self._get_context()
         
-        # Extract dips
-        dips = ["ranch", "blue cheese", "honey mustard", "bbq sauce", "buffalo sauce"]
-        for dip in dips:
-            if dip in msg_lower and "just" not in msg_lower:
-                # Check if already added
-                existing = [i for i in order["items"] if dip.lower() in i.get("name", "").lower()]
+        # Build system prompt
+        system_prompt = """You are Tasha, a friendly and efficient Wingstop cashier.
+
+PERSONALITY:
+- Warm, welcoming, and knowledgeable about wings
+- Use casual, conversational language with contractions
+- Remember customer details and reference them naturally
+- Be helpful but concise (1-2 sentences)
+- Show personality - be slightly playful
+
+IMPORTANT RULES:
+- ALWAYS use the customer's name if you know it
+- Acknowledge what the customer just said
+- Build on the conversation history, don't repeat
+- Guide the conversation naturally toward completing the order
+- If they said "that's it" or similar, confirm their order and ask pickup/delivery
+- Never ask for info they already provided
+
+CONVERSATION FLOW:
+1. Get name first
+2. Take order (wings → type → flavor → extras)
+3. Confirm when they say they're done
+4. Ask pickup/delivery
+5. Complete order"""
+        
+        # Build context for LLM
+        prompt = f"""CURRENT ORDER STATE:
+{json.dumps(state, indent=2)}
+
+CONVERSATION HISTORY:
+{context}
+
+USER UNDERSTANDING:
+{json.dumps(understanding, indent=2)}
+
+TOOL RESULTS:
+{json.dumps([r.get("result", {}).data if hasattr(r.get("result"), "data") else r for r in tool_results], indent=2, default=str)}
+
+Generate a natural response as Tasha:"""
+        
+        try:
+            response = self.llm.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=100,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"[Agent] Generation error: {e}")
+            # Fallback response
+            if not state.get("customer_name"):
+                return "Hey there! I'm Tasha. What's your name?"
+            return f"Hey {state['customer_name']}! What can I get you?"
+    
+    def _update_state(self, understanding: Dict):
+        """Update conversation state based on understanding"""
+        entities = understanding.get("entities", {})
+        intent = understanding.get("intent", "")
+        
+        # Get current state
+        state = self._get_state()
+        
+        # Update name
+        if entities.get("name") and not state["customer_name"]:
+            state["customer_name"] = entities["name"]
+        
+        # Update items
+        if entities.get("items"):
+            for new_item in entities["items"]:
+                # Check if item already exists
+                existing = False
+                for existing_item in state["items"]:
+                    if existing_item.get("name") == new_item.get("name"):
+                        # Update quantity or other fields
+                        if new_item.get("quantity"):
+                            existing_item["quantity"] = new_item["quantity"]
+                        if new_item.get("flavor"):
+                            existing_item["flavor"] = new_item["flavor"]
+                        existing = True
+                        break
+                
                 if not existing:
-                    order["items"].append({
-                        "name": dip.title() + " Dip",
-                        "quantity": 1,
-                        "price": 0.99,
-                        "type": "dip"
-                    })
+                    state["items"].append(new_item)
         
-        # Extract sides
-        sides = ["fries", "cheese fries", "veggie sticks", "onion rings"]
-        for side in sides:
-            if side in msg_lower and "just" not in msg_lower:
-                existing = [i for i in order["items"] if side.lower() in i.get("name", "").lower()]
-                if not existing:
-                    prices = {"fries": 3.99, "cheese fries": 4.99, "veggie sticks": 2.99, "onion rings": 4.49}
-                    order["items"].append({
-                        "name": side.title(),
-                        "quantity": 1,
-                        "price": prices.get(side, 3.99),
-                        "type": "side"
-                    })
+        # Update stage based on intent
+        if intent == "greeting":
+            state["stage"] = "greeting"
+        elif intent == "provide_name":
+            state["stage"] = "ordering"
+        elif intent == "order_items":
+            state["stage"] = "ordering"
+        elif intent == "complete_order":
+            state["stage"] = "confirming"
+        elif intent == "confirm":
+            if state["stage"] == "confirming":
+                state["confirmed"] = True
+                state["stage"] = "completed"
         
-        # Extract order type
-        if "pickup" in msg_lower or "pick up" in msg_lower:
-            order["order_type"] = "pickup"
-        elif "delivery" in msg_lower:
-            order["order_type"] = "delivery"
-        
-        self.working_memory.set_current_order(order)
+        # Save state
+        self.working_memory.set_customer_info({"name": state["customer_name"]})
+        self.working_memory.set_current_order({
+            "items": state["items"],
+            "order_type": state["order_type"],
+            "stage": state["stage"],
+            "confirmed": state["confirmed"]
+        })
     
-    def _extract_name(self, message: str) -> Optional[str]:
-        """Extract name from message"""
-        msg_lower = message.lower().strip()
-        
-        # Skip if it's just an order
-        if any(x in msg_lower for x in ["wing", "fries", "dip", "order", "want", "get"]):
-            return None
-        
-        # Common patterns
-        patterns = [
-            r"(?:name is|i am|i'm|call me|it's|this is)\s+([a-zA-Z]{2,})",
-            r"(?:for|name)\s*:?\s*([a-zA-Z]{2,})",
-            r"^([a-zA-Z]{2,})$",
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, msg_lower)
-            if match:
-                name = match.group(1).capitalize()
-                # Filter out non-names
-                non_names = ["the", "for", "pickup", "delivery", "wings", "boneless", 
-                            "classic", "lemon", "buffalo", "mango", "garlic", "atomic"]
-                if name.lower() not in non_names:
-                    return name
-        
-        # Single word that looks like a name (2+ letters, no numbers)
-        if " " not in message and len(message) >= 2 and message.isalpha():
-            name = message.capitalize()
-            non_names = ["Wings", "Fries", "Dip", "Ranch", "Buffalo", "Lemon", "Mango"]
-            if name not in non_names:
-                return name
-        
-        return None
-    
-    def _find_wing_item(self, order: Dict) -> Optional[Dict]:
-        """Find wing item in order"""
-        for item in order.get("items", []):
-            if "wing" in item.get("name", "").lower():
-                return item
-        return None
-    
-    async def _generate_response(self, user_message: str) -> str:
-        """Generate response based on state"""
-        
+    def _get_state(self) -> Dict:
+        """Get current conversation state"""
         customer = self.working_memory.get_customer_info() or {}
-        order = self.working_memory.get_current_order() or {"items": []}
-        name = customer.get("name")
-        msg_lower = user_message.lower().strip()
+        order = self.working_memory.get_current_order() or {}
         
-        # STATE 1: No name yet
-        if not name:
-            return "Hey there! I'm Tasha. What's your name?"
-        
-        # STATE 2: Just got name - greet
-        history = self.working_memory.get_recent()
-        if len(history) <= 2:
-            return f"Hey {name}! Welcome to Wingstop. What can I get for you today?"
-        
-        # Find wing item
-        wing = self._find_wing_item(order)
-        
-        # Check if customer is done
-        if order.get("customer_done"):
-            # Need order type?
-            if not order.get("order_type"):
-                return f"Pickup or delivery, {name}?"
-            
-            # Have everything - confirm order
-            return self._confirm_order(name, order)
-        
-        # Check for dips/sides request
-        if any(x in msg_lower for x in ["just", "add", "get"]):
-            # They just added something, ask if that's all
-            items = self._format_order_items(order)
-            if items:
-                return f"Got it. So that's {items}. Anything else?"
-        
-        # Taking wing order
-        if wing:
-            # Need quantity
-            if not wing.get("quantity"):
-                return f"How many wings, {name}?"
-            
-            # Need type
-            if not wing.get("type"):
-                return "Boneless or classic bone-in?"
-            
-            # Need flavor
-            if not wing.get("flavor"):
-                return "What flavor? Lemon Pepper, Buffalo, Mango Habanero?"
-            
-            # Wing complete - ask about add-ons
-            qty = wing.get("quantity", 0)
-            wing_desc = f"{qty} {wing.get('flavor', '')} {wing.get('name', 'wings')}".strip()
-            
-            return f"Great! {wing_desc}. Anything else - fries, drinks, or dips?"
-        
-        # No wings yet - ask what they want
-        return f"What would you like to order, {name}? We have wings, sides, and drinks."
+        return {
+            "customer_name": customer.get("name"),
+            "items": order.get("items", []),
+            "order_type": order.get("order_type"),
+            "stage": order.get("stage", "greeting"),
+            "confirmed": order.get("confirmed", False)
+        }
     
-    def _format_order_items(self, order: Dict) -> str:
-        """Format order items for display"""
-        items = order.get("items", [])
-        if not items:
-            return "nothing yet"
-        
-        descriptions = []
-        for item in items:
-            qty = item.get("quantity", 1)
-            name = item.get("name", "")
-            flavor = item.get("flavor", "")
-            
-            if "wing" in name.lower():
-                desc = f"{qty} {flavor} {name}" if flavor else f"{qty} {name}"
-            else:
-                desc = f"{qty} {name}"
-            
-            descriptions.append(desc.strip())
-        
-        return ", ".join(descriptions) if descriptions else "nothing yet"
+    def _get_context(self) -> str:
+        """Get conversation context"""
+        turns = self.working_memory.get_recent(10)
+        context = []
+        for turn in turns:
+            role = "Customer" if turn["role"] == "user" else "Tasha"
+            context.append(f"{role}: {turn['content']}")
+        return "\n".join(context)
     
-    def _confirm_order(self, name: str, order: Dict) -> str:
-        """Generate order confirmation"""
-        items_desc = self._format_order_items(order)
-        order_type = order.get("order_type", "pickup")
+    def _get_item_price(self, item_name: str) -> float:
+        """Get price for menu item"""
+        prices = {
+            "wings": 11.99,
+            "boneless wings": 11.99,
+            "classic wings": 12.99,
+            "fries": 3.99,
+            "cheese fries": 4.99,
+            "ranch dip": 0.99,
+            "blue cheese dip": 0.99,
+            "drink": 2.99
+        }
         
-        # Calculate total
-        total = 0
-        for item in order.get("items", []):
-            qty = item.get("quantity", 1)
-            price = item.get("price", 11.99)
-            if "wing" in item.get("name", "").lower() and not item.get("price"):
-                price = 11.99  # default wing price
-            total += qty * price
+        name_lower = item_name.lower()
+        for key, price in prices.items():
+            if key in name_lower:
+                return price
         
-        tax = total * 0.0825
-        total_with_tax = total + tax
-        
-        return f"Perfect {name}! Your order is {items_desc} for {order_type}. Total is ${total_with_tax:.2f}. Ready in 15-20 minutes!"
+        return 11.99  # default
     
     async def _persist_session(self, session_id: str):
         """Save session"""
