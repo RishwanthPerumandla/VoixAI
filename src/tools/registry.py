@@ -64,12 +64,25 @@ class ToolRegistry:
             return ToolResult(success=False, error=f"Execution error: {str(e)}")
     
     def create_default_registry(self):
-        """Create registry with default tools (Phase 1.6)"""
-        # Import and register tools
+        """Create registry with all 8 tools for Phase 2"""
+        # Import all tools
         from src.tools.menu_search import MenuSearchTool
         from src.tools.order_creation import OrderCreationTool
+        from src.tools.price_calculator import PriceCalculatorTool
+        from src.tools.order_modification import OrderModificationTool
+        from src.tools.upsell_engine import UpsellEngineTool
+        from src.tools.policy_checker import PolicyCheckerTool
+        from src.tools.ticket_creator import TicketCreatorTool
         
+        # Register all tools
         self.register(MenuSearchTool())
         self.register(OrderCreationTool())
+        self.register(PriceCalculatorTool())
+        self.register(OrderModificationTool())
+        self.register(UpsellEngineTool())
+        self.register(PolicyCheckerTool())
+        self.register(TicketCreatorTool())
+        
+        print(f"[ToolRegistry] Registered {len(self._tools)} tools: {self.list_tools()}")
         
         return self
