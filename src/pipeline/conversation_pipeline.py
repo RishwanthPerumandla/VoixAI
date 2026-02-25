@@ -7,8 +7,16 @@ import asyncio
 from typing import Optional
 
 from src.agent.react_agent import ReActAgent
-from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor
-from src.processors.cartesia_tts import CartesiaTTSProcessor, MockTTSProcessor
+try:
+    from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor, DEEPGRAM_SDK_V6
+except ImportError:
+    from src.processors.deepgram_stt import MockSTTProcessor
+    DEEPGRAM_SDK_V6 = False
+try:
+    from src.processors.cartesia_tts import CartesiaTTSProcessor, MockTTSProcessor, CARTESIA_AVAILABLE
+except ImportError:
+    from src.processors.cartesia_tts import MockTTSProcessor
+    CARTESIA_AVAILABLE = False
 from src.transports.daily_transport import SimpleWebSocketTransport
 from src.config import settings
 
@@ -34,23 +42,31 @@ class ConversationPipeline:
         self.transport = SimpleWebSocketTransport()
         
         # STT
-        if use_mock_stt or not settings.deepgram_api_key:
+        if use_mock_stt or not settings.deepgram_api_key or not DEEPGRAM_SDK_V6:
             print("[Pipeline] Using Mock STT")
             self.stt = MockSTTProcessor()
         else:
             print("[Pipeline] Using Deepgram STT")
-            self.stt = DeepgramSTTProcessor()
+            try:
+                self.stt = DeepgramSTTProcessor()
+            except Exception as e:
+                print(f"[Pipeline] Failed to init Deepgram STT: {e}, using Mock")
+                self.stt = MockSTTProcessor()
         
         # Agent
         self.agent = ReActAgent()
         
         # TTS
-        if use_mock_tts or not settings.cartesia_api_key:
+        if use_mock_tts or not settings.cartesia_api_key or not CARTESIA_AVAILABLE:
             print("[Pipeline] Using Mock TTS")
             self.tts = MockTTSProcessor()
         else:
             print("[Pipeline] Using Cartesia TTS")
-            self.tts = CartesiaTTSProcessor()
+            try:
+                self.tts = CartesiaTTSProcessor()
+            except Exception as e:
+                print(f"[Pipeline] Failed to init Cartesia TTS: {e}, using Mock")
+                self.tts = MockTTSProcessor()
         
         # Session
         self.session_id: Optional[str] = None

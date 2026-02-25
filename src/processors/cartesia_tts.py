@@ -7,8 +7,10 @@ import asyncio
 from typing import Callable, Optional
 try:
     from cartesia import Cartesia
+    CARTESIA_AVAILABLE = True
 except ImportError:
     Cartesia = None
+    CARTESIA_AVAILABLE = False
 
 from src.config import settings
 
@@ -24,7 +26,7 @@ class CartesiaTTSProcessor:
     """
     
     def __init__(self, api_key: str = None):
-        if Cartesia is None:
+        if not CARTESIA_AVAILABLE:
             raise ImportError("Cartesia SDK not installed")
         
         self.api_key = api_key or settings.cartesia_api_key
