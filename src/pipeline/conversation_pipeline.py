@@ -8,7 +8,11 @@ import time
 from typing import Optional
 
 from src.agent.react_agent import ReActAgent
-from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor
+try:
+    from src.processors.deepgram_stt import DeepgramSTTProcessor, MockSTTProcessor, DEEPGRAM_AVAILABLE
+except ImportError:
+    from src.processors.deepgram_stt import MockSTTProcessor
+    DEEPGRAM_AVAILABLE = False
 from src.processors.cartesia_tts import CartesiaTTSProcessor, MockTTSProcessor
 from src.transports.daily_transport import SimpleWebSocketTransport
 from src.config import settings

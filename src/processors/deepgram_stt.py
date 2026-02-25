@@ -6,9 +6,16 @@ Real-time streaming transcription using Deepgram Nova 2
 import asyncio
 import json
 from typing import Callable, Optional
-from deepgram import Deepgram
 
 from src.config import settings
+
+# Deepgram SDK v6
+try:
+    from deepgram import AsyncDeepgramClient
+    DEEPGRAM_AVAILABLE = True
+except ImportError:
+    DEEPGRAM_AVAILABLE = False
+    AsyncDeepgramClient = None
 
 
 class DeepgramSTTProcessor:
@@ -22,8 +29,11 @@ class DeepgramSTTProcessor:
     """
     
     def __init__(self, api_key: str = None):
+        if not DEEPGRAM_AVAILABLE:
+            raise ImportError("Deepgram SDK not installed")
+        
         self.api_key = api_key or settings.deepgram_api_key
-        self.dg_client = Deepgram(self.api_key)
+        self.client = AsyncDeepgramClient(api_key=self.api_key)
         self.connection = None
         
         # Callbacks
@@ -37,28 +47,22 @@ class DeepgramSTTProcessor:
     async def start(self):
         """Start the STT connection"""
         try:
-            # Deepgram SDK v2 uses transcription.live
-            self.connection = await self.dg_client.transcription.live(
-                {
-                    "smart_format": True,
-                    "interim_results": True,
-                    "language": "en-US",
-                    "model": "nova-2",
-                    "punctuate": True,
-                    "endpointing": 300,
-                }
-            )
+            # Create live transcription connection
+            self.connection = await self.client.listen.asynclive.v("1")
             
             # Register event handlers
-            self.connection.registerHandler(
-                self.connection.event.CLOSE,
-                lambda _: self._handle_close()
-            )
+            self.connection.on(self.connection.event.CLOSE, lambda _: self._handle_close())
+            self.connection.on(self.connection.event.TRANSCRIPT_RECEIVED, self._handle_transcript)
             
-            self.connection.registerHandler(
-                self.connection.event.TRANSCRIPT_RECEIVED,
-                self._handle_transcript
-            )
+            # Start with options
+            await self.connection.start({
+                "smart_format": True,
+                "interim_results": True,
+                "language": "en-US",
+                "model": "nova-2",
+                "punctuate": True,
+                "endpointing": 300,
+            })
             
             self._is_listening = True
             print("[DeepgramSTT] Started listening")
@@ -75,7 +79,7 @@ class DeepgramSTTProcessor:
         self._is_listening = False
         if self.connection:
             try:
-                self.connection.finish()
+                await self.connection.finish()
             except:
                 pass
             self.connection = None
