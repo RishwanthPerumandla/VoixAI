@@ -91,13 +91,10 @@ class DailyTransport:
     
     async def send_audio(self, audio_data: bytes):
         """Send audio data to the room"""
-        # This will be implemented with Pipecat's daily transport
-        # For now, we'll use a WebSocket-based approach
         pass
     
     async def receive_audio(self) -> bytes:
         """Receive audio data from the room"""
-        # Placeholder for audio receiving
         await asyncio.sleep(0.1)
         return b""
     
@@ -112,52 +109,86 @@ class DailyTransport:
 
 class SimpleWebSocketTransport:
     """
-    Fallback WebSocket transport for local testing
-    Uses simple WebSocket without Daily.co (for testing)
+    WebSocket transport for FastAPI
+    Handles WebSocket connections properly
     """
     
     def __init__(self):
-        self.connections = []
+        self.connections: list = []
         self.on_message: Optional[Callable] = None
         self.on_audio: Optional[Callable] = None
+        self._running = False
     
-    async def handle_websocket(self, websocket, path=""):
-        """Handle WebSocket connection"""
+    async def handle_websocket(self, websocket):
+        """Handle WebSocket connection from FastAPI"""
         self.connections.append(websocket)
         print(f"[WebSocket] Client connected. Total: {len(self.connections)}")
         
         try:
-            async for message in websocket:
-                if isinstance(message, bytes):
-                    # Audio data
-                    if self.on_audio:
-                        await self.on_audio(message)
-                else:
-                    # Text message
-                    data = json.loads(message)
-                    if self.on_message:
-                        await self.on_message(data, websocket)
+            self._running = True
+            while self._running:
+                try:
+                    # Receive message from client
+                    message = await websocket.receive()
+                    
+                    # Handle different message types
+                    if message["type"] == "websocket.receive":
+                        if "text" in message:
+                            # Text message
+                            data = json.loads(message["text"])
+                            if self.on_message:
+                                await self.on_message(data, websocket)
+                        elif "bytes" in message:
+                            # Binary/audio message
+                            if self.on_audio:
+                                await self.on_audio(message["bytes"])
+                    
+                    elif message["type"] == "websocket.disconnect":
+                        print(f"[WebSocket] Client disconnected: {message.get('code', 'unknown')}")
+                        break
                         
+                except Exception as e:
+                    print(f"[WebSocket] Error receiving: {e}")
+                    break
+                    
         except Exception as e:
-            print(f"[WebSocket] Error: {e}")
+            print(f"[WebSocket] Connection error: {e}")
         finally:
-            self.connections.remove(websocket)
-            print(f"[WebSocket] Client disconnected. Total: {len(self.connections)}")
+            if websocket in self.connections:
+                self.connections.remove(websocket)
+            print(f"[WebSocket] Client removed. Total: {len(self.connections)}")
     
     async def send_text(self, message: dict, websocket=None):
         """Send text message to client(s)"""
-        if websocket:
-            await websocket.send(json.dumps(message))
-        else:
-            # Broadcast to all
-            for conn in self.connections:
-                await conn.send(json.dumps(message))
+        try:
+            if websocket:
+                await websocket.send_text(json.dumps(message))
+            else:
+                # Broadcast to all
+                for conn in self.connections:
+                    try:
+                        await conn.send_text(json.dumps(message))
+                    except:
+                        pass
+        except Exception as e:
+            print(f"[WebSocket] Error sending text: {e}")
     
     async def send_audio(self, audio_data: bytes, websocket=None):
         """Send audio data to client(s)"""
-        if websocket:
-            await websocket.send(audio_data)
-        else:
-            # Broadcast to all
-            for conn in self.connections:
-                await conn.send(audio_data)
+        try:
+            if websocket:
+                await websocket.send_bytes(audio_data)
+            else:
+                # Broadcast to all
+                for conn in self.connections:
+                    try:
+                        await conn.send_bytes(audio_data)
+                    except:
+                        pass
+        except Exception as e:
+            print(f"[WebSocket] Error sending audio: {e}")
+    
+    def disconnect_all(self):
+        """Disconnect all clients"""
+        self._running = False
+        self.connections.clear()

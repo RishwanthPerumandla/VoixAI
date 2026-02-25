@@ -138,13 +138,79 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket connection established")
     
     try:
-        # Handle WebSocket through pipeline transport
-        await pipeline.handle_websocket(websocket)
+        # Set up message handler for this connection
+        await handle_websocket_messages(websocket)
         
     except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
+        logger.info("WebSocket disconnected by client")
     except Exception as e:
-        logger.error("WebSocket error", error=str(e))
+        logger.error(f"WebSocket error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        logger.info("WebSocket connection closed")
+
+
+async def handle_websocket_messages(websocket: WebSocket):
+    """Handle WebSocket messages with proper error handling"""
+    session_id = None
+    
+    # Send connection confirmation
+    await websocket.send_text(json.dumps({
+        "type": "system",
+        "event": "connected",
+        "session_id": f"session-{asyncio.get_event_loop().time()}"
+    }))
+    
+    while True:
+        try:
+            # Receive message
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            msg_type = message.get("type")
+            
+            if msg_type == "start_conversation":
+                session_id = message.get("session_id") or f"session-{asyncio.get_event_loop().time()}"
+                await websocket.send_text(json.dumps({
+                    "type": "system",
+                    "event": "session_started",
+                    "session_id": session_id
+                }))
+                
+            elif msg_type == "text":
+                # Process text message through pipeline
+                text = message.get("content", "")
+                if text and session_id:
+                    print(f"[WS] User: '{text}'")
+                    
+                    # Process through agent
+                    import time
+                    start_time = time.time()
+                    
+                    response = await pipeline.agent.process(text, session_id)
+                    
+                    latency_ms = (time.time() - start_time) * 1000
+                    print(f"[WS] Bot: '{response}' ({latency_ms:.0f}ms)")
+                    
+                    # Send response
+                    await websocket.send_text(json.dumps({
+                        "type": "bot_text",
+                        "content": response,
+                        "latency_ms": latency_ms
+                    }))
+                    
+            elif msg_type == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+                
+        except WebSocketDisconnect:
+            raise
+        except Exception as e:
+            logger.error(f"Error handling message: {e}")
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "content": "Sorry, I had trouble processing that."
+            }))
 
 
 def get_html_client():
@@ -301,22 +367,6 @@ def get_html_client():
                 transform: none;
             }
             
-            .mic-btn {
-                background: #4ecca3;
-                padding: 15px;
-                border-radius: 50%;
-                width: 56px;
-                height: 56px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .mic-btn.recording {
-                background: #e94560;
-                animation: pulse 1s infinite;
-            }
-            
             .connection-status {
                 text-align: center;
                 padding: 10px;
@@ -404,14 +454,25 @@ def get_html_client():
             
             let ws = null;
             let sessionId = null;
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 5;
             
             // Connect to WebSocket
             function connect() {
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    connectionStatus.textContent = 'Failed to connect. Please refresh.';
+                    return;
+                }
+                
+                reconnectAttempts++;
                 const wsUrl = `ws://${window.location.host}/ws`;
+                console.log(`Connecting to ${wsUrl} (attempt ${reconnectAttempts})`);
+                
                 ws = new WebSocket(wsUrl);
                 
                 ws.onopen = () => {
                     console.log('WebSocket connected');
+                    reconnectAttempts = 0;
                     connectionStatus.textContent = 'Connected';
                     messageInput.disabled = false;
                     sendBtn.disabled = false;
@@ -430,8 +491,12 @@ def get_html_client():
                     if (data.type === 'system' && data.event === 'connected') {
                         sessionId = data.session_id;
                         console.log('Session:', sessionId);
+                    }
+                    else if (data.type === 'system' && data.event === 'session_started') {
+                        sessionId = data.session_id;
+                        console.log('Session started:', sessionId);
                         
-                        // Update mode indicator based on health check
+                        // Update mode indicator
                         fetch('/health')
                             .then(r => r.json())
                             .then(h => {
@@ -443,22 +508,18 @@ def get_html_client():
                     else if (data.type === 'bot_text') {
                         addMessage(data.content, 'bot', data.latency_ms);
                     }
-                    else if (data.type === 'bot_audio') {
-                        // Play audio if supported
-                        playAudio(data.data);
-                    }
                     else if (data.type === 'error') {
                         addMessage(data.content, 'bot');
                     }
                 };
                 
-                ws.onclose = () => {
-                    console.log('WebSocket closed');
-                    connectionStatus.textContent = 'Disconnected - Reconnecting...';
+                ws.onclose = (event) => {
+                    console.log('WebSocket closed:', event.code, event.reason);
+                    connectionStatus.textContent = `Disconnected - Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`;
                     messageInput.disabled = true;
                     sendBtn.disabled = true;
                     
-                    // Reconnect after 3 seconds
+                    // Reconnect after delay
                     setTimeout(connect, 3000);
                 };
                 
@@ -466,28 +527,6 @@ def get_html_client():
                     console.error('WebSocket error:', error);
                     connectionStatus.textContent = 'Connection error';
                 };
-            }
-            
-            // Play audio (if browser supports it)
-            function playAudio(base64Data) {
-                try {
-                    const audioData = atob(base64Data);
-                    const arrayBuffer = new ArrayBuffer(audioData.length);
-                    const view = new Uint8Array(arrayBuffer);
-                    for (let i = 0; i < audioData.length; i++) {
-                        view[i] = audioData.charCodeAt(i);
-                    }
-                    
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                        const source = audioContext.createBufferSource();
-                        source.buffer = buffer;
-                        source.connect(audioContext.destination);
-                        source.start();
-                    });
-                } catch (e) {
-                    console.log('Audio playback not supported:', e);
-                }
             }
             
             // Add message to chat
