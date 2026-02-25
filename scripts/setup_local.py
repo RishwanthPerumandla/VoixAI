@@ -10,34 +10,34 @@ from pathlib import Path
 
 def run_command(cmd, description):
     """Run a shell command"""
-    print(f"\n📦 {description}...")
+    print(f"\n[SETUP] {description}...")
     print(f"   Command: {cmd}")
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"   ❌ Error: {result.stderr}")
+        print(f"   [ERROR] {result.stderr}")
         return False
-    print(f"   ✅ Success")
+    print(f"   [OK] Success")
     return True
 
 
 def check_docker():
     """Check if Docker is running"""
-    print("\n🔍 Checking Docker...")
+    print("\n[INFO] Checking Docker...")
     result = subprocess.run("docker ps", shell=True, capture_output=True)
     if result.returncode != 0:
-        print("   ❌ Docker is not running. Please start Docker Desktop first.")
+        print("   [ERROR] Docker is not running. Please start Docker Desktop first.")
         return False
-    print("   ✅ Docker is running")
+    print("   [OK] Docker is running")
     return True
 
 
 def setup_venv():
     """Setup virtual environment"""
-    print("\n🐍 Setting up Python virtual environment...")
+    print("\n[INFO] Setting up Python virtual environment...")
     
     venv_path = Path("venv")
     if venv_path.exists():
-        print("   ℹ️  Virtual environment already exists")
+        print("   [INFO] Virtual environment already exists")
         return True
     
     return run_command(
@@ -48,23 +48,23 @@ def setup_venv():
 
 def install_deps():
     """Install dependencies"""
-    print("\n📥 Installing dependencies...")
+    print("\n[INFO] Installing dependencies...")
     
-    # Determine pip path
+    # Use python -m pip to ensure we use the venv's pip
     if os.name == "nt":  # Windows
-        pip_path = "venv\\Scripts\\pip"
+        python_path = "venv\\Scripts\\python.exe"
     else:
-        pip_path = "venv/bin/pip"
+        python_path = "venv/bin/python"
     
     return run_command(
-        f"{pip_path} install -r requirements-v3.txt",
+        f"{python_path} -m pip install -r requirements-v3.txt",
         "Installing Python packages"
     )
 
 
 def start_services():
     """Start Docker services"""
-    print("\n🐳 Starting local services (Redis, Qdrant)...")
+    print("\n[INFO] Starting local services (Redis, Qdrant)...")
     return run_command(
         "docker-compose up -d",
         "Starting Docker containers"
@@ -73,25 +73,25 @@ def start_services():
 
 def check_env():
     """Check environment file"""
-    print("\n🔐 Checking environment configuration...")
+    print("\n[INFO] Checking environment configuration...")
     
     env_path = Path(".env")
     env_example = Path(".env.example")
     
     if not env_path.exists():
         if env_example.exists():
-            print("   ⚠️  .env file not found. Copying from .env.example...")
+            print("   [WARN] .env file not found. Copying from .env.example...")
             with open(env_example, 'r') as f:
                 content = f.read()
             with open(env_path, 'w') as f:
                 f.write(content)
-            print("   ✅ Created .env file")
-            print("   ⚠️  Please edit .env and add your API keys!")
+            print("   [OK] Created .env file")
+            print("   [WARN] Please edit .env and add your API keys!")
         else:
-            print("   ❌ .env.example not found!")
+            print("   [ERROR] .env.example not found!")
             return False
     else:
-        print("   ✅ .env file exists")
+        print("   [OK] .env file exists")
     
     # Check for required keys
     with open(env_path, 'r') as f:
@@ -111,7 +111,7 @@ def check_env():
                 missing.append(key)
     
     if missing:
-        print(f"   ⚠️  Missing API keys: {', '.join(missing)}")
+        print(f"   [WARN] Missing API keys: {', '.join(missing)}")
         print("   Please add them to .env file")
         return False
     
@@ -121,16 +121,16 @@ def check_env():
 
 def create_data_dir():
     """Create data directory"""
-    print("\n📁 Creating data directory...")
+    print("\n[INFO] Creating data directory...")
     Path("data").mkdir(exist_ok=True)
-    print("   ✅ Data directory ready")
+    print("   [OK] Data directory ready")
     return True
 
 
 def main():
     """Main setup function"""
     print("=" * 60)
-    print("🚀 VoixAI v3.0 - Local Development Setup")
+    print("VoixAI v3.0 - Local Development Setup")
     print("=" * 60)
     
     steps = [
@@ -152,7 +152,7 @@ def main():
     
     print("\n" + "=" * 60)
     if all(results):
-        print("✅ Setup complete!")
+        print("[SUCCESS] Setup complete!")
         print("\nNext steps:")
         print("  1. Ensure .env has all your API keys")
         print("  2. Activate virtual environment:")
@@ -164,7 +164,7 @@ def main():
         print("     python src/main.py")
         print("  4. Open http://localhost:8000 in your browser")
     else:
-        print("❌ Setup incomplete. Please fix the errors above.")
+        print("[ERROR] Setup incomplete. Please fix the errors above.")
         sys.exit(1)
     print("=" * 60)
 
