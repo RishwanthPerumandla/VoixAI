@@ -1,5 +1,5 @@
 """
-VoixAI v3.0 - Main Entry Point (Concurrent Mode)
+VoixAI v3.0 - Concurrent Main Entry Point
 Supports multiple simultaneous customer sessions
 """
 
@@ -21,29 +21,22 @@ from contextlib import asynccontextmanager
 from src.config import settings
 from src.api.websocket_concurrent import (
     get_websocket_endpoint, 
-    shutdown_websocket
+    shutdown_websocket,
+    ConcurrentWebSocketEndpoint
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    print("="*60)
-    print("🚀 VoixAI v3.0 - Concurrent Mode")
-    print("="*60)
-    print("Features:")
-    print("  ✓ Multiple simultaneous customers (one per tab)")
-    print("  ✓ Real-time order dashboard")
-    print("  ✓ Session isolation")
-    print("  ✓ Concurrent message processing")
-    print("="*60)
-    
+    # Startup
+    print("[Server] Starting VoixAI v3.0 (Concurrent Mode)")
     ws_endpoint = await get_websocket_endpoint()
-    print("\n[Server] WebSocket endpoint ready")
-    print("[Server] Dashboard: http://localhost:8000/dashboard")
+    print("[Server] WebSocket endpoint initialized")
     
     yield
     
+    # Shutdown
     await shutdown_websocket()
     print("[Server] Shutdown complete")
 
@@ -59,7 +52,7 @@ app.router.lifespan_context = lifespan
 
 @app.get("/")
 async def root():
-    """Serve main ordering page"""
+    """Serve main page"""
     return FileResponse("static/index.html")
 
 
@@ -72,37 +65,29 @@ async def dashboard_page():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    try:
-        ws_endpoint = await get_websocket_endpoint()
-        stats = await ws_endpoint.get_global_stats()
-        return {
-            "status": "healthy",
-            "mode": "concurrent",
-            "active_sessions": stats["active_sessions"],
-            "total_sessions": stats["total_sessions"]
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    ws_endpoint = await get_websocket_endpoint()
+    stats = await ws_endpoint.get_global_stats()
+    
+    return {
+        "status": "healthy",
+        "mode": "concurrent",
+        "active_sessions": stats["active_sessions"],
+        "total_sessions": stats["total_sessions"]
+    }
 
 
 @app.get("/api/dashboard")
-async def dashboard_api():
+async def dashboard():
     """Get dashboard data for all active sessions"""
-    try:
-        ws_endpoint = await get_websocket_endpoint()
-        return await ws_endpoint.get_dashboard_data()
-    except Exception as e:
-        return {"error": str(e)}
+    ws_endpoint = await get_websocket_endpoint()
+    return await ws_endpoint.get_dashboard_data()
 
 
 @app.get("/api/stats")
-async def stats_api():
+async def stats():
     """Get global statistics"""
-    try:
-        ws_endpoint = await get_websocket_endpoint()
-        return await ws_endpoint.get_global_stats()
-    except Exception as e:
-        return {"error": str(e)}
+    ws_endpoint = await get_websocket_endpoint()
+    return await ws_endpoint.get_global_stats()
 
 
 @app.websocket("/ws")
@@ -115,14 +100,11 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_endpoint.handle_connection(websocket)
 
 
-# Legacy compatibility endpoints
+# Legacy endpoints for compatibility
 @app.post("/daily/create-room")
 async def create_daily_room():
-    """Create a Daily.co room (legacy - not used in concurrent mode)"""
-    return {
-        "status": "deprecated", 
-        "message": "Daily.co integration not used in concurrent mode. Use WebSocket at /ws"
-    }
+    """Create a Daily.co room (legacy)"""
+    return {"status": "not_implemented", "message": "Use WebSocket endpoint instead"}
 
 
 if __name__ == "__main__":

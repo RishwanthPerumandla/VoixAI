@@ -1,19 +1,65 @@
-# Install PyTorch CPU first (separate command):
-# pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
+# ============================================
+# VoixAI v3.0 - Python Dependencies
+# For local development on 16GB RAM
+# ============================================
 
-# Core dependencies
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-websockets==12.0
-numpy==1.26.4
-faster-whisper==1.0.3
-soundfile==0.12.1
-silero-vad==5.1.2
-groq>=1.0.0
-python-dotenv==1.0.0
-pyyaml==6.0.1
-aiofiles==23.2.1
+# --------------------------------------------
+# Web Framework
+# --------------------------------------------
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
 
-# Faster TTS with ONNX
-kokoro-onnx>=0.2.0
-onnxruntime>=1.16.0
+# --------------------------------------------
+# Cloud AI Services
+# --------------------------------------------
+groq
+deepgram-sdk
+cartesia
+openai
+
+# --------------------------------------------
+# Local Data Services
+# --------------------------------------------
+redis
+qdrant-client
+aiosqlite
+asyncpg  # Phase 2: PostgreSQL support
+
+# --------------------------------------------
+# Vector Embeddings (optional for Phase 2)
+# --------------------------------------------
+sentence-transformers  # Phase 2: Vector embeddings
+numpy
+
+# --------------------------------------------
+# Utilities
+# --------------------------------------------
+pydantic
+pydantic-settings
+python-dotenv
+structlog
+aiofiles
+aiohttp
+httpx
+
+# --------------------------------------------
+# Observability
+# --------------------------------------------
+prometheus-client
+
+# --------------------------------------------
+# Development & Testing
+# --------------------------------------------
+pytest
+pytest-asyncio
+pytest-cov
+black
+ruff
+mypy
+
+# --------------------------------------------
+# Note: Pipecat will be installed in Phase 1.2
+# when we add the pipeline
+# --------------------------------------------

@@ -25,11 +25,12 @@ openai
 redis
 qdrant-client
 aiosqlite
+asyncpg  # Phase 2: PostgreSQL support
 
 # --------------------------------------------
 # Vector Embeddings (optional for Phase 2)
 # --------------------------------------------
-# sentence-transformers  # Uncomment in Phase 2
+sentence-transformers  # Phase 2: Vector embeddings
 numpy
 
 # --------------------------------------------
