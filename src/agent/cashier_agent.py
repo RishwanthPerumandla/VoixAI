@@ -118,25 +118,32 @@ class WingstopCashier:
         conversation = self._get_conversation_text(session_id)
         
         # Build SHORT prompt
+        # Check if we should upsell
+        last_item_needs = self._get_needs(order)
+        should_upsell = last_item_needs == "complete" and len(order.items) > 0 and not any(x in message.lower() for x in ["done", "that\'s all", "complete", "no", "nothing"])
+        
+        upsell_instruction = ""
+        if should_upsell:
+            upsell_instruction = "\n- CURRENT ITEM IS COMPLETE - UPSELL: Suggest combo, drink, or dip!"
+        
         prompt = f"""You are Tasha, a Wingstop cashier. Keep responses SHORT (under 8 words).
 
 MENU:
 Boneless: 6pc $10.99, 8pc $13.99, 10pc $16.99, 15pc $23.99, 20pc $29.99, 30pc $42.99
 Classic: 6pc $9.99, 8pc $12.99, 10pc $15.99, 15pc $21.99, 20pc $27.99, 30pc $39.99
 Flavors: Lemon Pepper, Garlic Parmesan, Original Hot, Hickory BBQ, Mango Habanero, Atomic, Cajun
-
 RULES:
 - KEEP RESPONSES SHORT (5-8 words max)
 - Get name first
 - Ask: boneless or classic → size → flavor
-- Short questions: "Boneless or classic?" / "What size?" / "What flavor?"
-- Give total at end
+- UPSELL when wings complete: "Make it a combo?" / "Add a drink?" / "Our ranch is popular!"
+- Only give total when customer is done{upsell_instruction}
 
 CURRENT ORDER:
 Name: {order.customer_name or "?"}
 Items: {self._format_items(order.items)}
 Total: ${order.total:.2f}
-Last item needs: {self._get_needs(order)}
+Last item needs: {last_item_needs}
 
 CHAT:
 {conversation}
