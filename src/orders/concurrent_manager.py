@@ -112,6 +112,7 @@ class ConcurrentSessionManager:
         # Stats
         self.total_sessions_created: int = 0
         self.total_orders_completed: int = 0
+        self.completed_orders_history: List[Dict] = []  # Persist completed orders for revenue
         
         # Start cleanup task
         self._cleanup_task: Optional[asyncio.Task] = None
@@ -192,6 +193,20 @@ class ConcurrentSessionManager:
         session = self.sessions.get(session_id)
         if not session:
             return
+        
+        # Save order to history before closing
+        agent = self.agents.get(session_id)
+        if agent:
+            status = agent.get_status(session_id)
+            if status.get("total", 0) > 0:
+                self.completed_orders_history.append({
+                    "session_id": session_id,
+                    "customer": status.get("customer", "Anonymous"),
+                    "total": status.get("total", 0),
+                    "items": status.get("items", 0),
+                    "completed_at": datetime.now().isoformat()
+                })
+                self.total_orders_completed += 1
         
         session.mark_disconnected()
         
@@ -293,24 +308,28 @@ class ConcurrentSessionManager:
     
     def get_global_stats(self) -> Dict:
         """Get global statistics across all sessions"""
-        active_orders = self.get_active_orders()
-        completed_sessions = [s for s in self.sessions.values() 
-                             if s.status == SessionStatus.COMPLETED]
+        active_sessions = self.get_active_sessions()
         
-        total_revenue = sum(
-            self.get_order(s.session_id).total 
-            for s in completed_sessions
-            if self.get_order(s.session_id)
-        )
+        # Calculate revenue from completed orders history + active sessions
+        completed_revenue = sum(order.get("total", 0) for order in self.completed_orders_history)
+        
+        # Also add active orders to show current potential revenue
+        active_revenue = 0
+        for session in active_sessions:
+            agent = self.agents.get(session.session_id)
+            if agent:
+                status = agent.get_status(session.session_id)
+                active_revenue += status.get("total", 0)
+        
+        total_revenue = completed_revenue + active_revenue
         
         return {
             "total_sessions": self.total_sessions_created,
-            "active_sessions": self.get_active_count(),
+            "active_sessions": len(active_sessions),
             "completed_orders": self.total_orders_completed,
-            "active_orders": len(active_orders),
+            "active_orders": len(active_sessions),
             "total_revenue": round(total_revenue, 2),
-            "average_order_value": round(total_revenue / self.total_orders_completed, 2) 
-                                  if self.total_orders_completed > 0 else 0,
+            "average_order_value": round(total_revenue / max(self.total_orders_completed, 1), 2),
             "sessions_by_status": {
                 "active": len([s for s in self.sessions.values() if s.status == SessionStatus.ACTIVE]),
                 "idle": len([s for s in self.sessions.values() if s.status == SessionStatus.IDLE]),
@@ -329,6 +348,18 @@ class ConcurrentSessionManager:
             agent = self.agents.get(session.session_id)
             order_status = agent.get_status(session.session_id) if agent else {}
             
+            # Get detailed item info
+            order_details = []
+            if agent and session.session_id in agent.orders:
+                order = agent.orders[session.session_id]
+                for item in order.items:
+                    detail = f"{item.quantity}x {item.name}"
+                    if item.size:
+                        detail += f" ({item.size}pc)"
+                    if item.flavor:
+                        detail += f" - {item.flavor}"
+                    order_details.append(detail)
+            
             session_data.append({
                 "session_id": session.session_id,
                 "customer": order_status.get("customer") or session.customer_name or "Anonymous",
@@ -337,12 +368,14 @@ class ConcurrentSessionManager:
                 "items": order_status.get("items", 0),
                 "total": round(order_status.get("total", 0), 2),
                 "duration": int(session.duration_seconds),
-                "messages": session.messages_count
+                "messages": session.messages_count,
+                "order_details": order_details
             })
         
         return {
             "stats": self.get_global_stats(),
             "active_sessions": session_data,
+            "completed_orders": self.completed_orders_history,
             "timestamp": datetime.now().isoformat()
         }
     

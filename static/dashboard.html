@@ -266,28 +266,33 @@
             }
             
             sessionsList.innerHTML = data.active_sessions.map(session => `
-                <div class="session-card">
-                    <div>
-                        <div class="customer-name">${session.customer}</div>
-                        <div class="session-id">${session.session_id}</div>
+                <div class="session-card" style="grid-template-columns: 1fr;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <div class="customer-name">${session.customer}</div>
+                            <div class="session-id">${session.session_id}</div>
+                        </div>
+                        <div>
+                            <span class="order-state ${getStateClass(session.order_state)}">
+                                ${session.order_state}
+                            </span>
+                        </div>
+                        <div>
+                            <div class="order-total">${formatCurrency(session.total)}</div>
+                            <div class="item-count">${session.items} items</div>
+                        </div>
+                        <div class="duration">
+                            ${formatDuration(session.duration)}
+                        </div>
                     </div>
-                    <div>
-                        <span class="order-state ${getStateClass(session.order_state)}">
-                            ${session.order_state}
-                        </span>
-                    </div>
-                    <div>
-                        <div class="order-total">${formatCurrency(session.total)}</div>
-                        <div class="item-count">${session.items} items</div>
-                    </div>
-                    <div class="duration">
-                        Duration: ${formatDuration(session.duration)}
-                    </div>
-                    <div>
-                        <span style="color: #888; font-size: 12px;">
-                            ${session.messages} messages
-                        </span>
-                    </div>
+                    ${session.order_details && session.order_details.length > 0 ? `
+                        <div style="grid-column: 1 / -1; padding: 10px; background: #0f3460; border-radius: 8px; margin-top: 10px;">
+                            <strong style="color: #e94560; font-size: 12px;">ORDER DETAILS:</strong>
+                            <ul style="margin: 5px 0 0 20px; color: #ccc; font-size: 14px;">
+                                ${session.order_details.map(item => `<li>${item}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
         }
