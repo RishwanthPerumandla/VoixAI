@@ -325,14 +325,17 @@ class ConcurrentSessionManager:
         
         session_data = []
         for session in active_sessions:
-            order = self.get_order(session.session_id)
+            # Get order info from cashier agent
+            agent = self.agents.get(session.session_id)
+            order_status = agent.get_status(session.session_id) if agent else {}
+            
             session_data.append({
                 "session_id": session.session_id,
-                "customer": session.customer_name or "Anonymous",
+                "customer": order_status.get("customer") or session.customer_name or "Anonymous",
                 "status": session.status.value,
-                "order_state": order.state.value if order else "none",
-                "items": order.item_count if order else 0,
-                "total": round(order.total, 2) if order else 0,
+                "order_state": "active" if order_status.get("active") else "none",
+                "items": order_status.get("items", 0),
+                "total": round(order_status.get("total", 0), 2),
                 "duration": int(session.duration_seconds),
                 "messages": session.messages_count
             })

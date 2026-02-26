@@ -100,7 +100,10 @@ class WingstopCashier:
         order = self._get_order(session_id)
         self._add_message(session_id, "user", message)
         
-        # Use LLM to understand and respond
+        # Extract items from message first (before LLM)
+        self._parse_and_add_item(message, order)
+        
+        # Use LLM to generate response
         response = await self._llm_process(message, order, session_id)
         
         self._add_message(session_id, "assistant", response)
@@ -114,64 +117,43 @@ class WingstopCashier:
         
         conversation = self._get_conversation_text(session_id)
         
-        # Build comprehensive prompt
-        prompt = f"""You are Tasha, a friendly and efficient Wingstop cashier taking phone orders. You talk naturally like a real person, not a robot.
+        # Build SHORT prompt
+        prompt = f"""You are Tasha, a Wingstop cashier. Keep responses SHORT (under 8 words).
 
-YOUR PERSONALITY:
-- Warm, friendly, and helpful
-- Efficient but not rushed
-- Uses casual language ("got it", "sounds good", "perfect")
-- Asks follow-up questions naturally
-- Never mentions "states", "machines", or "systems"
+MENU:
+Boneless: 6pc $10.99, 8pc $13.99, 10pc $16.99, 15pc $23.99, 20pc $29.99, 30pc $42.99
+Classic: 6pc $9.99, 8pc $12.99, 10pc $15.99, 15pc $21.99, 20pc $27.99, 30pc $39.99
+Flavors: Lemon Pepper, Garlic Parmesan, Original Hot, Hickory BBQ, Mango Habanero, Atomic, Cajun
 
-WINGSTOP MENU:
-Boneless Wings: 6pc $10.99, 8pc $13.99, 10pc $16.99, 15pc $23.99, 20pc $29.99, 30pc $42.99
-Classic Wings: 6pc $9.99, 8pc $12.99, 10pc $15.99, 15pc $21.99, 20pc $27.99, 30pc $39.99
-Flavors: Lemon Pepper, Garlic Parmesan, Original Hot, Hickory Smoked BBQ, Mango Habanero, Atomic, Spicy Korean Q, Louisiana Rub, Cajun
-Sides: Seasoned Fries (reg $3.49/lg $4.99), Cheese Fries $4.49, Veggie Sticks $3.99
-Dips: Ranch, Blue Cheese, Honey Mustard, Cheese Sauce - all $0.99
-Drinks: Fountain 20oz $2.49/32oz $2.99, Water $1.99
-Combos: 6pc $13.99 (saves $3), 8pc $16.99, 10pc $19.99 - all include fries + drink
-
-ORDER FLOW (like a real call):
-1. Greet warmly and get customer name first
-2. Ask what they'd like to order
-3. If wings: ask boneless or classic, then size, then flavor
-4. Suggest combos if ordering 6+ wings ("Want to make it a combo with fries and drink? Saves you $3!")
-5. Offer dips ("Our ranch is really popular with that!")
-6. Give total and time estimate
-7. Close warmly
+RULES:
+- KEEP RESPONSES SHORT (5-8 words max)
+- Get name first
+- Ask: boneless or classic → size → flavor
+- Short questions: "Boneless or classic?" / "What size?" / "What flavor?"
+- Give total at end
 
 CURRENT ORDER:
-Customer Name: {order.customer_name or "Not asked yet"}
+Name: {order.customer_name or "?"}
 Items: {self._format_items(order.items)}
 Total: ${order.total:.2f}
+Last item needs: {self._get_needs(order)}
 
-CONVERSATION SO FAR:
+CHAT:
 {conversation}
 
-CUSTOMER JUST SAID: "{message}"
+Customer: {message}
 
-INSTRUCTIONS:
-- Respond naturally as Tasha would on the phone
-- If you don't have customer name yet, ask for it naturally
-- If ordering wings, make sure you know: type (boneless/classic), size, and flavor
-- Suggest upsells naturally (combos, dips)
-- Keep responses conversational (1-2 sentences max)
-- Don't repeat the same question if customer already answered
-- If customer confirms order, give total and say "It'll be ready in 15-20 minutes!"
-
-TASHA:"""
+Tasha (SHORT reply, 5-8 words):"""
 
         try:
             response = self.llm_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": "You are Tasha, a natural, friendly Wingstop cashier. Talk like a real person, not a script."},
+                    {"role": "system", "content": "You are Tasha, a Wingstop cashier. Keep responses SHORT and SIMPLE."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=150,
-                temperature=0.8
+                max_tokens=30,
+                temperature=0.3
             )
             
             return response.choices[0].message.content.strip()
@@ -219,28 +201,9 @@ TASHA:"""
         return "What else can I get you?"
     
     def _parse_and_add_item(self, message: str, order: Order):
-        """Parse items from message"""
+        """Parse items from message and update order"""
         msg_lower = message.lower()
         
-        # Check for existing incomplete item
-        last_item = order.items[-1] if order.items else None
-        if last_item and "wing" in last_item.name.lower():
-            # Check if this completes the last item
-            if not last_item.wing_type:
-                if "boneless" in msg_lower:
-                    last_item.wing_type = "boneless"
-                    return
-                elif "classic" in msg_lower or "bone-in" in msg_lower or "bone in" in msg_lower:
-                    last_item.wing_type = "bone-in"
-                    return
-            
-            if not last_item.flavor:
-                for flavor in self.MENU["flavors"]:
-                    if flavor.lower() in msg_lower:
-                        last_item.flavor = flavor
-                        return
-        
-        # New item
         # Extract size
         size_match = re.search(r'(\d+)\s*(?:pc|piece|wings?)', msg_lower)
         size = int(size_match.group(1)) if size_match else None
@@ -249,7 +212,7 @@ TASHA:"""
         wing_type = None
         if "boneless" in msg_lower:
             wing_type = "boneless"
-        elif "classic" in msg_lower or "bone" in msg_lower:
+        elif "classic" in msg_lower or "bone-in" in msg_lower or "bone in" in msg_lower or "regular" in msg_lower:
             wing_type = "bone-in"
         
         # Extract flavor
@@ -259,6 +222,31 @@ TASHA:"""
                 flavor = f
                 break
         
+        # Check for existing incomplete wing item
+        last_wing = None
+        for item in reversed(order.items):
+            if "wing" in item.name.lower():
+                last_wing = item
+                break
+        
+        if last_wing:
+            # Update existing item
+            if wing_type and not last_wing.wing_type:
+                last_wing.wing_type = wing_type
+            if flavor and not last_wing.flavor:
+                last_wing.flavor = flavor
+            if size and not last_wing.size:
+                last_wing.size = size
+            
+            # Recalculate price if we have all info
+            if last_wing.wing_type and last_wing.size:
+                price_key = f"{last_wing.size}pc"
+                last_wing.unit_price = self.MENU["wings"][last_wing.wing_type].get(price_key, 1.29)
+                last_wing.total_price = last_wing.unit_price
+            
+            return
+        
+        # New item - only if we have wing keywords
         if size or "wing" in msg_lower:
             item = OrderItem(
                 name="Wings",
@@ -268,13 +256,27 @@ TASHA:"""
                 quantity=1
             )
             
-            # Calculate price
+            # Calculate price if we have all info
             if wing_type and size:
                 price_key = f"{size}pc"
                 item.unit_price = self.MENU["wings"][wing_type].get(price_key, 1.29)
                 item.total_price = item.unit_price
             
             order.items.append(item)
+    
+    def _get_needs(self, order: Order) -> str:
+        """Get what info is needed for the last item"""
+        for item in reversed(order.items):
+            if "wing" in item.name.lower():
+                needs = []
+                if not item.wing_type:
+                    needs.append("type")
+                if not item.size:
+                    needs.append("size")
+                if not item.flavor:
+                    needs.append("flavor")
+                return ", ".join(needs) if needs else "complete"
+        return "new item"
     
     def _format_items(self, items: List[OrderItem]) -> str:
         if not items:
