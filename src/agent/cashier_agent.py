@@ -136,8 +136,8 @@ RULES:
 - KEEP RESPONSES SHORT (5-8 words max)
 - Get name first
 - Ask: boneless or classic → size → flavor
-- UPSELL when wings complete: "Make it a combo?" / "Add a drink?" / "Our ranch is popular!"
-- Only give total when customer is done{upsell_instruction}
+- When wings COMPLETE: Confirm + Upsell together! "10 classic, got it. Make it a combo?" or "Perfect! Add a drink?"
+- Never just say "got it" - always ask for next step{upsell_instruction}
 
 CURRENT ORDER:
 Name: {order.customer_name or "?"}
