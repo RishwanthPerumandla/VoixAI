@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: voixai-mvp-api
+Version: 0.1.0
+Summary: Minimal FastAPI service for VoixAI MVP Phase 0
+Requires-Python: >=3.10
+Requires-Dist: fastapi<1.0,>=0.116
+Requires-Dist: livekit-api<2.0,>=1.0.7
+Requires-Dist: python-dotenv<2.0,>=1.0
+Requires-Dist: uvicorn<1.0,>=0.35

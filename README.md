@@ -1,244 +1,253 @@
-# VoixAI v1.0 - Wingstop Conversational Voice Agent
+# VoixAI Restaurant Voice Agent Demo
 
-A production-ready conversational AI agent for Wingstop phone orders. Built with a state machine architecture for natural, human-like ordering conversations.
+VoixAI is a small LiveKit-based MVP for learning how a browser voice agent works end to end. The current repo is a restaurant ordering demo: a web user joins a LiveKit room, a Python voice agent joins the same room, and the conversation flows through speech detection, transcription, language generation, and speech synthesis.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.11-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+This is still an MVP. It is intentionally focused on local development, demo behavior, and architecture learning rather than production infrastructure.
 
-## Overview
+## What Is Implemented
 
-VoixAI acts as "Tasha" - a friendly Wingstop cashier that:
-- Takes phone orders through natural conversation
-- Collects customer names for personalized service  
-- Upsells naturally - suggests combos for 6+ wings
-- Handles complete menu - wings, flavors, drinks, sides, dips
-- Calculates prices in real-time
-- Confirms orders before finalizing
+- `apps/web`: Next.js LiveKit client UI for joining a conversation, showing connection state, transcript, and demo panels.
+- `apps/api`: FastAPI service with `GET /health` and `POST /api/livekit/token`.
+- `apps/agent-runtime`: Python LiveKit agent with a restaurant persona, in-memory order state, mock totals, and mock order confirmation.
+- Phase 0 through Phase 6 documentation in [docs/PHASE_STATUS.md](/d:/Personal/Projects/voixai-v2/docs/PHASE_STATUS.md).
 
-## Quick Start
+## What Is Not Implemented
 
-### Prerequisites
-- Python 3.11+
-- Groq API key (for fast LLM inference)
-- Microphone access
+- Production deployment
+- Database persistence
+- Real POS integration
+- Payments
+- Telephony
+- Admin dashboard
+- Analytics pipeline
+- Durable order storage across sessions
 
-### Installation
+## Repo Structure
 
-```bash
-# Clone repository
-git clone <repo-url>
-cd VoixAI
-
-# Create virtual environment
-python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set your Groq API key
-set GROQ_API_KEY=gsk_...
-```
-
-### Run the Agent
-
-```bash
-python main_conversational.py
-```
-
-Open browser: **http://localhost:8000**
-
-## Example Conversation
-
-```
-Tasha: "Hey! Welcome to Wingstop! I'm Tasha. What's your name?"
-
-User: "Rishi"
-
-Tasha: "Rishi, gotcha! How many wings can I get you?"
-
-User: "10 boneless"
-
-Tasha: "10 wings, gotcha! Bone-in or boneless?"
-
-User: "Boneless"
-
-Tasha: "Rishi, boneless, nice! Want to make that a combo?"
-
-User: "No thanks"
-
-Tasha: "Rishi, boneless, nice! What flavors? Lemon Pepper's popular!"
-
-User: "Lemon pepper"
-
-Tasha: "So that's 10 boneless wings (10 lemon pepper). Total is $12.90. Look right?"
-
-User: "Yes"
-
-Tasha: "Perfect! Ready in 15-20 mins, Rishi. Total $12.90. See you then!"
+```text
+voixai-v2/
+  apps/
+    web/              Next.js + LiveKit browser client
+    api/              FastAPI token + health service
+    agent-runtime/    Python LiveKit voice agent
+  docs/
+    MVP.MD
+    MVP_IMPLEMENTATION_PLAN.md
+    LOCAL_SETUP.md
+    ENVIRONMENT_VARIABLES.md
+    INTERRUPTION_TESTING.md
+    DEMO_SCRIPT.md
+    PHASE_STATUS.md
+    CODEX_RULES.md
+  README.md
 ```
 
 ## Architecture
 
-### State Machine Flow
-```
-GREETING → ASKING_NAME → ASKING_MAIN_ITEM → ASKING_COMBO → 
-ASKING_FLAVOR → CONFIRMING → COMPLETED
-```
+The current voice path is:
 
-### Key Components
+1. The browser joins a LiveKit room using a token from `apps/api`.
+2. The token request includes a LiveKit agent dispatch for `AGENT_NAME`.
+3. The Python worker registers that same `AGENT_NAME` and is assigned into the room.
+4. Inside the worker:
+   - `silero` VAD helps detect speech boundaries
+   - LiveKit turn detection decides when the user turn is complete
+   - Deepgram STT transcribes speech
+   - OpenAI LLM generates the assistant reply
+   - Cartesia TTS synthesizes the reply audio
+5. The web app plays the returned audio and renders transcript/status UI.
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **STT** | Whisper tiny.en | Fast speech-to-text (~100ms) |
-| **LLM** | Groq (llama-3.3-70b) | Conversational AI (~300ms) |
-| **TTS** | Kokoro ONNX | Natural voice synthesis (~1s) |
-| **State Machine** | Python Enum | Reliable conversation flow |
-| **Database** | SQLite | Order persistence |
+## Current Demo Features
 
-### Files Structure
+- Start and end a browser conversation
+- LiveKit room join through the API
+- Restaurant-style greeting and ordering flow
+- In-memory order memory for one session
+- Simple corrections to items, drink, and order details
+- Mock order recap with demo pricing
+- Mock order confirmation with `VX-####` order number
+- Transcript and order-summary driven UI panels
+- Worker debug logs for speech state, corrections, and latency
 
-```
-VoixAI/
-├── main_conversational.py      # Entry point
-├── core/
-│   ├── llm_agent_conversational.py  # State machine agent
-│   ├── stt_engine.py          # Whisper STT
-│   ├── tts_engine_onnx.py     # Kokoro TTS
-│   ├── audio_stream.py        # VAD audio buffer
-│   └── order_manager.py       # Order persistence
-├── static/
-│   └── index.html             # Web UI
-├── config.yaml                # Configuration
-└── requirements.txt           # Dependencies
-```
+## Environment Variables
 
-## Configuration
+You need the same LiveKit project credentials for the API and the worker:
 
-Edit `config.yaml` to customize:
+- `LIVEKIT_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
 
-```yaml
-# STT - whisper model size
-stt:
-  model: "tiny.en"  # tiny.en (fast) | base.en (balanced) | small.en (accurate)
+Optional:
 
-# LLM - Groq settings  
-llm:
-  model: "llama-3.3-70b-versatile"
-  temperature: 0.2  # Lower = more consistent
-  max_tokens: 80    # Shorter = faster
+- `AGENT_NAME`
+- `ALLOWED_ORIGINS`
 
-# TTS - voice speed
-tts:
-  speed: 1.3        # 1.0 = normal, 1.3 = faster
+Copy the example files first:
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item apps\web\.env.example apps\web\.env.local
+Copy-Item apps\api\.env.example apps\api\.env
+Copy-Item apps\agent-runtime\.env.example apps\agent-runtime\.env
 ```
 
-## Features
+The API loads env values from:
 
-### Conversational Intelligence
-- Natural dialogue flow
-- Handles interruptions gracefully
-- Remembers context (name, previous items)
-- Smart upselling (combos for 6+ wings)
+1. root `.env`
+2. `apps/agent-runtime/.env`
+3. `apps/api/.env`
 
-### Voice Quality
-- Fast response (~2s total latency)
-- Accurate STT (tiny.en optimized)
-- Natural TTS (Kokoro ONNX)
-- VAD-based auto-detection
+`apps/api/.env` wins if the same variable exists in multiple places.
 
-### Order Management
-- Customer name collection
-- Complete order tracking
-- Price calculation
-- Pickup time estimation
-- Order confirmation
+## Prerequisites
 
-### Reliability
-- Hardcoded state responses (no hallucination)
-- Fuzzy matching for STT errors
-- Automatic retries
-- SQLite persistence
+- Node.js 18+
+- `pnpm`
+- Python 3.10+
+- A LiveKit server or LiveKit Cloud project
+- Microphone access in the browser
 
-## Advanced Usage
+## Running The Project
 
-### Environment Variables
-```bash
-set GROQ_API_KEY=gsk_...        # Required - LLM inference
-set KMP_DUPLICATE_LIB_OK=TRUE   # Windows OpenMP fix
+We are using Python `venv`, not `uv`.
+
+### 1. Start the web app
+
+```powershell
+cd apps/web
+corepack pnpm install
+corepack pnpm dev
 ```
 
-### Database
-Orders stored in `orders.db`:
-```python
-# Query orders
-sqlite3 orders.db "SELECT * FROM orders;"
+The web app runs at `http://localhost:3000`.
+
+### 2. Start the API
+
+```powershell
+cd apps/api
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+python -m uvicorn main:app --reload --port 8000
 ```
 
-### Testing
-```bash
-# Run test suite
-python -m pytest tests/
+Health check:
 
-# Test agent logic
-python test_conversational_agent.py
+```powershell
+curl.exe http://127.0.0.1:8000/health
 ```
 
-## Performance Metrics
+Expected response:
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| STT Latency | < 500ms | ~100ms |
-| LLM Latency | < 1s | ~300ms |
-| TTS Latency | < 2s | ~1s |
-| Total Response | < 3s | ~2s |
-| Order Completion | 95%+ | Working |
+```json
+{"status":"OK"}
+```
 
-## Changelog
+### 3. Start the agent runtime
 
-### v1.0.0 (Current)
-- Conversational state machine with 9 states
-- Customer name collection
-- Complete order flow (wings → flavors → combo → confirm)
-- Price calculation
-- Pickup time display
-- Hardcoded responses for reliability
-- Fuzzy matching for STT corrections
+```powershell
+cd apps/agent-runtime
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+python src/agent.py download-files
+python src/agent.py dev
+```
 
-## Roadmap
+### 4. Start the conversation
 
-### v1.1 (Planned)
-- Payment integration
-- SMS order confirmation
-- Multi-language support
+1. Open `http://localhost:3000`
+2. Click `Start Conversation`
+3. Allow microphone access
+4. Speak to the restaurant agent
+5. Click `End Conversation` when done
 
-### v2.0 (Future)
-- Full-duplex streaming (OpenAI Realtime API)
-- Emotional voice modulation
-- Advanced upselling with ML
+## Quick Troubleshooting
 
-## Contributing
+If the browser says it is waiting for the agent:
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature-name`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push: `git push origin feature-name`
-5. Submit pull request
+- Confirm the API and worker use the same `LIVEKIT_URL`
+- Confirm both use the same `AGENT_NAME`
+- Confirm the worker logs `registered worker`
+- Confirm the API token request succeeds
+- Confirm the worker starts a session for the same room name
 
-## License
+If the worker says `LIVEKIT_URL` is missing:
 
-MIT License - see [LICENSE](LICENSE) file
+- Make sure `apps/agent-runtime/.env` exists
+- Make sure you started the worker from `apps/agent-runtime`
+- Make sure `.env` contains real values, not blanks
 
-## Acknowledgments
+## Understanding The Delay
 
-- [Groq](https://groq.com) for fast LLM inference
-- [Whisper](https://github.com/openai/whisper) for STT
-- [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) for TTS
-- [FastAPI](https://fastapi.tiangolo.com) for web framework
+The delay you hear is usually not just one thing. In this stack it is the sum of:
 
----
+1. `VAD / turn detection`
+   The system waits long enough to decide you finished speaking.
+2. `STT`
+   Your audio is sent to Deepgram and turned into text.
+3. `LLM`
+   The text is sent to OpenAI and the agent waits for the first generated tokens.
+4. `TTS`
+   The reply text is sent to Cartesia and the browser waits for audio to start.
+5. `Network + playback`
+   LiveKit transport and browser playback add a little more time.
 
-**Made for Wingstop**
+So the user experience is usually:
+
+`you stop speaking -> end of turn detected -> transcript ready -> LLM starts answering -> TTS starts streaming audio -> you hear the voice`
+
+## Where To See STT, LLM, and TTS Timing
+
+The worker now logs per-turn latency in [apps/agent-runtime/src/agent.py](/d:/Personal/Projects/voixai-v2/apps/agent-runtime/src/agent.py).
+
+When you run:
+
+```powershell
+python src/agent.py dev
+```
+
+look for logs like:
+
+```text
+User turn latency metrics: transcription_delay=0.42s end_of_turn_delay=0.78s on_user_turn_completed_delay=0.81s
+Assistant turn latency metrics: llm_ttft=0.64s tts_ttfb=0.31s e2e_latency=1.86s started_speaking_at=... stopped_speaking_at=...
+```
+
+How to read them:
+
+- `transcription_delay`: how long it took to get the transcript after speech
+- `end_of_turn_delay`: how long turn detection waited after you stopped
+- `llm_ttft`: LLM time to first token
+- `tts_ttfb`: TTS time to first audio byte
+- `e2e_latency`: overall latency for the assistant turn
+
+If `end_of_turn_delay` is the big number, the wait is mostly turn detection.
+If `llm_ttft` is the big number, the wait is mostly the model.
+If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
+
+## Current Limitations
+
+- Order state is in memory only and resets when the session or worker ends.
+- The order summary and final order panels are transcript-driven UI helpers, not a direct realtime state sync.
+- Latency logs are currently visible in worker logs, not yet in the web UI.
+- The demo depends on external providers for STT, LLM, and TTS, so network and provider latency will vary.
+
+## Future Upgrades
+
+- Add a dedicated latency panel in the web app for STT, LLM, TTS, and e2e timing
+- Stream structured order state from the worker to the UI instead of inferring from transcript text
+- Persist mock orders in a small database
+- Add better correction handling and clearer recap logic
+- Support multiple rooms and participant sessions
+- Add observability dashboards for latency, interruptions, and provider health
+- Add production-safe token auth and environment separation
+- Evaluate a realtime speech-to-speech model to reduce pipeline hops
+
+## Useful Docs
+
+- [docs/LOCAL_SETUP.md](/d:/Personal/Projects/voixai-v2/docs/LOCAL_SETUP.md)
+- [docs/ENVIRONMENT_VARIABLES.md](/d:/Personal/Projects/voixai-v2/docs/ENVIRONMENT_VARIABLES.md)
+- [docs/PHASE_STATUS.md](/d:/Personal/Projects/voixai-v2/docs/PHASE_STATUS.md)
+- [docs/INTERRUPTION_TESTING.md](/d:/Personal/Projects/voixai-v2/docs/INTERRUPTION_TESTING.md)
+- [docs/DEMO_SCRIPT.md](/d:/Personal/Projects/voixai-v2/docs/DEMO_SCRIPT.md)

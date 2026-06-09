@@ -1,38 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environment
-venv/
 .env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Data files
-orders.db
-*.db
-*.wav
-*.mp3
-uploads/
-
-# Models (large files)
-*.onnx
-*.bin
-
-# Logs
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
+.env.local
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.next/
+node_modules/
+dist/
+coverage/
