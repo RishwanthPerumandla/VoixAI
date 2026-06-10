@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voixai-mvp-api"
+version = "0.1.0"
+description = "Minimal FastAPI service for VoixAI MVP Phase 0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.116,<1.0",
+    "livekit-api>=1.0.7,<2.0",
+    "python-dotenv>=1.0,<2.0",
+    "uvicorn>=0.35,<1.0",
+]
