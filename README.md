@@ -9,7 +9,7 @@ This is still an MVP. It is intentionally focused on local development, demo beh
 - `apps/web`: Next.js LiveKit client UI for joining a conversation, showing connection state, transcript, and demo panels.
 - `apps/api`: FastAPI service with `GET /health` and `POST /api/livekit/token`.
 - `apps/agent-runtime`: Python LiveKit agent with a restaurant persona, in-memory order state, mock totals, and mock order confirmation.
-- Phase 0 through Phase 6 documentation in [docs/PHASE_STATUS.md](/d:/Personal/Projects/VoixAI/docs/PHASE_STATUS.md).
+- Phase 0 through Phase 6 documentation in [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md).
 
 ## What Is Not Implemented
 
@@ -210,7 +210,7 @@ So the user experience is usually:
 
 ## Where To See STT, LLM, and TTS Timing
 
-The worker now logs per-turn latency in [apps/agent-runtime/src/agent.py](/d:/Personal/Projects/VoixAI/apps/agent-runtime/src/agent.py).
+The worker now logs per-turn latency in [apps/agent-runtime/src/agent.py](./apps/agent-runtime/src/agent.py).
 
 When you run:
 
@@ -257,8 +257,8 @@ If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
 
 ## Useful Docs
 
-- [docs/LOCAL_SETUP.md](/d:/Personal/Projects/VoixAI/docs/LOCAL_SETUP.md)
-- [docs/ENVIRONMENT_VARIABLES.md](/d:/Personal/Projects/VoixAI/docs/ENVIRONMENT_VARIABLES.md)
-- [docs/PHASE_STATUS.md](/d:/Personal/Projects/VoixAI/docs/PHASE_STATUS.md)
-- [docs/INTERRUPTION_TESTING.md](/d:/Personal/Projects/VoixAI/docs/INTERRUPTION_TESTING.md)
-- [docs/DEMO_SCRIPT.md](/d:/Personal/Projects/VoixAI/docs/DEMO_SCRIPT.md)
+- [docs/LOCAL_SETUP.md](./docs/LOCAL_SETUP.md)
+- [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
+- [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md)
+- [docs/INTERRUPTION_TESTING.md](./docs/INTERRUPTION_TESTING.md)
+- [docs/DEMO_SCRIPT.md](./docs/DEMO_SCRIPT.md)
