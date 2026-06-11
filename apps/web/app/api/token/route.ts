@@ -7,7 +7,7 @@ export async function POST() {
   return NextResponse.json(
     {
       error:
-        'Phase 0 setup does not expose LiveKit token generation yet. Implement the token flow in Phase 1.',
+        'This local route is not used in the current setup. Start the API service and request the session there instead.',
     },
     { status: 501, headers: { 'Cache-Control': 'no-store' } }
   );

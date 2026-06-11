@@ -1,5 +1,13 @@
+import agent as agent_module
+import pytest
+from types import SimpleNamespace
+
 from agent import (
     ACCEPTABLE_E2E_LATENCY_MS,
+    SUPPORTED_VOICE_PROVIDERS,
+    VOICE_PROVIDER_CLASSIC,
+    VOICE_PROVIDER_GEMINI_LIVE,
+    VOICE_PROVIDER_OPENAI_REALTIME,
     VOICE_ENGINE_GEMINI_LIVE,
     VOICE_ENGINE_GEMINI_LIVE_TEXT,
     VOICE_ENGINE_OPENAI_REALTIME,
@@ -13,8 +21,12 @@ from agent import (
     SessionState,
     SUPPORTED_VOICE_ENGINES,
     TARGET_E2E_LATENCY_MS,
+    _normalize_voice_provider,
     _runtime_profile_payload,
     _snapshot_payload,
+    _preload_optional_realtime_plugins,
+    _validate_runtime_config,
+    _voice_engine_for_provider,
     summarize_order_state,
 )
 
@@ -135,3 +147,84 @@ def test_supported_voice_engines_cover_pipeline_and_realtime_modes() -> None:
         VOICE_ENGINE_GEMINI_LIVE,
         VOICE_ENGINE_GEMINI_LIVE_TEXT,
     }
+
+
+def test_supported_voice_providers_cover_classic_and_openai_realtime() -> None:
+    assert SUPPORTED_VOICE_PROVIDERS == {
+        VOICE_PROVIDER_CLASSIC,
+        VOICE_PROVIDER_OPENAI_REALTIME,
+        VOICE_PROVIDER_GEMINI_LIVE,
+    }
+
+
+def test_voice_provider_normalization_maps_legacy_pipeline_value() -> None:
+    assert _normalize_voice_provider("pipeline") == VOICE_PROVIDER_CLASSIC
+    assert _normalize_voice_provider("classic") == VOICE_PROVIDER_CLASSIC
+    assert _normalize_voice_provider("openai_realtime") == VOICE_PROVIDER_OPENAI_REALTIME
+    assert _normalize_voice_provider("gemini_live") == VOICE_PROVIDER_GEMINI_LIVE
+
+
+def test_voice_engine_mapping_uses_pipeline_for_classic_provider() -> None:
+    assert _voice_engine_for_provider(VOICE_PROVIDER_CLASSIC) == VOICE_ENGINE_PIPELINE
+    assert (
+        _voice_engine_for_provider(VOICE_PROVIDER_OPENAI_REALTIME)
+        == VOICE_ENGINE_OPENAI_REALTIME
+    )
+    assert _voice_engine_for_provider(VOICE_PROVIDER_GEMINI_LIVE) == VOICE_ENGINE_GEMINI_LIVE
+
+
+def test_realtime_validation_requires_openai_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_config = RuntimeConfig(
+        voice_provider=VOICE_PROVIDER_OPENAI_REALTIME,
+        voice_engine=VOICE_ENGINE_OPENAI_REALTIME,
+    )
+    monkeypatch.setattr(agent_module, "LIVEKIT_URL", "wss://example.livekit.cloud")
+    monkeypatch.setattr(agent_module, "LIVEKIT_API_KEY", "lk-api-key")
+    monkeypatch.setattr(agent_module, "LIVEKIT_API_SECRET", "lk-api-secret")
+    monkeypatch.setattr(agent_module, "OPENAI_API_KEY", "")
+
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        _validate_runtime_config(runtime_config)
+
+
+def test_gemini_validation_requires_google_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_config = RuntimeConfig(
+        voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
+        voice_engine=VOICE_ENGINE_GEMINI_LIVE,
+    )
+    monkeypatch.setattr(agent_module, "LIVEKIT_URL", "wss://example.livekit.cloud")
+    monkeypatch.setattr(agent_module, "LIVEKIT_API_KEY", "lk-api-key")
+    monkeypatch.setattr(agent_module, "LIVEKIT_API_SECRET", "lk-api-secret")
+    monkeypatch.setattr(agent_module, "GOOGLE_API_KEY", "")
+
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        _validate_runtime_config(runtime_config)
+
+
+def test_preload_optional_realtime_plugins_caches_openai_imports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    turn_detection = type("FakeTurnDetection", (), {})
+
+    def fake_import_module(name: str) -> object:
+        if name == "livekit.plugins.openai":
+            return SimpleNamespace(realtime=SimpleNamespace(RealtimeModel=object))
+        if name == "openai.types.beta.realtime.session":
+            return SimpleNamespace(TurnDetection=turn_detection)
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setattr(agent_module, "_OPENAI_REALTIME_PLUGIN", None)
+    monkeypatch.setattr(agent_module, "_OPENAI_REALTIME_TURN_DETECTION", None)
+    monkeypatch.setattr(agent_module, "_GOOGLE_REALTIME_PLUGIN", None)
+    monkeypatch.setattr(agent_module, "_OPTIONAL_PLUGIN_IMPORT_ERRORS", {})
+    monkeypatch.setattr(
+        agent_module,
+        "_has_module",
+        lambda module_name: module_name in {"livekit.plugins.openai", "openai"},
+    )
+    monkeypatch.setattr(agent_module.importlib, "import_module", fake_import_module)
+
+    _preload_optional_realtime_plugins()
+
+    assert agent_module._OPENAI_REALTIME_PLUGIN is not None
+    assert agent_module._OPENAI_REALTIME_TURN_DETECTION is turn_detection

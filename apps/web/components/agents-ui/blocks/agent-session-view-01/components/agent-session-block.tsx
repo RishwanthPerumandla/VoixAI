@@ -332,28 +332,24 @@ function formatLatency(ms: number | null): string {
   return `${Math.round(ms)}ms`;
 }
 
-function formatCount(label: string, count: number): string {
-  return `${count} ${label}${count === 1 ? '' : 's'}`;
-}
-
 function getSessionHeadline(
   finalMockOrder: ParsedFinalOrder | null,
   orderSummary: ParsedOrderSummary | null,
   messageCount: number
 ): string {
   if (finalMockOrder) {
-    return `Mock order ${finalMockOrder.orderNumber} is ready to review.`;
+    return `Mock order ${finalMockOrder.orderNumber} is ready.`;
   }
 
   if (orderSummary) {
-    return 'The order recap is live. Review the details before confirming.';
+    return 'The latest recap is ready to review before you confirm.';
   }
 
   if (messageCount > 0) {
-    return 'The agent is actively building the order from the conversation.';
+    return 'The assistant is building the order from the conversation.';
   }
 
-  return 'Start the conversation to populate the order state, transcript, and timing panels.';
+  return 'Start talking to see the order state and transcript update live.';
 }
 
 interface StatusPillProps {
@@ -452,7 +448,7 @@ export interface AgentSessionView_01Props {
   className?: string;
   connectionStatusLabel?: string;
   agentStatusLabel?: string;
-  roomName?: string;
+  runtimePanel?: ReactNode;
 }
 
 export function AgentSessionView_01({
@@ -472,7 +468,7 @@ export function AgentSessionView_01({
   audioVisualizerWaveLineWidth,
   connectionStatusLabel,
   agentStatusLabel,
-  roomName,
+  runtimePanel,
   ref,
   className,
   ...props
@@ -495,12 +491,6 @@ export function AgentSessionView_01({
     messages.length
   );
   const sessionHeadline = getSessionHeadline(finalMockOrder, orderSummary, messages.length);
-  const suggestedPrompts = [
-    'I want ten lemon pepper wings for pickup.',
-    'Actually, make that boneless.',
-    'Add fries and change the drink to lemonade.',
-    'Can you recap the order before I confirm?',
-  ];
 
   const controls: AgentControlBarControls = {
     leave: true,
@@ -521,15 +511,15 @@ export function AgentSessionView_01({
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_24%)]" />
 
-      <div className="relative mx-auto flex min-h-svh max-w-[1600px] flex-col px-4 py-4 md:px-6 md:py-6 xl:px-8">
+      <div className="relative mx-auto flex min-h-svh max-w-[1380px] flex-col px-4 py-4 md:px-6 md:py-6 xl:px-8">
         <div className="rounded-[30px] border border-border/70 bg-background/76 p-5 shadow-xl shadow-black/5 backdrop-blur">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <p className="font-mono text-[11px] tracking-[0.28em] uppercase text-muted-foreground">
-                VoixAI Operator Console
+                VoixAI Live Session
               </p>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-                Production-style live voice ordering view
+                Voice conversation in progress
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
                 {sessionHeadline}
@@ -537,8 +527,7 @@ export function AgentSessionView_01({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {roomName && <StatusPill active label={`Room ${roomName}`} />}
-              <StatusPill active={session.isConnected} label={connectionStatusLabel ?? 'Connected'} />
+              <StatusPill active={session.isConnected} label={connectionStatusLabel ?? 'Live'} />
               <StatusPill active={isListening} label={agentStatusLabel ?? 'Listening'} />
               <StatusPill active={isSpeaking} label="Speaking" />
               <Button
@@ -552,162 +541,16 @@ export function AgentSessionView_01({
               </Button>
             </div>
           </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Last assistant reply"
-              value={formatLatency(latencySnapshot.lastReplyMs)}
-              tone={
-                latencySnapshot.lastReplyMs !== null && latencySnapshot.lastReplyMs > 2500
-                  ? 'warn'
-                  : 'good'
-              }
-            />
-            <MetricCard
-              label="Average reply time"
-              value={formatLatency(latencySnapshot.averageReplyMs)}
-              tone={
-                latencySnapshot.averageReplyMs !== null && latencySnapshot.averageReplyMs > 2200
-                  ? 'warn'
-                  : 'default'
-              }
-            />
-            <MetricCard
-              label="Completed turns"
-              value={String(latencySnapshot.completedTurns)}
-              tone="default"
-            />
-            <MetricCard
-              label="Transcript volume"
-              value={`${latencySnapshot.userMessages}/${latencySnapshot.agentMessages}`}
-              tone="default"
-            />
-          </div>
         </div>
 
-        <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_380px]">
-          <aside className="flex min-h-0 flex-col gap-4">
+        <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_420px]">
+          <div className="flex min-h-0 flex-col gap-4">
             <ShellPanel
-              title="Order State"
-              description="The latest order recap stays pinned here while the call is active."
-              className="min-h-0"
+              title="Live Voice"
+              description="Talk naturally, pause when you need to, and the session will keep tracking the order."
+              className="flex min-h-[420px] flex-col overflow-hidden p-0"
             >
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                    Current stage
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">
-                    {orderPanel.stageLabel}
-                  </p>
-                  {orderPanel.mockOrderNumber && (
-                    <p className="mt-2 font-mono text-sm text-foreground">
-                      {orderPanel.mockOrderNumber}
-                      {orderPanel.total ? ` / ${orderPanel.total}` : ''}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="rounded-2xl border border-border/70 p-4">
-                    <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                      Service
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
-                      {orderPanel.serviceType ?? 'Not captured yet'}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border/70 p-4">
-                    <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                      Drink and style
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
-                      {[orderPanel.drink, orderPanel.style].filter(Boolean).join(' / ') ||
-                        'Waiting for order details'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-border/70 p-4">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                    Items
-                  </p>
-                  {orderPanel.items.length > 0 ? (
-                    <ul className="mt-3 space-y-2">
-                      {orderPanel.items.map((item) => (
-                        <li
-                          key={item}
-                          className="rounded-xl bg-muted/25 px-3 py-2 text-sm text-foreground"
-                        >
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Items will appear here once the agent recaps the order.
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-border/70 p-4">
-                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                    Summary details
-                  </p>
-                  <dl className="mt-3 space-y-2 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="text-muted-foreground">Flavor</dt>
-                      <dd className="text-right text-foreground">
-                        {orderPanel.flavor ?? 'Not set'}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="text-muted-foreground">Pickup time</dt>
-                      <dd className="text-right text-foreground">
-                        {orderPanel.pickupTime ?? 'Not set'}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="text-muted-foreground">Confirmation</dt>
-                      <dd className="text-right text-foreground">
-                        {orderPanel.confirmed ? 'Confirmed' : 'Pending'}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="text-muted-foreground">Demo total</dt>
-                      <dd className="text-right text-foreground">
-                        {orderPanel.total ?? 'Waiting'}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-            </ShellPanel>
-
-            <ShellPanel
-              title="Operator Guide"
-              description="Use this script to steer the conversation and test corrections."
-            >
-              <ul className="space-y-3">
-                {suggestedPrompts.map((prompt, index) => (
-                  <li key={prompt} className="flex gap-3">
-                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] text-foreground">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm leading-6 text-muted-foreground">{prompt}</span>
-                  </li>
-                ))}
-              </ul>
-            </ShellPanel>
-          </aside>
-
-          <div className="flex min-h-0 flex-col gap-3">
-            <ShellPanel
-              title="Live Session"
-              description="The voice session stays centered while controls remain docked below it."
-              className="flex min-h-[340px] flex-col overflow-hidden p-0"
-            >
-              <div className="relative min-h-[340px] overflow-hidden rounded-[24px] border border-border/60 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_34%),linear-gradient(180deg,rgba(248,250,252,0.98),rgba(241,245,249,0.94))] dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_34%),linear-gradient(180deg,rgba(9,9,11,0.95),rgba(17,24,39,0.96))]">
+              <div className="relative min-h-[420px] overflow-hidden rounded-[24px] border border-border/60 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_34%),linear-gradient(180deg,rgba(248,250,252,0.98),rgba(241,245,249,0.94))] dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_34%),linear-gradient(180deg,rgba(9,9,11,0.95),rgba(17,24,39,0.96))]">
                 <div className="absolute left-5 top-5 z-10 flex flex-wrap items-center gap-2">
                   <StatusPill active={session.isConnected} label="Session live" />
                   <StatusPill active={isListening} label="Listening" />
@@ -720,7 +563,7 @@ export function AgentSessionView_01({
                   </p>
                   <p className="mt-2 text-sm leading-6 text-foreground">
                     {messages.length > 0
-                      ? 'Keep the conversation short and specific for the cleanest turn timing and order recap updates.'
+                      ? 'Short, specific turns usually produce the cleanest order updates.'
                       : preConnectMessage}
                   </p>
                 </div>
@@ -766,77 +609,106 @@ export function AgentSessionView_01({
           </div>
 
           <aside className="flex min-h-0 flex-col gap-4">
+            {runtimePanel}
+
             <ShellPanel
-              title="Latency Metrics"
-              description="These browser-side timing estimates show how quickly the agent answers each user turn."
+              title="Order Snapshot"
+              description="The current order stays pinned here while the call is active."
+              className="min-h-0"
             >
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <MetricCard
-                  label="End-to-end latency"
-                  value={
-                    telemetrySnapshot?.assistant_turn_metrics?.e2e_latency !== null &&
-                    telemetrySnapshot?.assistant_turn_metrics?.e2e_latency !== undefined
-                      ? formatLatency(telemetrySnapshot.assistant_turn_metrics.e2e_latency * 1000)
-                      : formatLatency(latencySnapshot.lastReplyMs)
-                  }
-                  tone={
-                    latencySnapshot.lastReplyMs !== null && latencySnapshot.lastReplyMs > 1500
-                      ? 'warn'
-                      : 'good'
-                  }
-                />
-                <MetricCard
-                  label="LLM first token"
-                  value={
-                    telemetrySnapshot?.assistant_turn_metrics?.llm_ttft !== null &&
-                    telemetrySnapshot?.assistant_turn_metrics?.llm_ttft !== undefined
-                      ? formatLatency(telemetrySnapshot.assistant_turn_metrics.llm_ttft * 1000)
-                      : formatLatency(latencySnapshot.averageReplyMs)
-                  }
-                  tone={
-                    telemetrySnapshot?.assistant_turn_metrics?.llm_ttft !== null &&
-                    telemetrySnapshot?.assistant_turn_metrics?.llm_ttft !== undefined &&
-                    telemetrySnapshot.assistant_turn_metrics.llm_ttft * 1000 > 800
-                      ? 'warn'
-                      : 'default'
-                  }
-                />
-                <MetricCard
-                  label="TTS first byte"
-                  value={
-                    telemetrySnapshot?.assistant_turn_metrics?.tts_ttfb !== null &&
-                    telemetrySnapshot?.assistant_turn_metrics?.tts_ttfb !== undefined
-                      ? formatLatency(telemetrySnapshot.assistant_turn_metrics.tts_ttfb * 1000)
-                      : formatLatency(latencySnapshot.longestReplyMs)
-                  }
-                  tone="default"
-                />
-                <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
                   <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
-                    Turn and target
+                    Current stage
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-foreground">
-                    {formatCount('caller turn', latencySnapshot.userMessages)}
+                  <p className="mt-2 text-lg font-semibold text-foreground">
+                    {orderPanel.stageLabel}
                   </p>
-                  <p className="text-sm leading-6 text-foreground">
-                    {formatCount('assistant turn', latencySnapshot.agentMessages)}
+                  {orderPanel.mockOrderNumber && (
+                    <p className="mt-2 font-mono text-sm text-foreground">
+                      {orderPanel.mockOrderNumber}
+                      {orderPanel.total ? ` / ${orderPanel.total}` : ''}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <MetricCard label="Last reply" value={formatLatency(latencySnapshot.lastReplyMs)} tone="good" />
+                  <MetricCard label="Turns" value={String(latencySnapshot.completedTurns)} tone="default" />
+                </div>
+
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
+                    Items
                   </p>
-                  <p className="pt-2 font-mono text-[11px] text-muted-foreground">
-                    Target: under{' '}
-                    {formatLatency(
-                      telemetrySnapshot?.target_e2e_latency_ms ?? 800
-                    )}{' '}
-                    ideal
+                  {orderPanel.items.length > 0 ? (
+                    <ul className="mt-3 space-y-2">
+                      {orderPanel.items.map((item) => (
+                        <li key={item} className="rounded-xl bg-muted/25 px-3 py-2 text-sm text-foreground">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      The item list will appear here after the first recap.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-border/70 p-4">
+                  <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
+                    Details
                   </p>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Service</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.serviceType ?? 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Flavor</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.flavor ?? 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Drink</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.drink ?? 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Style</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.style ?? 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Pickup time</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.pickupTime ?? 'Not set'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Confirmation</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.confirmed ? 'Confirmed' : 'Pending'}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt className="text-muted-foreground">Demo total</dt>
+                      <dd className="text-right text-foreground">
+                        {orderPanel.total ?? 'Waiting'}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                These numbers now prefer agent-published telemetry from the LiveKit room. If that
-                channel is unavailable, the panel falls back to rough browser-observed timings.
-              </p>
             </ShellPanel>
 
-            <div className="min-h-[420px] flex-1">
+            <div className="min-h-[360px] flex-1">
               <AgentChatTranscript
                 agentState={agentState}
                 messages={messages}

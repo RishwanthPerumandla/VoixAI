@@ -134,3 +134,28 @@ Known limitations:
 - The order and final summary panels are transcript-driven UI helpers, not a direct real-time sync of the Python `OrderState`.
 - Full end-to-end demo validation still requires running the API, web app, and agent runtime together with valid LiveKit credentials.
 - The mock order remains session-only and is not stored anywhere after the demo ends.
+
+## Phase 7
+
+Status: Complete
+
+Completed work:
+
+- Added a `VOICE_PROVIDER` switch in `apps/agent-runtime` with `classic` as the default and `openai_realtime` as the optional low-latency mode.
+- Kept the existing Deepgram STT, OpenAI text LLM, and Cartesia TTS pipeline intact for classic mode.
+- Wired the optional OpenAI Realtime path through the LiveKit OpenAI plugin inside the Python worker, without changing the browser or API token architecture.
+- Added startup validation so classic mode requires the LiveKit env values and realtime mode additionally requires `OPENAI_API_KEY`.
+- Added startup logs that clearly show which provider is active and explain that classic per-stage latency metrics are not emitted in realtime mode.
+- Updated env examples and setup docs for the new worker-side provider switch.
+
+Validation notes:
+
+- `apps/agent-runtime/.venv` installs `livekit-agents` with the OpenAI plugin support needed for both the classic OpenAI usage and the OpenAI Realtime path.
+- Unit coverage was refreshed around provider normalization and provider-to-engine mapping in `apps/agent-runtime/tests/test_order_state.py`.
+- Full live-room verification still requires valid LiveKit and OpenAI credentials plus the API, web app, and worker running together.
+
+Known limitations:
+
+- The browser still connects only through LiveKit in this phase; no browser-direct OpenAI WebRTC path or ephemeral OpenAI session endpoint was added.
+- Classic latency logs remain the source of truth for STT, LLM, and TTS stage timings. Realtime mode currently logs the active provider but not equivalent per-stage metrics.
+- The in-session order tools remain available in both modes, but realtime behavior still depends on tool-calling quality during live conversation.

@@ -29,6 +29,12 @@ Optional but recommended:
 - `AGENT_NAME`
 - `ALLOWED_ORIGINS`
 
+Worker provider defaults:
+
+- `VOICE_PROVIDER=classic` keeps the existing Deepgram -> OpenAI -> Cartesia pipeline
+- `VOICE_PROVIDER=openai_realtime` switches only the Python worker to OpenAI Realtime through LiveKit
+- Keep `OPENAI_API_KEY` out of `apps/web/.env.local`
+
 ## 2. Start the web app
 
 ```powershell
@@ -50,6 +56,15 @@ python -m venv .venv
 python -m pip install -e .
 python src/agent.py download-files
 python src/agent.py dev
+```
+
+Classic mode stays the default. To enable OpenAI Realtime, set this in `apps/agent-runtime/.env` before starting the worker:
+
+```text
+VOICE_PROVIDER=openai_realtime
+OPENAI_API_KEY=sk-...
+OPENAI_REALTIME_MODEL=gpt-realtime
+OPENAI_REALTIME_VOICE=alloy
 ```
 
 ## 4. Start the API
@@ -126,6 +141,8 @@ Quick interpretation:
 - `llm_ttft` is how long the LLM takes to start responding
 - `tts_ttfb` is how long TTS takes to begin audio
 - `e2e_latency` is the overall assistant response latency
+
+In `openai_realtime` mode, the worker logs that classic per-stage STT/LLM/TTS latency metrics are not emitted because the realtime model handles the combined audio stack.
 
 ## 9. Demo tips
 

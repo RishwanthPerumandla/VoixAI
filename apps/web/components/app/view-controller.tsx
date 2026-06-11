@@ -1,13 +1,16 @@
 'use client';
 
+import { type ReactNode } from 'react';
 import { useTheme } from 'next-themes';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
 import { useAgent } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
 import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
+import { RuntimeConfigPanel } from '@/components/app/runtime-config-panel';
 import { WelcomeView } from '@/components/app/welcome-view';
 import { useSessionTelemetry } from '@/hooks/useSessionTelemetry';
+import { type RuntimeConfig } from '@/lib/runtime-config';
 
 const MotionWelcomeView = motion.create(WelcomeView);
 const MotionSessionView = motion.create(AgentSessionView_01);
@@ -32,45 +35,93 @@ const VIEW_MOTION_PROPS = {
 
 interface ViewControllerProps {
   appConfig: AppConfig;
+  runtimeConfig: RuntimeConfig;
+  onRuntimeConfigChange: (config: RuntimeConfig) => void;
 }
 
-export function ViewController({ appConfig }: ViewControllerProps) {
+function buildActiveRuntimeConfig(
+  runtimeConfig: RuntimeConfig,
+  telemetrySnapshot: ReturnType<typeof useSessionTelemetry>
+) {
+  const profile = telemetrySnapshot?.runtime_profile;
+  if (!profile) {
+    return null;
+  }
+
+  return {
+    ...runtimeConfig,
+    voiceEngine: profile.voice_engine as RuntimeConfig['voiceEngine'],
+    llmModel: profile.llm_model,
+    sttModel: profile.stt_model ?? runtimeConfig.sttModel,
+    ttsModel: profile.tts_model ?? runtimeConfig.ttsModel,
+    openaiRealtimeModel: profile.openai_realtime_model,
+    openaiRealtimeVoice: profile.openai_realtime_voice,
+    openaiRealtimeEagerness: profile.openai_realtime_eagerness,
+    googleRealtimeModel: profile.google_realtime_model,
+    googleRealtimeVoice: profile.google_realtime_voice,
+    realtimeTemperature: profile.realtime_temperature,
+    realtimeEnableAffectiveDialog: profile.realtime_enable_affective_dialog,
+    realtimeEnableProactivity: profile.realtime_enable_proactivity,
+    presetId: profile.preset_id ?? runtimeConfig.presetId,
+    presetLabel: profile.preset_label ?? runtimeConfig.presetLabel,
+    comparisonLabel: profile.comparison_label ?? runtimeConfig.comparisonLabel,
+    fallbackReason: profile.fallback_reason,
+    requestedVoiceEngine: profile.requested_voice_engine,
+  };
+}
+
+export function ViewController({
+  appConfig,
+  runtimeConfig,
+  onRuntimeConfigChange,
+}: ViewControllerProps) {
   const { connectionState, isConnected, room, start } = useSessionContext();
   const agent = useAgent();
   const telemetrySnapshot = useSessionTelemetry();
   const { resolvedTheme } = useTheme();
+  const activeRuntimeConfig = buildActiveRuntimeConfig(runtimeConfig, telemetrySnapshot);
   const connectionStatusLabel =
     connectionState === 'connected'
-      ? 'Connected'
+      ? 'Live'
       : connectionState === 'connecting'
-        ? 'Connecting'
+        ? 'Starting'
         : connectionState === 'reconnecting' || connectionState === 'signalReconnecting'
           ? 'Reconnecting'
-          : 'Disconnected';
+          : 'Ready';
   const hasAgentTelemetry = telemetrySnapshot !== null;
   const isAgentActive =
     agent.state === 'listening' || agent.state === 'thinking' || agent.state === 'speaking';
-  let agentStatusLabel = 'Agent offline';
+  let agentStatusLabel = 'Assistant offline';
 
   if (agent.state === 'failed') {
-    agentStatusLabel = 'Agent connection failed';
+    agentStatusLabel = 'Assistant unavailable';
   } else if (hasAgentTelemetry) {
-    agentStatusLabel = 'Agent ready';
+    agentStatusLabel = 'Assistant ready';
   } else if (isAgentActive) {
-    agentStatusLabel = 'Agent initializing';
+    agentStatusLabel = 'Assistant joining';
   } else if (connectionState === 'connecting') {
     agentStatusLabel = 'Starting session';
   } else if (
     connectionState === 'reconnecting' ||
     connectionState === 'signalReconnecting'
   ) {
-    agentStatusLabel = 'Reconnecting agent';
+    agentStatusLabel = 'Reconnecting';
   } else if (isConnected) {
-    agentStatusLabel = 'Waiting for agent';
+    agentStatusLabel = 'Waiting for assistant';
   }
   const preConnectMessage = isConnected
-    ? `Connected to ${room.name || appConfig.roomName}. Ask for a recap when you are ready to review the order.`
-    : `Ready to join ${appConfig.roomName}.`;
+    ? 'Ask for a recap whenever you want to review the latest order details.'
+    : 'Allow the microphone, say your order naturally, and make one correction to test the flow.';
+
+  const runtimePanel: ReactNode = (
+    <RuntimeConfigPanel
+      config={runtimeConfig}
+      activeConfig={activeRuntimeConfig}
+      connected={isConnected}
+      compact={isConnected}
+      onConfigChange={onRuntimeConfigChange}
+    />
+  );
 
   return (
     <AnimatePresence mode="wait">
@@ -82,9 +133,9 @@ export function ViewController({ appConfig }: ViewControllerProps) {
           pageTitle={appConfig.pageTitle}
           pageDescription={appConfig.pageDescription}
           startButtonText={appConfig.startButtonText}
-          roomName={appConfig.roomName}
           connectionStatusLabel={connectionStatusLabel}
           onStartCall={start}
+          runtimePanel={runtimePanel}
         />
       )}
       {/* Session view */}
@@ -99,7 +150,7 @@ export function ViewController({ appConfig }: ViewControllerProps) {
           preConnectMessage={preConnectMessage}
           connectionStatusLabel={connectionStatusLabel}
           agentStatusLabel={agentStatusLabel}
-          roomName={room.name || appConfig.roomName}
+          runtimePanel={runtimePanel}
           audioVisualizerType={appConfig.audioVisualizerType}
           audioVisualizerColor={
             resolvedTheme === 'dark'

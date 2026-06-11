@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { TokenSource } from 'livekit-client';
 import { useSession } from '@livekit/components-react';
 import { WarningIcon } from '@phosphor-icons/react/dist/ssr';
@@ -11,6 +11,7 @@ import { ViewController } from '@/components/app/view-controller';
 import { Toaster } from '@/components/ui/sonner';
 import { useAgentErrors } from '@/hooks/useAgentErrors';
 import { useDebugMode } from '@/hooks/useDebug';
+import { DEFAULT_RUNTIME_CONFIG, toApiRuntimeConfig, type RuntimeConfig } from '@/lib/runtime-config';
 import { getSandboxTokenSource } from '@/lib/utils';
 
 const IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
@@ -27,6 +28,8 @@ interface AppProps {
 }
 
 export function App({ appConfig }: AppProps) {
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig>(DEFAULT_RUNTIME_CONFIG);
+
   const tokenSource = useMemo(() => {
     return typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string'
       ? getSandboxTokenSource(appConfig)
@@ -39,12 +42,13 @@ export function App({ appConfig }: AppProps) {
             body: JSON.stringify({
               room_name: appConfig.roomName,
               participant_name: appConfig.participantName,
+              runtime_config: toApiRuntimeConfig(runtimeConfig),
             }),
           });
 
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(errorText || 'Unable to create LiveKit token');
+            throw new Error(errorText || 'Unable to start the voice session');
           }
 
           const data = (await response.json()) as {
@@ -58,7 +62,7 @@ export function App({ appConfig }: AppProps) {
             participantToken: data.token,
           };
         });
-  }, [appConfig]);
+  }, [appConfig, runtimeConfig]);
 
   const session = useSession(tokenSource);
 
@@ -66,7 +70,11 @@ export function App({ appConfig }: AppProps) {
     <AgentSessionProvider session={session}>
       <AppSetup />
       <main className="min-h-svh">
-        <ViewController appConfig={appConfig} />
+        <ViewController
+          appConfig={appConfig}
+          runtimeConfig={runtimeConfig}
+          onRuntimeConfigChange={setRuntimeConfig}
+        />
       </main>
       <StartAudioButton label="Start Audio" />
       <Toaster

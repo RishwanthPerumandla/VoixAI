@@ -47,7 +47,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   const hdrs = await headers();
   const appConfig = await getAppConfig(hdrs);
   const styles = getStyles(appConfig);
-  const { pageTitle, pageDescription, companyName, logo, logoDark } = appConfig;
+  const { pageTitle, pageDescription, companyName } = appConfig;
 
   return (
     <html
@@ -71,33 +71,13 @@ export default async function RootLayout({ children }: RootLayoutProps) {
           enableSystem
           disableTransitionOnChange
         >
-          <header className="fixed top-0 left-0 z-50 hidden w-full flex-row justify-between p-6 md:flex">
-            <a
-              target="_blank"
-              rel="noopener noreferrer"
-              href="https://livekit.io"
-              className="scale-100 transition-transform duration-300 hover:scale-110"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logo} alt={`${companyName} Logo`} className="block size-6 dark:hidden" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={logoDark ?? logo}
-                alt={`${companyName} Logo`}
-                className="hidden size-6 dark:block"
-              />
-            </a>
-            <span className="text-foreground font-mono text-xs font-bold tracking-wider uppercase">
-              Built with{' '}
-              <a
-                target="_blank"
-                rel="noopener noreferrer"
-                href="https://docs.livekit.io/agents"
-                className="underline underline-offset-4"
-              >
-                LiveKit Agents
-              </a>
-            </span>
+          <header className="fixed top-0 left-0 z-50 hidden w-full justify-between p-6 md:flex">
+            <div className="rounded-full border border-border/70 bg-background/88 px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.22em] text-foreground shadow-sm backdrop-blur">
+              {companyName}
+            </div>
+            <div className="rounded-full border border-border/70 bg-background/88 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground shadow-sm backdrop-blur">
+              Voice-first ordering demo
+            </div>
           </header>
 
           {children}

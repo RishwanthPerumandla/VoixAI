@@ -37,9 +37,9 @@ export interface AppConfig {
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
   companyName: 'VoixAI',
-  pageTitle: 'VoixAI Restaurant Voice Agent Demo.',
+  pageTitle: 'VoixAI Voice Demo',
   pageDescription:
-    'A polished MVP where a browser user talks to a restaurant voice agent, corrects the order, and receives a mock order confirmation.',
+    'A streamlined voice demo where you can speak naturally, correct the order, and confirm a mock checkout.',
   roomName: process.env.NEXT_PUBLIC_LIVEKIT_ROOM_NAME ?? 'voixai-mvp-demo',
   participantName: process.env.NEXT_PUBLIC_PARTICIPANT_NAME ?? 'web-user',
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000',
@@ -49,10 +49,10 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   supportsScreenShare: false,
   isPreConnectBufferEnabled: true,
 
-  logo: '/lk-logo.svg',
-  accent: '#002cf2',
-  logoDark: '/lk-logo-dark.svg',
-  accentDark: '#1fd5f9',
+  logo: '/favicon.ico',
+  accent: '#c8642a',
+  logoDark: '/favicon.ico',
+  accentDark: '#ff9254',
   startButtonText: 'Start Conversation',
 
   // optional: audio visualization configuration

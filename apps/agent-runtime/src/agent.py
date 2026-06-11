@@ -3,6 +3,7 @@ import os
 import random
 import textwrap
 import asyncio
+import importlib
 import importlib.util
 import json
 import time
@@ -45,17 +46,24 @@ load_dotenv(".env.local", override=True)
 
 AGENT_NAME = os.getenv("AGENT_NAME", "my-agent")
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 USER_AWAY_TIMEOUT_SECONDS = float(os.getenv("USER_AWAY_TIMEOUT_SECONDS", "12"))
 TTS_SPEED = float(os.getenv("TTS_SPEED", "1.08"))
-VOICE_ENGINE = os.getenv("VOICE_ENGINE", "pipeline").strip().lower()
+VOICE_PROVIDER = os.getenv(
+    "VOICE_PROVIDER",
+    os.getenv("VOICE_ENGINE", "classic"),
+).strip().lower()
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-5.3-chat-latest")
 STT_MODEL = os.getenv("STT_MODEL", "deepgram/flux-general")
 STT_LANGUAGE = os.getenv("STT_LANGUAGE", "en").strip() or "en"
 TTS_MODEL = os.getenv("TTS_MODEL", "cartesia/sonic-3")
-OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime-2")
-OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")
+OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
 OPENAI_REALTIME_EAGERNESS = os.getenv("OPENAI_REALTIME_EAGERNESS", "medium")
-GOOGLE_REALTIME_MODEL = os.getenv("GOOGLE_REALTIME_MODEL", "gemini-2.5-flash")
+GOOGLE_REALTIME_MODEL = os.getenv("GOOGLE_REALTIME_MODEL", "gemini-3.1-flash-live-preview")
 GOOGLE_REALTIME_VOICE = os.getenv("GOOGLE_REALTIME_VOICE", "Puck")
 REALTIME_TEMPERATURE = float(os.getenv("REALTIME_TEMPERATURE", "0.6"))
 REALTIME_ENABLE_AFFECTIVE_DIALOG = (
@@ -67,6 +75,15 @@ REALTIME_ENABLE_PROACTIVITY = (
 TELEMETRY_TOPIC = "voixai.telemetry"
 TARGET_E2E_LATENCY_MS = 800
 ACCEPTABLE_E2E_LATENCY_MS = 1500
+
+VOICE_PROVIDER_CLASSIC = "classic"
+VOICE_PROVIDER_OPENAI_REALTIME = "openai_realtime"
+VOICE_PROVIDER_GEMINI_LIVE = "gemini_live"
+SUPPORTED_VOICE_PROVIDERS = {
+    VOICE_PROVIDER_CLASSIC,
+    VOICE_PROVIDER_OPENAI_REALTIME,
+    VOICE_PROVIDER_GEMINI_LIVE,
+}
 
 VOICE_ENGINE_PIPELINE = "pipeline"
 VOICE_ENGINE_OPENAI_REALTIME = "openai_realtime"
@@ -80,6 +97,30 @@ SUPPORTED_VOICE_ENGINES = {
     VOICE_ENGINE_GEMINI_LIVE,
     VOICE_ENGINE_GEMINI_LIVE_TEXT,
 }
+
+_OPTIONAL_PLUGIN_IMPORT_ERRORS: dict[str, Exception] = {}
+_OPENAI_REALTIME_PLUGIN: Any | None = None
+_OPENAI_REALTIME_TURN_DETECTION: Any | None = None
+_GOOGLE_REALTIME_PLUGIN: Any | None = None
+
+
+def _normalize_voice_provider(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {VOICE_PROVIDER_CLASSIC, VOICE_ENGINE_PIPELINE}:
+        return VOICE_PROVIDER_CLASSIC
+    if normalized in {VOICE_PROVIDER_OPENAI_REALTIME, VOICE_ENGINE_OPENAI_REALTIME_TEXT}:
+        return VOICE_PROVIDER_OPENAI_REALTIME
+    if normalized in {VOICE_PROVIDER_GEMINI_LIVE, VOICE_ENGINE_GEMINI_LIVE_TEXT}:
+        return VOICE_PROVIDER_GEMINI_LIVE
+    return normalized
+
+
+def _voice_engine_for_provider(provider: str) -> str:
+    if provider == VOICE_PROVIDER_OPENAI_REALTIME:
+        return VOICE_ENGINE_OPENAI_REALTIME
+    if provider == VOICE_PROVIDER_GEMINI_LIVE:
+        return VOICE_ENGINE_GEMINI_LIVE
+    return VOICE_ENGINE_PIPELINE
 
 
 @dataclass
@@ -114,7 +155,8 @@ class SessionState:
 
 @dataclass
 class RuntimeConfig:
-    voice_engine: str = VOICE_ENGINE
+    voice_provider: str = _normalize_voice_provider(VOICE_PROVIDER)
+    voice_engine: str = _voice_engine_for_provider(_normalize_voice_provider(VOICE_PROVIDER))
     llm_model: str = LLM_MODEL
     stt_model: str = STT_MODEL
     stt_language: str = STT_LANGUAGE
@@ -130,6 +172,7 @@ class RuntimeConfig:
     preset_id: str | None = None
     preset_label: str | None = None
     comparison_label: str | None = None
+    requested_voice_provider: str | None = None
     requested_voice_engine: str | None = None
     fallback_reason: str | None = None
 
@@ -229,10 +272,20 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
         return RuntimeConfig()
 
     defaults = RuntimeConfig()
+    requested_provider = str(
+        payload.get(
+            "voice_provider",
+            payload.get("voice_engine", defaults.voice_provider),
+        )
+    ).strip().lower()
+    voice_provider = _normalize_voice_provider(requested_provider)
     return RuntimeConfig(
-        voice_engine=str(payload.get("voice_engine", defaults.voice_engine)).strip().lower(),
+        voice_provider=voice_provider,
+        voice_engine=_voice_engine_for_provider(voice_provider),
         llm_model=str(payload.get("llm_model", defaults.llm_model)).strip(),
         stt_model=str(payload.get("stt_model", defaults.stt_model)).strip(),
+        stt_language=str(payload.get("stt_language", defaults.stt_language)).strip()
+        or defaults.stt_language,
         tts_model=str(payload.get("tts_model", defaults.tts_model)).strip(),
         openai_realtime_model=str(
             payload.get("openai_realtime_model", defaults.openai_realtime_model)
@@ -268,6 +321,10 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
             if payload.get("comparison_label")
             else None
         ),
+        requested_voice_provider=requested_provider,
+        requested_voice_engine=(
+            str(payload["voice_engine"]).strip().lower() if payload.get("voice_engine") else None
+        ),
     )
 
 
@@ -291,6 +348,8 @@ def _load_runtime_config_for_room(room_name: str) -> RuntimeConfig:
 
 def _runtime_profile_payload(runtime_config: RuntimeConfig) -> dict[str, object]:
     return {
+        "voice_provider": runtime_config.voice_provider,
+        "requested_voice_provider": runtime_config.requested_voice_provider,
         "voice_engine": runtime_config.voice_engine,
         "requested_voice_engine": runtime_config.requested_voice_engine,
         "llm_model": runtime_config.llm_model,
@@ -538,11 +597,137 @@ def _has_module(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
 
 
+def _preload_optional_realtime_plugins() -> None:
+    global _OPENAI_REALTIME_PLUGIN, _OPENAI_REALTIME_TURN_DETECTION, _GOOGLE_REALTIME_PLUGIN
+
+    if _has_module("livekit.plugins.openai") and _has_module("openai"):
+        try:
+            _OPENAI_REALTIME_PLUGIN = importlib.import_module("livekit.plugins.openai")
+            realtime_session = importlib.import_module("openai.types.beta.realtime.session")
+            _OPENAI_REALTIME_TURN_DETECTION = getattr(realtime_session, "TurnDetection")
+        except Exception as exc:
+            _OPTIONAL_PLUGIN_IMPORT_ERRORS["openai_realtime"] = exc
+
+    if _has_module("livekit.plugins.google") and _has_module("google.genai"):
+        try:
+            _GOOGLE_REALTIME_PLUGIN = importlib.import_module("livekit.plugins.google")
+        except Exception as exc:
+            _OPTIONAL_PLUGIN_IMPORT_ERRORS["gemini_live"] = exc
+
+
+def _runtime_config_from_env() -> RuntimeConfig:
+    requested_provider = VOICE_PROVIDER or VOICE_PROVIDER_CLASSIC
+    voice_provider = _normalize_voice_provider(requested_provider)
+    preset_id = "classic-pipeline"
+    preset_label = "Classic Voice"
+    comparison_label = "Deepgram, text reasoning, and Cartesia speech"
+
+    if voice_provider == VOICE_PROVIDER_OPENAI_REALTIME:
+        preset_id = "openai-realtime-voice"
+        preset_label = "OpenAI Realtime"
+        comparison_label = "Native OpenAI speech to speech"
+    elif voice_provider == VOICE_PROVIDER_GEMINI_LIVE:
+        preset_id = "gemini-live-voice"
+        preset_label = "Gemini Live"
+        comparison_label = "Native Gemini speech to speech"
+
+    return RuntimeConfig(
+        voice_provider=voice_provider,
+        voice_engine=_voice_engine_for_provider(voice_provider),
+        llm_model=LLM_MODEL,
+        stt_model=STT_MODEL,
+        stt_language=STT_LANGUAGE,
+        tts_model=TTS_MODEL,
+        openai_realtime_model=OPENAI_REALTIME_MODEL,
+        openai_realtime_voice=OPENAI_REALTIME_VOICE,
+        openai_realtime_eagerness=OPENAI_REALTIME_EAGERNESS,
+        google_realtime_model=GOOGLE_REALTIME_MODEL,
+        google_realtime_voice=GOOGLE_REALTIME_VOICE,
+        realtime_temperature=REALTIME_TEMPERATURE,
+        realtime_enable_affective_dialog=REALTIME_ENABLE_AFFECTIVE_DIALOG,
+        realtime_enable_proactivity=REALTIME_ENABLE_PROACTIVITY,
+        preset_id=preset_id,
+        preset_label=preset_label,
+        comparison_label=comparison_label,
+        requested_voice_provider=requested_provider,
+        requested_voice_engine=os.getenv("VOICE_ENGINE", "").strip().lower() or None,
+    )
+
+
+def _validate_runtime_config(runtime_config: RuntimeConfig) -> None:
+    if runtime_config.voice_provider not in SUPPORTED_VOICE_PROVIDERS:
+        supported = ", ".join(sorted(SUPPORTED_VOICE_PROVIDERS))
+        raise RuntimeError(
+            f"Unsupported VOICE_PROVIDER `{runtime_config.requested_voice_provider or runtime_config.voice_provider}`. "
+            f"Supported values: {supported}."
+        )
+
+    missing_env: list[str] = []
+    for env_name, env_value in (
+        ("LIVEKIT_URL", LIVEKIT_URL),
+        ("LIVEKIT_API_KEY", LIVEKIT_API_KEY),
+        ("LIVEKIT_API_SECRET", LIVEKIT_API_SECRET),
+    ):
+        if not env_value.strip():
+            missing_env.append(env_name)
+
+    if runtime_config.voice_provider == VOICE_PROVIDER_OPENAI_REALTIME:
+        if not OPENAI_API_KEY.strip():
+            missing_env.append("OPENAI_API_KEY")
+        missing_modules: list[str] = []
+        if not _has_module("livekit.plugins.openai"):
+            missing_modules.append("livekit.plugins.openai")
+        if not _has_module("openai"):
+            missing_modules.append("openai")
+        if missing_modules:
+            raise RuntimeError(
+                "OpenAI Realtime mode requires the LiveKit OpenAI plugin packages. "
+                f"Missing modules: {', '.join(missing_modules)}."
+            )
+    elif runtime_config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE:
+        if not GOOGLE_API_KEY.strip():
+            missing_env.append("GOOGLE_API_KEY")
+        missing_modules = []
+        if not _has_module("livekit.plugins.google"):
+            missing_modules.append("livekit.plugins.google")
+        if not _has_module("google.genai"):
+            missing_modules.append("google.genai")
+        if missing_modules:
+            raise RuntimeError(
+                "Gemini Live mode requires the LiveKit Google plugin packages. "
+                f"Missing modules: {', '.join(missing_modules)}."
+            )
+
+    if missing_env:
+        raise RuntimeError(
+            "Missing required environment variables for the agent runtime: "
+            + ", ".join(missing_env)
+        )
+
+
+def _log_provider_startup(runtime_config: RuntimeConfig) -> None:
+    logger.info("Voice provider: %s", runtime_config.voice_provider)
+    if runtime_config.voice_provider == VOICE_PROVIDER_OPENAI_REALTIME:
+        logger.info("OpenAI Realtime model: %s", runtime_config.openai_realtime_model)
+        logger.info("OpenAI Realtime voice: %s", runtime_config.openai_realtime_voice)
+        logger.info(
+            "OpenAI Realtime mode active: STT/LLM/TTS are handled by the realtime model, so classic per-stage latency metrics are not emitted."
+        )
+    elif runtime_config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE:
+        logger.info("Gemini Live model: %s", runtime_config.google_realtime_model)
+        logger.info("Gemini Live voice: %s", runtime_config.google_realtime_voice)
+        logger.info(
+            "Gemini Live mode active: speech recognition, reasoning, and speech synthesis stay on the realtime model."
+        )
+
+
 def _resolve_runtime_config(runtime_config: RuntimeConfig) -> RuntimeConfig:
     resolved = RuntimeConfig(**asdict(runtime_config))
+    resolved.requested_voice_provider = runtime_config.voice_provider
     resolved.requested_voice_engine = runtime_config.voice_engine
 
     if resolved.voice_engine not in SUPPORTED_VOICE_ENGINES:
+        resolved.voice_provider = VOICE_PROVIDER_CLASSIC
         resolved.voice_engine = VOICE_ENGINE_PIPELINE
         resolved.fallback_reason = (
             f"Unsupported voice engine `{runtime_config.voice_engine}`. Falling back to the classic pipeline."
@@ -557,6 +742,7 @@ def _resolve_runtime_config(runtime_config: RuntimeConfig) -> RuntimeConfig:
             missing_modules.append("openai")
 
         if missing_modules:
+            resolved.voice_provider = VOICE_PROVIDER_CLASSIC
             resolved.voice_engine = VOICE_ENGINE_PIPELINE
             resolved.fallback_reason = (
                 "OpenAI realtime dependencies are missing "
@@ -574,6 +760,7 @@ def _resolve_runtime_config(runtime_config: RuntimeConfig) -> RuntimeConfig:
             missing_modules.append("google.genai")
 
         if missing_modules:
+            resolved.voice_provider = VOICE_PROVIDER_CLASSIC
             resolved.voice_engine = VOICE_ENGINE_PIPELINE
             resolved.fallback_reason = (
                 "Google Live dependencies are missing "
@@ -591,10 +778,8 @@ def _build_pipeline_llm(runtime_config: RuntimeConfig) -> Any:
 
 
 def _build_openai_realtime_llm(runtime_config: RuntimeConfig, *, text_only: bool) -> Any:
-    try:
-        from livekit.plugins import openai
-        from openai.types.beta.realtime.session import TurnDetection
-    except ImportError as exc:
+    if _OPENAI_REALTIME_PLUGIN is None or _OPENAI_REALTIME_TURN_DETECTION is None:
+        exc = _OPTIONAL_PLUGIN_IMPORT_ERRORS.get("openai_realtime")
         raise RuntimeError(
             "VOICE_ENGINE uses OpenAI Realtime, but the OpenAI plugin is not installed. "
             "Install `livekit-agents[openai]~=1.5` and set OPENAI_API_KEY."
@@ -603,7 +788,7 @@ def _build_openai_realtime_llm(runtime_config: RuntimeConfig, *, text_only: bool
     kwargs: dict[str, Any] = {
         "model": runtime_config.openai_realtime_model,
         "temperature": runtime_config.realtime_temperature,
-        "turn_detection": TurnDetection(
+        "turn_detection": _OPENAI_REALTIME_TURN_DETECTION(
             type="semantic_vad",
             eagerness=runtime_config.openai_realtime_eagerness,
             create_response=True,
@@ -616,13 +801,12 @@ def _build_openai_realtime_llm(runtime_config: RuntimeConfig, *, text_only: bool
     else:
         kwargs["voice"] = runtime_config.openai_realtime_voice
 
-    return openai.realtime.RealtimeModel(**kwargs)
+    return _OPENAI_REALTIME_PLUGIN.realtime.RealtimeModel(**kwargs)
 
 
 def _build_gemini_realtime_llm(runtime_config: RuntimeConfig, *, text_only: bool) -> Any:
-    try:
-        from livekit.plugins import google
-    except ImportError as exc:
+    if _GOOGLE_REALTIME_PLUGIN is None:
+        exc = _OPTIONAL_PLUGIN_IMPORT_ERRORS.get("gemini_live")
         raise RuntimeError(
             "VOICE_ENGINE uses Gemini Live, but the Google plugin is not installed. "
             "Install `livekit-agents[google]~=1.5` and set GOOGLE_API_KEY."
@@ -658,7 +842,7 @@ def _build_gemini_realtime_llm(runtime_config: RuntimeConfig, *, text_only: bool
             "Gemini 3.1 does not support affective dialog or proactivity; those flags were ignored."
         )
 
-    return google.realtime.RealtimeModel(**kwargs)
+    return _GOOGLE_REALTIME_PLUGIN.realtime.RealtimeModel(**kwargs)
 
 
 def _build_llm_for_engine(runtime_config: RuntimeConfig) -> Any:
@@ -759,6 +943,25 @@ def _build_session_for_engine(
     )
 
 
+def build_classic_session(
+    ctx: JobContext,
+    runtime_config: RuntimeConfig,
+) -> AgentSession[SessionState]:
+    return _build_pipeline_session(ctx, runtime_config)
+
+
+def build_openai_realtime_session(runtime_config: RuntimeConfig) -> AgentSession[SessionState]:
+    return _build_realtime_session(runtime_config, text_only=False)
+
+
+def _build_llm_for_provider(runtime_config: RuntimeConfig) -> Any:
+    if runtime_config.voice_provider == VOICE_PROVIDER_OPENAI_REALTIME:
+        return _build_openai_realtime_llm(runtime_config, text_only=False)
+    if runtime_config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE:
+        return _build_gemini_realtime_llm(runtime_config, text_only=False)
+    return _build_pipeline_llm(runtime_config)
+
+
 def _build_room_options() -> room_io.RoomOptions:
     return room_io.RoomOptions(
         audio_input=room_io.AudioInputOptions(
@@ -774,7 +977,9 @@ def _log_runtime_profile(runtime_config: RuntimeConfig) -> None:
     logger.info(
         "Voice runtime profile selected",
         extra={
+            "voice_provider": runtime_config.voice_provider,
             "voice_engine": engine,
+            "requested_voice_provider": runtime_config.requested_voice_provider,
             "requested_voice_engine": runtime_config.requested_voice_engine,
             "llm_model": runtime_config.llm_model,
             "stt_model": runtime_config.stt_model if engine == VOICE_ENGINE_PIPELINE else None,
@@ -939,8 +1144,14 @@ class Assistant(Agent):
 
 server = AgentServer(num_idle_processes=1)
 
+_preload_optional_realtime_plugins()
+
 
 def prewarm(proc: JobProcess):
+    runtime_config = _resolve_runtime_config(_runtime_config_from_env())
+    _validate_runtime_config(runtime_config)
+    _log_provider_startup(runtime_config)
+    proc.userdata["runtime_config"] = runtime_config
     proc.userdata["vad"] = silero.VAD.load()
 
 
@@ -963,16 +1174,16 @@ async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
-    runtime_config = RuntimeConfig(
-        voice_engine=VOICE_ENGINE_PIPELINE,
-        requested_voice_engine=VOICE_ENGINE_PIPELINE,
-        preset_id="pipeline-fast",
-        preset_label="Classic STT + LLM + TTS",
-        comparison_label="Deepgram plus text LLM plus Cartesia",
-    )
-
-    assistant_llm = _build_pipeline_llm(runtime_config)
-    session = _build_pipeline_session(ctx, runtime_config)
+    runtime_config = _resolve_runtime_config(_load_runtime_config_for_room(ctx.room.name))
+    _validate_runtime_config(runtime_config)
+    assistant_llm = _build_llm_for_provider(runtime_config)
+    if runtime_config.voice_provider in {
+        VOICE_PROVIDER_OPENAI_REALTIME,
+        VOICE_PROVIDER_GEMINI_LIVE,
+    }:
+        session = build_openai_realtime_session(runtime_config)
+    else:
+        session = build_classic_session(ctx, runtime_config)
     _log_runtime_profile(runtime_config)
     session.userdata.room = ctx.room
     session.userdata.runtime_profile = _runtime_profile_payload(runtime_config)
@@ -1012,30 +1223,36 @@ async def my_agent(ctx: JobContext):
 
         if item.role == "user":
             session.userdata.turn_count += 1
-            session.userdata.user_turn_metrics = {
-                "transcription_delay": _metric_value(metrics.get("transcription_delay")) if metrics else None,
-                "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")) if metrics else None,
-                "on_user_turn_completed_delay": _metric_value(
-                    metrics.get("on_user_turn_completed_delay")
-                )
-                if metrics
-                else None,
-            }
+            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+                session.userdata.user_turn_metrics = {
+                    "transcription_delay": _metric_value(metrics.get("transcription_delay")) if metrics else None,
+                    "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")) if metrics else None,
+                    "on_user_turn_completed_delay": _metric_value(
+                        metrics.get("on_user_turn_completed_delay")
+                    )
+                    if metrics
+                    else None,
+                }
+            else:
+                session.userdata.user_turn_metrics = None
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
         elif item.role == "assistant":
-            session.userdata.assistant_turn_metrics = {
-                "llm_ttft": _metric_value(metrics.get("llm_node_ttft")) if metrics else None,
-                "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")) if metrics else None,
-                "e2e_latency": _metric_value(metrics.get("e2e_latency")) if metrics else None,
-                "started_speaking_at": _metric_value(metrics.get("started_speaking_at"))
-                if metrics
-                else None,
-                "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at"))
-                if metrics
-                else None,
-            }
+            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+                session.userdata.assistant_turn_metrics = {
+                    "llm_ttft": _metric_value(metrics.get("llm_node_ttft")) if metrics else None,
+                    "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")) if metrics else None,
+                    "e2e_latency": _metric_value(metrics.get("e2e_latency")) if metrics else None,
+                    "started_speaking_at": _metric_value(metrics.get("started_speaking_at"))
+                    if metrics
+                    else None,
+                    "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at"))
+                    if metrics
+                    else None,
+                }
+            else:
+                session.userdata.assistant_turn_metrics = None
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
             )

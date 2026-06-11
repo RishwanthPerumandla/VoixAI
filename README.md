@@ -57,10 +57,9 @@ The current voice path is:
    - Cartesia TTS synthesizes the reply audio
 5. The web app plays the returned audio and renders transcript/status UI.
 
-The stable local path is the classic STT -> LLM -> TTS pipeline. The worker
-still contains experimental realtime provider code, but the UI and local token
-flow are currently aligned around the classic pipeline so the demo stays
-predictable.
+The stable local path is the classic STT -> LLM -> TTS pipeline. The worker can
+now also run an optional OpenAI Realtime mode, but the UI and local token flow
+still stay centered on LiveKit rooms and the Python worker.
 
 ## Current Demo Features
 
@@ -84,9 +83,21 @@ You need the same LiveKit project credentials for the API and the worker:
 
 Optional:
 
+- `OPENAI_API_KEY`
+- `VOICE_PROVIDER`
 - `AGENT_NAME`
 - `ALLOWED_ORIGINS`
 - `STT_LANGUAGE`
+
+Supported `VOICE_PROVIDER` values:
+
+- `classic`
+- `openai_realtime`
+
+For OpenAI Realtime:
+
+- `OPENAI_REALTIME_MODEL=gpt-realtime`
+- `OPENAI_REALTIME_VOICE=alloy`
 
 Copy the example files first:
 
@@ -104,6 +115,9 @@ The API loads env values from:
 3. `apps/api/.env`
 
 `apps/api/.env` wins if the same variable exists in multiple places.
+
+Do not put `OPENAI_API_KEY` in `apps/web/.env.local`. The browser still talks
+to LiveKit, not directly to OpenAI.
 
 ## Prerequisites
 
@@ -160,6 +174,15 @@ python src/agent.py download-files
 python src/agent.py dev
 ```
 
+Classic mode is the default. To enable OpenAI Realtime in the worker, set:
+
+```text
+VOICE_PROVIDER=openai_realtime
+OPENAI_API_KEY=sk-...
+OPENAI_REALTIME_MODEL=gpt-realtime
+OPENAI_REALTIME_VOICE=alloy
+```
+
 ### 4. Start the conversation
 
 1. Open `http://localhost:3000`
@@ -188,6 +211,13 @@ If the worker crashes with a Deepgram language mismatch:
 
 - Set `STT_LANGUAGE=en` in `apps/agent-runtime/.env`
 - Keep `STT_MODEL=deepgram/flux-general` unless you intentionally change providers
+
+If OpenAI Realtime mode fails at startup:
+
+- Confirm `VOICE_PROVIDER=openai_realtime`
+- Confirm `OPENAI_API_KEY` is set in `apps/agent-runtime/.env` or root `.env`
+- Confirm the worker startup logs show the selected realtime model and voice
+- Keep the browser and API on the normal LiveKit token flow
 
 ## Understanding The Delay
 
@@ -237,6 +267,9 @@ If `end_of_turn_delay` is the big number, the wait is mostly turn detection.
 If `llm_ttft` is the big number, the wait is mostly the model.
 If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
 
+In `openai_realtime` mode, the worker logs that classic STT, LLM, and TTS stage
+metrics are not emitted because the realtime model handles the combined stack.
+
 ## Current Limitations
 
 - Order state is in memory only and resets when the session or worker ends.
@@ -262,3 +295,4 @@ If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
 - [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md)
 - [docs/INTERRUPTION_TESTING.md](./docs/INTERRUPTION_TESTING.md)
 - [docs/DEMO_SCRIPT.md](./docs/DEMO_SCRIPT.md)
+- [docs/OPENAI_REALTIME.md](./docs/OPENAI_REALTIME.md)
