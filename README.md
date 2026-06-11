@@ -9,7 +9,7 @@ This is still an MVP. It is intentionally focused on local development, demo beh
 - `apps/web`: Next.js LiveKit client UI for joining a conversation, showing connection state, transcript, and demo panels.
 - `apps/api`: FastAPI service with `GET /health` and `POST /api/livekit/token`.
 - `apps/agent-runtime`: Python LiveKit agent with a restaurant persona, in-memory order state, mock totals, and mock order confirmation.
-- Phase 0 through Phase 6 documentation in [docs/PHASE_STATUS.md](/d:/Personal/Projects/voixai-v2/docs/PHASE_STATUS.md).
+- Phase 0 through Phase 6 documentation in [docs/PHASE_STATUS.md](/d:/Personal/Projects/VoixAI/docs/PHASE_STATUS.md).
 
 ## What Is Not Implemented
 
@@ -25,7 +25,7 @@ This is still an MVP. It is intentionally focused on local development, demo beh
 ## Repo Structure
 
 ```text
-voixai-v2/
+VoixAI/
   apps/
     web/              Next.js + LiveKit browser client
     api/              FastAPI token + health service
@@ -57,6 +57,11 @@ The current voice path is:
    - Cartesia TTS synthesizes the reply audio
 5. The web app plays the returned audio and renders transcript/status UI.
 
+The stable local path is the classic STT -> LLM -> TTS pipeline. The worker
+still contains experimental realtime provider code, but the UI and local token
+flow are currently aligned around the classic pipeline so the demo stays
+predictable.
+
 ## Current Demo Features
 
 - Start and end a browser conversation
@@ -81,6 +86,7 @@ Optional:
 
 - `AGENT_NAME`
 - `ALLOWED_ORIGINS`
+- `STT_LANGUAGE`
 
 Copy the example files first:
 
@@ -178,6 +184,11 @@ If the worker says `LIVEKIT_URL` is missing:
 - Make sure you started the worker from `apps/agent-runtime`
 - Make sure `.env` contains real values, not blanks
 
+If the worker crashes with a Deepgram language mismatch:
+
+- Set `STT_LANGUAGE=en` in `apps/agent-runtime/.env`
+- Keep `STT_MODEL=deepgram/flux-general` unless you intentionally change providers
+
 ## Understanding The Delay
 
 The delay you hear is usually not just one thing. In this stack it is the sum of:
@@ -199,7 +210,7 @@ So the user experience is usually:
 
 ## Where To See STT, LLM, and TTS Timing
 
-The worker now logs per-turn latency in [apps/agent-runtime/src/agent.py](/d:/Personal/Projects/voixai-v2/apps/agent-runtime/src/agent.py).
+The worker now logs per-turn latency in [apps/agent-runtime/src/agent.py](/d:/Personal/Projects/VoixAI/apps/agent-runtime/src/agent.py).
 
 When you run:
 
@@ -230,7 +241,7 @@ If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
 
 - Order state is in memory only and resets when the session or worker ends.
 - The order summary and final order panels are transcript-driven UI helpers, not a direct realtime state sync.
-- Latency logs are currently visible in worker logs, not yet in the web UI.
+- The web UI now surfaces live latency cards, but the worker logs are still the source of truth for raw per-turn timing.
 - The demo depends on external providers for STT, LLM, and TTS, so network and provider latency will vary.
 
 ## Future Upgrades
@@ -242,12 +253,12 @@ If `tts_ttfb` is the big number, the wait is mostly speech synthesis.
 - Support multiple rooms and participant sessions
 - Add observability dashboards for latency, interruptions, and provider health
 - Add production-safe token auth and environment separation
-- Evaluate a realtime speech-to-speech model to reduce pipeline hops
+- Reintroduce provider comparisons only after the classic pipeline path stays stable
 
 ## Useful Docs
 
-- [docs/LOCAL_SETUP.md](/d:/Personal/Projects/voixai-v2/docs/LOCAL_SETUP.md)
-- [docs/ENVIRONMENT_VARIABLES.md](/d:/Personal/Projects/voixai-v2/docs/ENVIRONMENT_VARIABLES.md)
-- [docs/PHASE_STATUS.md](/d:/Personal/Projects/voixai-v2/docs/PHASE_STATUS.md)
-- [docs/INTERRUPTION_TESTING.md](/d:/Personal/Projects/voixai-v2/docs/INTERRUPTION_TESTING.md)
-- [docs/DEMO_SCRIPT.md](/d:/Personal/Projects/voixai-v2/docs/DEMO_SCRIPT.md)
+- [docs/LOCAL_SETUP.md](/d:/Personal/Projects/VoixAI/docs/LOCAL_SETUP.md)
+- [docs/ENVIRONMENT_VARIABLES.md](/d:/Personal/Projects/VoixAI/docs/ENVIRONMENT_VARIABLES.md)
+- [docs/PHASE_STATUS.md](/d:/Personal/Projects/VoixAI/docs/PHASE_STATUS.md)
+- [docs/INTERRUPTION_TESTING.md](/d:/Personal/Projects/VoixAI/docs/INTERRUPTION_TESTING.md)
+- [docs/DEMO_SCRIPT.md](/d:/Personal/Projects/VoixAI/docs/DEMO_SCRIPT.md)

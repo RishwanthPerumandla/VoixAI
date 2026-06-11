@@ -7,6 +7,7 @@ import { useAgent } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
 import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
 import { WelcomeView } from '@/components/app/welcome-view';
+import { useSessionTelemetry } from '@/hooks/useSessionTelemetry';
 
 const MotionWelcomeView = motion.create(WelcomeView);
 const MotionSessionView = motion.create(AgentSessionView_01);
@@ -36,6 +37,7 @@ interface ViewControllerProps {
 export function ViewController({ appConfig }: ViewControllerProps) {
   const { connectionState, isConnected, room, start } = useSessionContext();
   const agent = useAgent();
+  const telemetrySnapshot = useSessionTelemetry();
   const { resolvedTheme } = useTheme();
   const connectionStatusLabel =
     connectionState === 'connected'
@@ -45,14 +47,27 @@ export function ViewController({ appConfig }: ViewControllerProps) {
         : connectionState === 'reconnecting' || connectionState === 'signalReconnecting'
           ? 'Reconnecting'
           : 'Disconnected';
-  const agentStatusLabel =
-    agent.state === 'listening' || agent.state === 'thinking' || agent.state === 'speaking'
-      ? 'Agent joined'
-      : agent.state === 'failed'
-        ? 'Agent connection failed'
-        : isConnected
-          ? 'Waiting for agent'
-          : 'Agent offline';
+  const hasAgentTelemetry = telemetrySnapshot !== null;
+  const isAgentActive =
+    agent.state === 'listening' || agent.state === 'thinking' || agent.state === 'speaking';
+  let agentStatusLabel = 'Agent offline';
+
+  if (agent.state === 'failed') {
+    agentStatusLabel = 'Agent connection failed';
+  } else if (hasAgentTelemetry) {
+    agentStatusLabel = 'Agent ready';
+  } else if (isAgentActive) {
+    agentStatusLabel = 'Agent initializing';
+  } else if (connectionState === 'connecting') {
+    agentStatusLabel = 'Starting session';
+  } else if (
+    connectionState === 'reconnecting' ||
+    connectionState === 'signalReconnecting'
+  ) {
+    agentStatusLabel = 'Reconnecting agent';
+  } else if (isConnected) {
+    agentStatusLabel = 'Waiting for agent';
+  }
   const preConnectMessage = isConnected
     ? `Connected to ${room.name || appConfig.roomName}. Ask for a recap when you are ready to review the order.`
     : `Ready to join ${appConfig.roomName}.`;
@@ -98,7 +113,7 @@ export function ViewController({ appConfig }: ViewControllerProps) {
           audioVisualizerRadialBarCount={appConfig.audioVisualizerRadialBarCount}
           audioVisualizerRadialRadius={appConfig.audioVisualizerRadialRadius}
           audioVisualizerWaveLineWidth={appConfig.audioVisualizerWaveLineWidth}
-          className="fixed inset-0"
+          className="w-full"
         />
       )}
     </AnimatePresence>

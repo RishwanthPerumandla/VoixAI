@@ -48,7 +48,7 @@ export const WelcomeView = ({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(0,44,242,0.16),_transparent_38%),linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(243,244,246,0.92))] dark:bg-[radial-gradient(circle_at_top,_rgba(31,213,249,0.16),_transparent_35%),linear-gradient(180deg,_rgba(10,10,10,0.98),_rgba(17,24,39,0.94))]" />
 
       <section className="relative mx-auto flex min-h-svh max-w-6xl flex-col justify-center px-6 pb-24 pt-28 md:px-10">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_360px] lg:items-center">
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,520px)] xl:items-start">
           <div className="max-w-3xl">
             <div className="mb-6 inline-flex items-center gap-3 rounded-full border bg-background/85 px-4 py-3 shadow-sm backdrop-blur">
               <WelcomeImage />
@@ -82,7 +82,8 @@ export const WelcomeView = ({
                 {startButtonText}
               </Button>
               <p className="text-muted-foreground max-w-sm text-sm leading-6">
-                Start the API and Python agent first, then begin the conversation and try a correction before you confirm the mock order.
+                Start the API and Python agent first, then begin the conversation and try a
+                correction before you confirm the mock order.
               </p>
             </div>
           </div>
@@ -105,7 +106,7 @@ export const WelcomeView = ({
             <div className="mt-6 rounded-2xl border bg-muted/35 p-4">
               <p className="text-foreground text-sm font-medium">Suggested opener</p>
               <p className="text-muted-foreground mt-2 text-sm leading-6">
-                “Hi, I want ten lemon pepper wings for pickup.”
+                "Hi, I want ten lemon pepper wings for pickup."
               </p>
             </div>
           </aside>
