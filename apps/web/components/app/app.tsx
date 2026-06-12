@@ -11,7 +11,11 @@ import { ViewController } from '@/components/app/view-controller';
 import { Toaster } from '@/components/ui/sonner';
 import { useAgentErrors } from '@/hooks/useAgentErrors';
 import { useDebugMode } from '@/hooks/useDebug';
-import { DEFAULT_RUNTIME_CONFIG, toApiRuntimeConfig, type RuntimeConfig } from '@/lib/runtime-config';
+import {
+  getDefaultRuntimeConfig,
+  toApiRuntimeConfig,
+  type RuntimeConfig,
+} from '@/lib/runtime-config';
 import { getSandboxTokenSource } from '@/lib/utils';
 
 const IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
@@ -28,7 +32,14 @@ interface AppProps {
 }
 
 export function App({ appConfig }: AppProps) {
-  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig>(DEFAULT_RUNTIME_CONFIG);
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig>(() =>
+    getDefaultRuntimeConfig(appConfig.defaultVoiceMode)
+  );
+  const [orderSessionId, setOrderSessionId] = useState(() => Date.now().toString());
+  const sessionRoomName = useMemo(
+    () => `${appConfig.roomName}-${orderSessionId}`,
+    [appConfig.roomName, orderSessionId]
+  );
 
   const tokenSource = useMemo(() => {
     return typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string'
@@ -40,7 +51,7 @@ export function App({ appConfig }: AppProps) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              room_name: appConfig.roomName,
+              room_name: sessionRoomName,
               participant_name: appConfig.participantName,
               runtime_config: toApiRuntimeConfig(runtimeConfig),
             }),
@@ -62,9 +73,12 @@ export function App({ appConfig }: AppProps) {
             participantToken: data.token,
           };
         });
-  }, [appConfig, runtimeConfig]);
+  }, [appConfig, runtimeConfig, sessionRoomName]);
 
   const session = useSession(tokenSource);
+  const handleSessionEnded = () => {
+    setOrderSessionId(`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  };
 
   return (
     <AgentSessionProvider session={session}>
@@ -74,6 +88,7 @@ export function App({ appConfig }: AppProps) {
           appConfig={appConfig}
           runtimeConfig={runtimeConfig}
           onRuntimeConfigChange={setRuntimeConfig}
+          onSessionEnded={handleSessionEnded}
         />
       </main>
       <StartAudioButton label="Start Audio" />

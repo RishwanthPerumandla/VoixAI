@@ -5,6 +5,7 @@ export interface AppConfig {
   roomName: string;
   participantName: string;
   apiBaseUrl: string;
+  defaultVoiceMode: string;
 
   supportsChatInput: boolean;
   supportsVideoInput: boolean;
@@ -37,12 +38,17 @@ export interface AppConfig {
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
   companyName: 'VoixAI',
-  pageTitle: 'VoixAI Voice Demo',
+  pageTitle: 'Place an order by voice',
   pageDescription:
-    'A streamlined voice demo where you can speak naturally, correct the order, and confirm a mock checkout.',
+    'Speak naturally, make changes, and confirm your mock order in seconds.',
   roomName: process.env.NEXT_PUBLIC_LIVEKIT_ROOM_NAME ?? 'voixai-mvp-demo',
   participantName: process.env.NEXT_PUBLIC_PARTICIPANT_NAME ?? 'web-user',
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000',
+  defaultVoiceMode:
+    process.env.NEXT_PUBLIC_DEFAULT_VOICE_MODE ??
+    process.env.VOICE_PROVIDER ??
+    process.env.VOICE_ENGINE ??
+    'classic',
 
   supportsChatInput: true,
   supportsVideoInput: false,
@@ -53,7 +59,7 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   accent: '#c8642a',
   logoDark: '/favicon.ico',
   accentDark: '#ff9254',
-  startButtonText: 'Start Conversation',
+  startButtonText: 'Start voice order',
 
   // optional: audio visualization configuration
   // audioVisualizerType: 'bar',

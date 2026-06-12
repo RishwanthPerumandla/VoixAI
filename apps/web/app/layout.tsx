@@ -67,16 +67,16 @@ export default async function RootLayout({ children }: RootLayoutProps) {
       <body className="overflow-x-hidden">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
           <header className="fixed top-0 left-0 z-50 hidden w-full justify-between p-6 md:flex">
-            <div className="rounded-full border border-border/70 bg-background/88 px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.22em] text-foreground shadow-sm backdrop-blur">
+            <div className="rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm font-semibold text-slate-50 shadow-sm backdrop-blur">
               {companyName}
             </div>
-            <div className="rounded-full border border-border/70 bg-background/88 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground shadow-sm backdrop-blur">
-              Voice-first ordering demo
+            <div className="rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur">
+              Voice Ordering Demo
             </div>
           </header>
 

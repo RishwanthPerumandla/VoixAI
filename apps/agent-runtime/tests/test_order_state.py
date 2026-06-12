@@ -21,6 +21,7 @@ from agent import (
     SessionState,
     SUPPORTED_VOICE_ENGINES,
     TARGET_E2E_LATENCY_MS,
+    _trigger_away_prompt,
     _normalize_voice_provider,
     _runtime_profile_payload,
     _snapshot_payload,
@@ -228,3 +229,55 @@ def test_preload_optional_realtime_plugins_caches_openai_imports(
 
     assert agent_module._OPENAI_REALTIME_PLUGIN is not None
     assert agent_module._OPENAI_REALTIME_TURN_DETECTION is turn_detection
+
+
+def test_trigger_away_prompt_uses_say_for_classic() -> None:
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    class FakeSession:
+        def say(self, *args: object, **kwargs: object) -> None:
+            calls.append(("say", args, kwargs))
+
+        def generate_reply(self, *args: object, **kwargs: object) -> None:
+            calls.append(("generate_reply", args, kwargs))
+
+    _trigger_away_prompt(
+        FakeSession(), RuntimeConfig(voice_provider=VOICE_PROVIDER_CLASSIC, voice_engine=VOICE_ENGINE_PIPELINE)
+    )
+
+    assert calls == [
+        (
+            "say",
+            ("Are you still there?",),
+            {"allow_interruptions": True, "add_to_chat_ctx": False},
+        )
+    ]
+
+
+def test_trigger_away_prompt_uses_generate_reply_for_realtime() -> None:
+    calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+    class FakeSession:
+        def say(self, *args: object, **kwargs: object) -> None:
+            calls.append(("say", args, kwargs))
+
+        def generate_reply(self, *args: object, **kwargs: object) -> None:
+            calls.append(("generate_reply", args, kwargs))
+
+    _trigger_away_prompt(
+        FakeSession(),
+        RuntimeConfig(
+            voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
+            voice_engine=VOICE_ENGINE_GEMINI_LIVE,
+        ),
+    )
+
+    assert calls == [
+        (
+            "generate_reply",
+            (),
+            {
+                "instructions": "The user went silent. Ask only one short question: are you still there?"
+            },
+        )
+    ]

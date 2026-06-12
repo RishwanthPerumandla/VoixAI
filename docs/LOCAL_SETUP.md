@@ -32,8 +32,16 @@ Optional but recommended:
 Worker provider defaults:
 
 - `VOICE_PROVIDER=classic` keeps the existing Deepgram -> OpenAI -> Cartesia pipeline
-- `VOICE_PROVIDER=openai_realtime` switches only the Python worker to OpenAI Realtime through LiveKit
-- Keep `OPENAI_API_KEY` out of `apps/web/.env.local`
+- `VOICE_PROVIDER=openai_realtime` switches the worker to OpenAI Realtime through LiveKit
+- `VOICE_PROVIDER=gemini_live` switches the worker to Gemini Live through LiveKit
+- keep `OPENAI_API_KEY` out of `apps/web/.env.local`
+- keep `GOOGLE_API_KEY` out of `apps/web/.env.local`
+
+Frontend mode defaults:
+
+- `NEXT_PUBLIC_DEFAULT_VOICE_MODE=openai_realtime` starts the UI in OpenAI Realtime by default
+- `NEXT_PUBLIC_DEFAULT_VOICE_MODE=gemini_live` starts the UI in Gemini Live by default
+- if omitted, the frontend can still derive its default mode from server-side `VOICE_PROVIDER`
 
 ## 2. Start the web app
 
@@ -58,13 +66,22 @@ python src/agent.py download-files
 python src/agent.py dev
 ```
 
-Classic mode stays the default. To enable OpenAI Realtime, set this in `apps/agent-runtime/.env` before starting the worker:
+To enable OpenAI Realtime, set this in `apps/agent-runtime/.env` before starting the worker:
 
 ```text
 VOICE_PROVIDER=openai_realtime
 OPENAI_API_KEY=sk-...
 OPENAI_REALTIME_MODEL=gpt-realtime
 OPENAI_REALTIME_VOICE=alloy
+```
+
+To enable Gemini Live, set:
+
+```text
+VOICE_PROVIDER=gemini_live
+GOOGLE_API_KEY=...
+GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
+GOOGLE_REALTIME_VOICE=Puck
 ```
 
 ## 4. Start the API
@@ -113,15 +130,44 @@ Expected response shape:
 2. Start `apps/agent-runtime`.
 3. Start `apps/web`.
 4. Open `http://localhost:3000`.
-5. Click `Start Conversation`.
-6. Allow microphone access when prompted.
-7. Speak with the restaurant agent.
-8. Ask for a recap.
-9. Confirm the order to generate the mock order number.
+5. Choose a voice mode if needed.
+6. Click `Start voice order`.
+7. Allow microphone access when prompted.
+8. Speak with the restaurant agent.
+9. End the order and start another one if you want to test switching modes.
 
-## 8. Watching latency
+Important:
 
-The worker logs now include timing hints for each turn. Watch the terminal running:
+- the app now uses a fresh room per new order
+- that prevents stale session config from reusing the previous order's mode
+
+## 8. Verifying the active mode
+
+Do not rely only on worker startup log lines like:
+
+- `Voice provider: openai_realtime`
+
+Those reflect env defaults and prewarm behavior.
+
+The authoritative per-session log line is:
+
+- `Voice runtime profile selected`
+
+Examples:
+
+- Classic session:
+  - `voice_provider: classic`
+  - `voice_engine: pipeline`
+- OpenAI Realtime session:
+  - `voice_provider: openai_realtime`
+  - `voice_engine: openai_realtime`
+- Gemini Live session:
+  - `voice_provider: gemini_live`
+  - `voice_engine: gemini_live`
+
+## 9. Watching latency
+
+The worker logs include timing hints for each turn. Watch the terminal running:
 
 ```powershell
 python src/agent.py dev
@@ -142,11 +188,14 @@ Quick interpretation:
 - `tts_ttfb` is how long TTS takes to begin audio
 - `e2e_latency` is the overall assistant response latency
 
-In `openai_realtime` mode, the worker logs that classic per-stage STT/LLM/TTS latency metrics are not emitted because the realtime model handles the combined audio stack.
+In `openai_realtime` mode, classic STT/LLM/TTS stage metrics are not emitted because the realtime model handles the combined audio stack.
 
-## 9. Demo tips
+In `gemini_live` mode, classic STT/LLM/TTS stage metrics are also not emitted because the realtime model handles the combined audio stack.
+
+## 10. Demo tips
 
 - Use the session indicators to verify `Connected`, `Listening`, and `Speaking`.
 - Use the transcript panel to see what the system heard and replied with.
 - If the browser is connected but the agent does not join, compare `AGENT_NAME` in the API and worker environments.
+- If mode selection looks wrong, inspect the session-level `Voice runtime profile selected` log.
 - If latency feels high, say one short sentence at a time so turn detection has a clearer end of speech.

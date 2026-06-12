@@ -999,6 +999,22 @@ def _log_runtime_profile(runtime_config: RuntimeConfig) -> None:
     )
 
 
+def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: RuntimeConfig) -> None:
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+        session.say(
+            "Are you still there?",
+            allow_interruptions=True,
+            add_to_chat_ctx=False,
+        )
+        return
+
+    session.generate_reply(
+        instructions=(
+            "The user went silent. Ask only one short question: are you still there?"
+        ),
+    )
+
+
 class Assistant(Agent):
     def __init__(self, *, llm: Any) -> None:
         super().__init__(
@@ -1196,11 +1212,11 @@ async def my_agent(ctx: JobContext):
 
         away_prompt_state["sent"] = True
         logger.info("User idle detected; sending away prompt")
-        session.say(
-            "Are you still there?",
-            allow_interruptions=True,
-            add_to_chat_ctx=False,
-        )
+        try:
+            _trigger_away_prompt(session, runtime_config)
+        except RuntimeError:
+            logger.exception("Failed to send away prompt")
+            away_prompt_state["sent"] = False
 
     def _on_user_state_changed(event: UserStateChangedEvent) -> None:
         _handle_user_state_change(event)

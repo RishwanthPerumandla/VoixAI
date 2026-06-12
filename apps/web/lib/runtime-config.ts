@@ -146,6 +146,20 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
 
 export const DEFAULT_RUNTIME_CONFIG = RUNTIME_PRESETS[0].config;
 
+export function getDefaultRuntimeConfig(voiceMode?: string | null): RuntimeConfig {
+  const normalized = voiceMode?.trim().toLowerCase();
+
+  if (normalized === 'openai_realtime' || normalized === 'openai_realtime_text') {
+    return RUNTIME_PRESETS.find((preset) => preset.id === 'openai-realtime-voice')?.config ?? DEFAULT_RUNTIME_CONFIG;
+  }
+
+  if (normalized === 'gemini_live' || normalized === 'gemini_live_text') {
+    return RUNTIME_PRESETS.find((preset) => preset.id === 'gemini-live-voice')?.config ?? DEFAULT_RUNTIME_CONFIG;
+  }
+
+  return DEFAULT_RUNTIME_CONFIG;
+}
+
 export function getRuntimePresetById(presetId: string): RuntimePreset | undefined {
   return RUNTIME_PRESETS.find((preset) => preset.id === presetId);
 }
