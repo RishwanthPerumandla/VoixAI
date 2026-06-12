@@ -1,163 +1,144 @@
-<a href="https://livekit.io/">
-  <img src="./.github/assets/livekit-mark.png" alt="LiveKit logo" width="100" height="100">
-</a>
+# VoixAI Agent Runtime
 
-# LiveKit Agents Starter - Python
+This app is the Python voice agent runtime for VoixAI.
 
-A complete starter project for building voice AI apps with [LiveKit Agents for Python](https://github.com/livekit/agents) and [LiveKit Cloud](https://cloud.livekit.io/).
+It joins the same LiveKit room as the browser client, selects the correct voice mode for that room, runs the ordering conversation, and publishes session telemetry back to the frontend.
 
-The starter project includes:
+## What It Does
 
-- A simple voice AI assistant, ready for extension and customization
-- A voice AI pipeline built on [LiveKit Inference](https://docs.livekit.io/agents/models/inference)
-  with [models](https://docs.livekit.io/agents/models) from OpenAI, Cartesia, and Deepgram. More than 50 other model providers are supported, including [Realtime models](https://docs.livekit.io/agents/models/realtime)
-- Eval suite based on the LiveKit Agents [testing & evaluation framework](https://docs.livekit.io/agents/start/testing/)
-- [LiveKit Turn Detector](https://docs.livekit.io/agents/logic/turns/turn-detector/) for contextually-aware speaker detection, with multilingual support
-- [Background voice cancellation](https://docs.livekit.io/transport/media/noise-cancellation/)
-- Deep session insights from LiveKit [Agent Observability](https://docs.livekit.io/deploy/observability/)
-- A Dockerfile ready for [production deployment to LiveKit Cloud](https://docs.livekit.io/deploy/agents/)
+- loads env defaults and room-scoped runtime config
+- supports `classic`, `openai_realtime`, and `gemini_live`
+- maintains in-memory order state for the current session
+- exposes order tools to the agent
+- publishes transcript/order/latency snapshots on the telemetry topic
 
-This starter app is compatible with any [custom web/mobile frontend](https://docs.livekit.io/frontends/) or [telephony](https://docs.livekit.io/telephony/).
+## Main File
 
-## Using coding agents
+- [src/agent.py](./src/agent.py)
 
-This project is designed to work with coding agents like [Claude Code](https://claude.com/product/claude-code), [Cursor](https://www.cursor.com/), and [Codex](https://openai.com/codex/).
+This file currently contains most of the runtime logic, including:
 
-For your convenience, LiveKit offers both a CLI and an [MCP server](https://docs.livekit.io/reference/developer-tools/docs-mcp/) that can be used to browse and search its documentation. The [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) (`lk docs`) works with any coding agent that can run shell commands. Install it for your platform:
+- runtime config resolution
+- provider validation
+- classic and realtime session construction
+- order-state tools
+- telemetry publishing
+- session event handling
 
-**macOS:**
+## Voice Modes
 
-```console
-brew install livekit-cli
-```
+### `classic`
 
-**Linux:**
+Uses:
 
-```console
-curl -sSL https://get.livekit.io/cli | bash
-```
+- Deepgram STT
+- OpenAI text LLM
+- Cartesia TTS
 
-**Windows:**
+This path emits per-stage latency metrics in logs and session telemetry.
 
-```console
-winget install LiveKit.LiveKitCLI
-```
+### `openai_realtime`
 
-The `lk docs` subcommand requires version 2.15.0 or higher. Check your version with `lk --version` and update if needed. Once installed, your coding agent can search and browse LiveKit documentation directly from the terminal:
+Uses the LiveKit OpenAI realtime plugin.
 
-```console
-lk docs search "voice agents"
-lk docs get-page /agents/start/voice-ai-quickstart
-```
+This path does not emit classic STT/LLM/TTS stage metrics because the realtime model handles the combined voice stack.
 
-See the [Using coding agents](https://docs.livekit.io/intro/coding-agents/) guide for more details, including MCP server setup.
+### `gemini_live`
 
-The project includes a complete [AGENTS.md](AGENTS.md) file for these assistants. You can modify this file to suit your needs. To learn more about this file, see [https://agents.md](https://agents.md).
+Uses the LiveKit Google realtime plugin.
 
-## Dev Setup
+Current default model:
 
-Create a project from this template with the LiveKit CLI (recommended):
+- `gemini-3.1-flash-live-preview`
 
-```bash
-lk cloud auth
-lk agent init my-agent --template agent-starter-python
-```
+Important note:
 
-The CLI clones the template and configures your environment. Then follow the rest of this guide from [Run the agent](#run-the-agent).
+- Gemini 3.1 has limited mid-session update support, so instructions/context/tool changes may not apply until the next session.
 
-<details>
-<summary>Alternative: Manual setup without the CLI</summary>
+## Runtime Config Resolution
 
-Clone the repository and install dependencies to a virtual environment:
+Runtime config comes from two places:
 
-```console
-cd agent-starter-python
-uv sync
-```
+1. env defaults
+2. room-scoped config written by `apps/api`
 
-Sign up for [LiveKit Cloud](https://cloud.livekit.io/) then set up the environment by copying `.env.example` to `.env.local` and filling in the required keys:
+The final runtime profile is resolved when a room job starts. That means worker startup logs alone are not enough to tell you what mode a specific user session is actually using. The authoritative session-level log is:
+
+- `Voice runtime profile selected`
+
+## Telemetry
+
+The runtime publishes structured session snapshots to the room on:
+
+- `voixai.telemetry`
+
+These snapshots include:
+
+- order state
+- mock order state
+- runtime profile
+- turn count
+- classic latency metrics when available
+
+The frontend consumes those snapshots to drive:
+
+- transcript UI
+- order summary
+- confirmation screen
+- developer details
+
+## Environment
+
+Primary env variables:
 
 - `LIVEKIT_URL`
 - `LIVEKIT_API_KEY`
 - `LIVEKIT_API_SECRET`
+- `AGENT_NAME`
+- `VOICE_PROVIDER`
+- `OPENAI_API_KEY`
+- `GOOGLE_API_KEY`
 
-You can load the LiveKit environment automatically using the [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/):
+Mode-specific settings:
 
-```bash
-lk cloud auth
-lk app env --write --destination .env.local
+- `OPENAI_REALTIME_MODEL`
+- `OPENAI_REALTIME_VOICE`
+- `OPENAI_REALTIME_EAGERNESS`
+- `GOOGLE_REALTIME_MODEL`
+- `GOOGLE_REALTIME_VOICE`
+- `REALTIME_TEMPERATURE`
+- `REALTIME_ENABLE_AFFECTIVE_DIALOG`
+- `REALTIME_ENABLE_PROACTIVITY`
+
+See:
+
+- [../../docs/ENVIRONMENT_VARIABLES.md](../../docs/ENVIRONMENT_VARIABLES.md)
+
+## Local Run
+
+```powershell
+cd apps/agent-runtime
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+python src/agent.py download-files
+python src/agent.py dev
 ```
 
-</details>
+## Testing
 
-## Run the agent
+Current focused runtime tests live in:
 
-Before your first run, you must download certain models such as [Silero VAD](https://docs.livekit.io/agents/logic/turns/vad/) and the [LiveKit turn detector](https://docs.livekit.io/agents/logic/turns/turn-detector/):
+- [tests/test_order_state.py](./tests/test_order_state.py)
 
-```console
-uv run python src/agent.py download-files
+Typical command:
+
+```powershell
+apps\agent-runtime\.venv\Scripts\python.exe -m pytest apps\agent-runtime\tests\test_order_state.py -q
 ```
 
-Next, run this command to speak to your agent directly in your terminal:
+## Current Notes
 
-```console
-uv run python src/agent.py console
-```
-
-To run the agent for use with a frontend or telephony, use the `dev` command:
-
-```console
-uv run python src/agent.py dev
-```
-
-In production, use the `start` command:
-
-```console
-uv run python src/agent.py start
-```
-
-## Frontend & Telephony
-
-Get started quickly with our pre-built frontend starter apps, or add telephony support:
-
-| Platform | Link | Description |
-|----------|----------|-------------|
-| **Web** | [`livekit-examples/agent-starter-react`](https://github.com/livekit-examples/agent-starter-react) | Web voice AI assistant with React & Next.js |
-| **iOS/macOS** | [`livekit-examples/agent-starter-swift`](https://github.com/livekit-examples/agent-starter-swift) | Native iOS, macOS, and visionOS voice AI assistant |
-| **Flutter** | [`livekit-examples/agent-starter-flutter`](https://github.com/livekit-examples/agent-starter-flutter) | Cross-platform voice AI assistant app |
-| **React Native** | [`livekit-examples/voice-assistant-react-native`](https://github.com/livekit-examples/voice-assistant-react-native) | Native mobile app with React Native & Expo |
-| **Android** | [`livekit-examples/agent-starter-android`](https://github.com/livekit-examples/agent-starter-android) | Native Android app with Kotlin & Jetpack Compose |
-| **Web Embed** | [`livekit-examples/agent-starter-embed`](https://github.com/livekit-examples/agent-starter-embed) | Voice AI widget for any website |
-| **Telephony** | [Documentation](https://docs.livekit.io/telephony/) | Add inbound or outbound calling to your agent |
-
-For advanced customization, see the [complete frontend guide](https://docs.livekit.io/frontends/).
-
-## Tests and evals
-
-This project includes a complete suite of evals, based on the LiveKit Agents [testing & evaluation framework](https://docs.livekit.io/agents/start/testing/). To run them, use `pytest`.
-
-```console
-uv run pytest
-```
-
-## Using this template repo for your own project
-
-Once you've started your own project based on this repo, you should:
-
-1. **Check in your `uv.lock`**: This file is currently untracked for the template, but you should commit it to your repository for reproducible builds and proper configuration management. (The same applies to `livekit.toml`, if you run your agents in LiveKit Cloud)
-
-2. **Remove the git tracking test**: Delete the "Check files not tracked in git" step from `.github/workflows/tests.yml` since you'll now want this file to be tracked. These are just there for development purposes in the template repo itself.
-
-3. **Add your own repository secrets**: You must [add secrets](https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/using-secrets-in-github-actions) for `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` so that the tests can run in CI.
-
-## Deploying to production
-
-This project is production-ready and includes a working `Dockerfile`. To deploy it to LiveKit Cloud or another environment, see the [deploying to production](https://docs.livekit.io/deploy/agents/) guide.
-
-## Self-hosted LiveKit
-
-You can also self-host LiveKit instead of using LiveKit Cloud. See the [self-hosting](https://docs.livekit.io/transport/self-hosting/local/) guide for more information. If you choose to self-host, you'll need to also use [model plugins](https://docs.livekit.io/agents/models/#plugins) instead of LiveKit Inference and will need to remove the [LiveKit Cloud noise cancellation](https://docs.livekit.io/transport/media/noise-cancellation/) plugin.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- away prompts now use a realtime-safe path for Gemini/OpenAI sessions
+- fresh room-per-order behavior is handled by the frontend, not by this runtime
+- order state is in memory only and resets when the session ends

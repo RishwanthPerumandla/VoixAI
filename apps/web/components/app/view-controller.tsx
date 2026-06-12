@@ -1,106 +1,102 @@
 'use client';
 
-import { useTheme } from 'next-themes';
-import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
 import { useAgent } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
-import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
-import { WelcomeView } from '@/components/app/welcome-view';
-
-const MotionWelcomeView = motion.create(WelcomeView);
-const MotionSessionView = motion.create(AgentSessionView_01);
-
-const VIEW_MOTION_PROPS = {
-  variants: {
-    visible: {
-      opacity: 1,
-    },
-    hidden: {
-      opacity: 0,
-    },
-  },
-  initial: 'hidden',
-  animate: 'visible',
-  exit: 'hidden',
-  transition: {
-    duration: 0.5,
-    ease: 'linear',
-  },
-};
+import { DeveloperDetails } from '@/components/app/developer-details';
+import { LandingHero } from '@/components/app/landing-hero';
+import { SessionLayout } from '@/components/app/session-layout';
+import { useSessionTelemetry } from '@/hooks/useSessionTelemetry';
+import { getChannelConfig } from '@/lib/channel-config';
+import { getScenarioConfig } from '@/lib/scenario-config';
+import { type RuntimeConfig } from '@/lib/runtime-config';
 
 interface ViewControllerProps {
   appConfig: AppConfig;
+  runtimeConfig: RuntimeConfig;
+  onRuntimeConfigChange: (config: RuntimeConfig) => void;
+  onSessionEnded: () => void;
 }
 
-export function ViewController({ appConfig }: ViewControllerProps) {
-  const { connectionState, isConnected, room, start } = useSessionContext();
+function buildActiveRuntimeConfig(
+  runtimeConfig: RuntimeConfig,
+  telemetrySnapshot: ReturnType<typeof useSessionTelemetry>
+) {
+  const profile = telemetrySnapshot?.runtime_profile;
+  if (!profile) {
+    return runtimeConfig;
+  }
+
+  return {
+    ...runtimeConfig,
+    voiceEngine: profile.voice_engine as RuntimeConfig['voiceEngine'],
+    llmModel: profile.llm_model,
+    sttModel: profile.stt_model ?? runtimeConfig.sttModel,
+    ttsModel: profile.tts_model ?? runtimeConfig.ttsModel,
+    openaiRealtimeModel: profile.openai_realtime_model,
+    openaiRealtimeVoice: profile.openai_realtime_voice,
+    openaiRealtimeEagerness: profile.openai_realtime_eagerness,
+    googleRealtimeModel: profile.google_realtime_model,
+    googleRealtimeVoice: profile.google_realtime_voice,
+    realtimeTemperature: profile.realtime_temperature,
+    realtimeEnableAffectiveDialog: profile.realtime_enable_affective_dialog,
+    realtimeEnableProactivity: profile.realtime_enable_proactivity,
+    presetId: profile.preset_id ?? runtimeConfig.presetId,
+    presetLabel: profile.preset_label ?? runtimeConfig.presetLabel,
+    comparisonLabel: profile.comparison_label ?? runtimeConfig.comparisonLabel,
+    fallbackReason: profile.fallback_reason,
+    requestedVoiceEngine: profile.requested_voice_engine,
+  };
+}
+
+export function ViewController({
+  appConfig,
+  runtimeConfig,
+  onRuntimeConfigChange,
+  onSessionEnded,
+}: ViewControllerProps) {
+  const { isConnected, start, end } = useSessionContext();
   const agent = useAgent();
-  const { resolvedTheme } = useTheme();
-  const connectionStatusLabel =
-    connectionState === 'connected'
-      ? 'Connected'
-      : connectionState === 'connecting'
-        ? 'Connecting'
-        : connectionState === 'reconnecting' || connectionState === 'signalReconnecting'
-          ? 'Reconnecting'
-          : 'Disconnected';
-  const agentStatusLabel =
-    agent.state === 'listening' || agent.state === 'thinking' || agent.state === 'speaking'
-      ? 'Agent joined'
-      : agent.state === 'failed'
-        ? 'Agent connection failed'
-        : isConnected
-          ? 'Waiting for agent'
-          : 'Agent offline';
-  const preConnectMessage = isConnected
-    ? `Connected to ${room.name || appConfig.roomName}. Ask for a recap when you are ready to review the order.`
-    : `Ready to join ${appConfig.roomName}.`;
+  const telemetrySnapshot = useSessionTelemetry();
+  const developerMode = process.env.NEXT_PUBLIC_DEVELOPER_MODE === 'true';
+  const activeRuntimeConfig = buildActiveRuntimeConfig(runtimeConfig, telemetrySnapshot);
+  const scenario = getScenarioConfig(appConfig.activeScenarioId);
+  const channel = getChannelConfig(appConfig.activeChannelId);
+
+  const handleEndSession = async () => {
+    await end();
+    onSessionEnded();
+  };
+
+  if (!isConnected) {
+    return (
+      <LandingHero
+        scenario={scenario}
+        channel={channel}
+        onStartCall={start}
+        onUseText={start}
+        runtimeConfig={runtimeConfig}
+        onRuntimeConfigChange={onRuntimeConfigChange}
+        developerDetails={
+          <DeveloperDetails
+            enabled={developerMode}
+            runtimeConfig={runtimeConfig}
+            telemetrySnapshot={telemetrySnapshot}
+            rawState={agent.state}
+          />
+        }
+      />
+    );
+  }
 
   return (
-    <AnimatePresence mode="wait">
-      {/* Welcome view */}
-      {!isConnected && (
-        <MotionWelcomeView
-          key="welcome"
-          {...VIEW_MOTION_PROPS}
-          pageTitle={appConfig.pageTitle}
-          pageDescription={appConfig.pageDescription}
-          startButtonText={appConfig.startButtonText}
-          roomName={appConfig.roomName}
-          connectionStatusLabel={connectionStatusLabel}
-          onStartCall={start}
-        />
-      )}
-      {/* Session view */}
-      {isConnected && (
-        <MotionSessionView
-          key="session-view"
-          {...VIEW_MOTION_PROPS}
-          supportsChatInput={appConfig.supportsChatInput}
-          supportsVideoInput={appConfig.supportsVideoInput}
-          supportsScreenShare={appConfig.supportsScreenShare}
-          isPreConnectBufferEnabled={appConfig.isPreConnectBufferEnabled}
-          preConnectMessage={preConnectMessage}
-          connectionStatusLabel={connectionStatusLabel}
-          agentStatusLabel={agentStatusLabel}
-          roomName={room.name || appConfig.roomName}
-          audioVisualizerType={appConfig.audioVisualizerType}
-          audioVisualizerColor={
-            resolvedTheme === 'dark'
-              ? appConfig.audioVisualizerColorDark
-              : appConfig.audioVisualizerColor
-          }
-          audioVisualizerColorShift={appConfig.audioVisualizerColorShift}
-          audioVisualizerBarCount={appConfig.audioVisualizerBarCount}
-          audioVisualizerGridRowCount={appConfig.audioVisualizerGridRowCount}
-          audioVisualizerGridColumnCount={appConfig.audioVisualizerGridColumnCount}
-          audioVisualizerRadialBarCount={appConfig.audioVisualizerRadialBarCount}
-          audioVisualizerRadialRadius={appConfig.audioVisualizerRadialRadius}
-          audioVisualizerWaveLineWidth={appConfig.audioVisualizerWaveLineWidth}
-          className="fixed inset-0"
-        />
-      )}
-    </AnimatePresence>
+    <SessionLayout
+      scenario={scenario}
+      channel={channel}
+      runtimeConfig={activeRuntimeConfig}
+      telemetrySnapshot={telemetrySnapshot}
+      developerMode={developerMode}
+      onEndSession={handleEndSession}
+    />
   );
 }

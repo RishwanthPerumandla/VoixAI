@@ -2,9 +2,12 @@ export interface AppConfig {
   pageTitle: string;
   pageDescription: string;
   companyName: string;
+  activeScenarioId: string;
+  activeChannelId: string;
   roomName: string;
   participantName: string;
   apiBaseUrl: string;
+  defaultVoiceMode: string;
 
   supportsChatInput: boolean;
   supportsVideoInput: boolean;
@@ -37,23 +40,31 @@ export interface AppConfig {
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
   companyName: 'VoixAI',
-  pageTitle: 'VoixAI Restaurant Voice Agent Demo.',
+  pageTitle: 'VoixAI Voice AI System',
   pageDescription:
-    'A polished MVP where a browser user talks to a restaurant voice agent, corrects the order, and receives a mock order confirmation.',
+    'VoixAI is a core voice AI system. The current live scenario is Wingstop inbound ordering.',
+  activeScenarioId:
+    process.env.NEXT_PUBLIC_ACTIVE_SCENARIO_ID ?? 'wingstop_inbound_ordering',
+  activeChannelId: process.env.NEXT_PUBLIC_ACTIVE_CHANNEL_ID ?? 'web',
   roomName: process.env.NEXT_PUBLIC_LIVEKIT_ROOM_NAME ?? 'voixai-mvp-demo',
   participantName: process.env.NEXT_PUBLIC_PARTICIPANT_NAME ?? 'web-user',
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000',
+  defaultVoiceMode:
+    process.env.NEXT_PUBLIC_DEFAULT_VOICE_MODE ??
+    process.env.VOICE_PROVIDER ??
+    process.env.VOICE_ENGINE ??
+    'classic',
 
   supportsChatInput: true,
   supportsVideoInput: false,
   supportsScreenShare: false,
   isPreConnectBufferEnabled: true,
 
-  logo: '/lk-logo.svg',
-  accent: '#002cf2',
-  logoDark: '/lk-logo-dark.svg',
-  accentDark: '#1fd5f9',
-  startButtonText: 'Start Conversation',
+  logo: '/favicon.ico',
+  accent: '#c8642a',
+  logoDark: '/favicon.ico',
+  accentDark: '#ff9254',
+  startButtonText: 'Start demo',
 
   // optional: audio visualization configuration
   // audioVisualizerType: 'bar',

@@ -106,8 +106,8 @@ export function TileLayout({
   const videoHeight = agentVideoTrack?.publication.dimensions?.height ?? 0;
 
   return (
-    <div className="absolute inset-x-0 top-8 bottom-32 z-50 md:top-12 md:bottom-40">
-      <div className="relative mx-auto h-full max-w-2xl px-4 md:px-0">
+    <div className="absolute inset-0 z-0">
+      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center px-4 py-8 md:px-8 md:py-10">
         <div className={cn(tileViewClassNames.grid)}>
           {/* Agent */}
           <div
@@ -130,7 +130,7 @@ export function TileLayout({
                     ...ANIMATION_TRANSITION,
                     delay: animationDelay,
                   }}
-                  className={cn('relative aspect-square h-[90px]')}
+                  className={cn('relative aspect-square h-[128px] md:h-[156px]')}
                 >
                   <AudioVisualizer
                     key="audio-visualizer"
@@ -190,14 +190,14 @@ export function TileLayout({
                   }}
                   className={cn(
                     'overflow-hidden bg-black drop-shadow-xl/80',
-                    chatOpen ? 'h-[90px]' : 'h-auto w-full'
+                    chatOpen ? 'h-[120px] md:h-[150px]' : 'h-auto w-full'
                   )}
                 >
                   <VideoTrack
                     width={videoWidth}
                     height={videoHeight}
                     trackRef={agentVideoTrack}
-                    className={cn(chatOpen && 'size-[90px] object-cover')}
+                    className={cn(chatOpen && 'size-[120px] object-cover md:size-[150px]')}
                   />
                 </motion.div>
               )}
@@ -234,13 +234,13 @@ export function TileLayout({
                     ...ANIMATION_TRANSITION,
                     delay: animationDelay,
                   }}
-                  className="aspect-square size-[90px] drop-shadow-lg/20"
+                  className="aspect-square size-[110px] drop-shadow-lg/20 md:size-[132px]"
                 >
                   <VideoTrack
                     trackRef={cameraTrack || screenShareTrack}
                     width={(cameraTrack || screenShareTrack)?.publication.dimensions?.width ?? 0}
                     height={(cameraTrack || screenShareTrack)?.publication.dimensions?.height ?? 0}
-                    className="bg-muted aspect-square size-[90px] rounded-md object-cover"
+                    className="bg-muted aspect-square size-[110px] rounded-md object-cover md:size-[132px]"
                   />
                 </motion.div>
               )}

@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from livekit.protocol.room import RoomConfiguration
 
 API_DIR = Path(__file__).resolve().parent
 ROOT_DIR = API_DIR.parent.parent
+SESSION_CONFIG_DIR = ROOT_DIR / ".voixai" / "session-configs"
 
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "apps" / "agent-runtime" / ".env")
@@ -31,12 +33,18 @@ ALLOWED_ORIGINS = os.getenv(
 class TokenRequest(BaseModel):
     room_name: str = Field(min_length=1)
     participant_name: str = Field(min_length=1)
+    runtime_config: dict[str, object] | None = None
 
 
 class TokenResponse(BaseModel):
     livekit_url: str
     token: str
     room_name: str
+
+
+def _session_config_path(room_name: str) -> Path:
+    safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in room_name).strip("-")
+    return SESSION_CONFIG_DIR / f"{safe_name or 'default-room'}.json"
 
 
 app = FastAPI(title="VoixAI MVP API", version="0.2.0")
@@ -60,9 +68,16 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
         raise HTTPException(
             status_code=500,
             detail=(
-                "LiveKit environment variables are missing. Set LIVEKIT_URL, "
+                "Realtime transport environment variables are missing. Set LIVEKIT_URL, "
                 "LIVEKIT_API_KEY, and LIVEKIT_API_SECRET before requesting tokens."
             ),
+        )
+
+    if payload.runtime_config is not None:
+        SESSION_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        _session_config_path(payload.room_name).write_text(
+            json.dumps(payload.runtime_config, indent=2),
+            encoding="utf-8",
         )
 
     identity = f"{payload.participant_name}-{uuid4().hex[:8]}"
