@@ -53,7 +53,11 @@ export function App({ appConfig }: AppProps) {
             body: JSON.stringify({
               room_name: sessionRoomName,
               participant_name: appConfig.participantName,
-              runtime_config: toApiRuntimeConfig(runtimeConfig),
+              runtime_config: {
+                ...toApiRuntimeConfig(runtimeConfig),
+                scenario_id: appConfig.activeScenarioId,
+                channel_id: appConfig.activeChannelId,
+              },
             }),
           });
 

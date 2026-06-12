@@ -34,7 +34,7 @@ export function AssistantStage({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(75,175,255,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(48,201,182,0.10),transparent_22%)]" />
       <div className="relative flex flex-col items-center text-center">
         <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-[0.16em] text-slate-300">
-          Realtime voice stage
+          VoixAI realtime stage
         </div>
         <VoiceVisualizer state={state} className="mt-6" />
         <p className="mt-7 text-3xl font-semibold tracking-tight text-slate-50 md:text-[2.15rem]">
@@ -42,7 +42,7 @@ export function AssistantStage({
         </p>
         <p className="mt-3 max-w-xl text-base leading-7 text-slate-300">
           {state === 'listening' || state === 'userSpeaking'
-            ? 'Speak naturally. You can change anything before confirming.'
+            ? 'Speak naturally. This shared voice session can support different workflows.'
             : copy.helper}
         </p>
 

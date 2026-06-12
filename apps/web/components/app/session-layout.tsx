@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   useAgent,
   useChat,
@@ -13,32 +13,28 @@ import type { ReceivedMessage } from '@livekit/components-react';
 import { WarningIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { AssistantStage } from '@/components/app/assistant-stage';
-import { ConfirmationScreen } from '@/components/app/confirmation-screen';
 import { ConversationTranscript } from '@/components/app/conversation-transcript';
 import { DeveloperDetails } from '@/components/app/developer-details';
-import { OrderSummaryPanel, type OrderSummaryItem } from '@/components/app/order-summary-panel';
 import {
   getSessionStatusTone,
   getSessionStatusContent,
 } from '@/components/app/session-status';
+import type { ChannelConfig } from '@/lib/channel-config';
+import { resolveScenarioCopy } from '@/lib/scenario-config';
 import { VoiceControls } from '@/components/app/voice-controls';
 import { useInputControls } from '@/hooks/agents-ui/use-agent-control-bar';
 import { useVoicePresenceState } from '@/hooks/useVoicePresenceState';
+import type { ScenarioConfig } from '@/lib/scenario-config';
 import type { RuntimeConfig } from '@/lib/runtime-config';
 import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 
 interface SessionLayoutProps {
+  scenario: ScenarioConfig;
+  channel: ChannelConfig;
   runtimeConfig: RuntimeConfig | null;
   telemetrySnapshot: SessionTelemetrySnapshot | null;
   developerMode: boolean;
   onEndSession: () => void;
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function getLatestAssistantMessage(messages: ReceivedMessage[]) {
@@ -50,37 +46,9 @@ function getLatestAssistantMessage(messages: ReceivedMessage[]) {
   return null;
 }
 
-function buildOrderItems(snapshot: SessionTelemetrySnapshot | null): OrderSummaryItem[] {
-  const order = snapshot?.order;
-  if (!order || order.items.length === 0) {
-    return [];
-  }
-
-  return order.items.map((item) => ({
-    name: toTitleCase(item),
-    flavor: order.flavor,
-    style: order.classic_or_boneless,
-  }));
-}
-
-function buildMissingDetails(snapshot: SessionTelemetrySnapshot | null) {
-  const order = snapshot?.order;
-  if (!order) {
-    return ['Service', 'Items', 'Pickup time'];
-  }
-
-  const missing: string[] = [];
-  if (!order.pickup_or_delivery) missing.push('Service');
-  if (order.items.length === 0) missing.push('Items');
-  if (!order.drink) missing.push('Drink');
-  if (!order.pickup_time) missing.push('Pickup time');
-  if (!order.classic_or_boneless && order.items.some((item) => item.toLowerCase().includes('wings'))) {
-    missing.push('Style');
-  }
-  return missing;
-}
-
 export function SessionLayout({
+  scenario,
+  channel,
   runtimeConfig,
   telemetrySnapshot,
   developerMode,
@@ -114,19 +82,8 @@ export function SessionLayout({
   const statusCopy = getSessionStatusContent(userFacingState);
   const statusTone = getSessionStatusTone(userFacingState);
   const latestAssistantPrompt = getLatestAssistantMessage(messages);
-  const orderItems = useMemo(() => buildOrderItems(telemetrySnapshot), [telemetrySnapshot]);
-  const missingDetails = useMemo(() => buildMissingDetails(telemetrySnapshot), [telemetrySnapshot]);
-  const confirmDisabled =
-    userFacingState === 'complete' ||
-    missingDetails.length > 0 ||
-    orderItems.length === 0 ||
-    !isConnected;
-  const confirmHelperText =
-    missingDetails.length > 0
-      ? `Add ${missingDetails.join(', ').toLowerCase()} before confirming.`
-      : orderItems.length === 0
-        ? 'Add at least one item before confirming.'
-        : null;
+  const ScenarioWorkspace = scenario.WorkspaceComponent;
+  const ScenarioConfirmation = scenario.ConfirmationComponent;
 
   const handleEditOrder = async () => {
     await send('I want to change my order.');
@@ -138,13 +95,9 @@ export function SessionLayout({
 
   if (telemetrySnapshot?.mock_order) {
     return (
-      <ConfirmationScreen
-        service={telemetrySnapshot.order.pickup_or_delivery}
-        items={telemetrySnapshot.order.items.map(toTitleCase)}
-        pickupTime={telemetrySnapshot.order.pickup_time}
-        total={telemetrySnapshot.mock_order.total}
-        orderNumber={telemetrySnapshot.mock_order.order_number}
-        onStartNewOrder={onEndSession}
+      <ScenarioConfirmation
+        telemetrySnapshot={telemetrySnapshot}
+        onStartNewFlow={onEndSession}
         onBackToDemo={onEndSession}
       />
     );
@@ -155,7 +108,10 @@ export function SessionLayout({
       <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(10,17,30,0.92),rgba(10,18,31,0.82))] px-5 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-50">Voice order in progress</p>
+            <p className="text-sm font-semibold text-slate-50">VoixAI session in progress</p>
+            <p className="text-sm text-slate-300">
+              {resolveScenarioCopy(scenario.session.headerSubtitle, channel)}
+            </p>
             <p className="mt-1 text-sm text-slate-400">{statusCopy.helper}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -199,7 +155,7 @@ export function SessionLayout({
               <div className="w-full rounded-[24px] border border-amber-300/20 bg-amber-400/10 p-4 text-left">
                 <p className="text-base font-semibold text-amber-100">Microphone access needed</p>
                 <p className="mt-2 text-sm leading-6 text-amber-50/90">
-                  Allow microphone access to start your voice order.
+                  {resolveScenarioCopy(scenario.session.permissionPrompt, channel)}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Button
@@ -241,19 +197,28 @@ export function SessionLayout({
         </main>
 
         <div className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-          <OrderSummaryPanel
-            service={telemetrySnapshot?.order.pickup_or_delivery ?? null}
-            items={orderItems}
-            pickupTime={telemetrySnapshot?.order.pickup_time ?? null}
-            drink={telemetrySnapshot?.order.drink ?? null}
-            total={telemetrySnapshot?.mock_order?.total ?? null}
-            missingDetails={missingDetails}
-            isConfirmed={Boolean(telemetrySnapshot?.order.confirmed)}
-            onEditOrder={handleEditOrder}
-            onConfirmOrder={handleConfirmOrder}
-            confirmDisabled={confirmDisabled}
-            confirmHelperText={confirmHelperText}
-          />
+          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,15,28,0.92),rgba(12,20,34,0.84))] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
+            <div className="px-2 pb-4">
+              <p className="text-sm font-semibold text-slate-50">
+                {scenario.session.workspaceEyebrow}
+              </p>
+              <p className="mt-1 text-sm text-slate-300">{scenario.session.workspaceTitle}</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">
+                Channel: {channel.shortLabel}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                {resolveScenarioCopy(scenario.session.workspaceDescription, channel)}
+              </p>
+            </div>
+
+            <ScenarioWorkspace
+              telemetrySnapshot={telemetrySnapshot}
+              userFacingState={userFacingState}
+              isConnected={isConnected}
+              onEditWorkflow={handleEditOrder}
+              onConfirmWorkflow={handleConfirmOrder}
+            />
+          </section>
 
           <DeveloperDetails
             enabled={developerMode}
@@ -276,10 +241,10 @@ export function SessionLayout({
               <WarningIcon size={24} className="mt-1 text-amber-300" />
               <div>
                 <h2 id="end-order-title" className="text-lg font-semibold text-slate-50">
-                  End this order?
+                  {scenario.session.endDialogTitle}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Your current mock order will be discarded.
+                  {scenario.session.endDialogDescription}
                 </p>
               </div>
             </div>
@@ -290,7 +255,7 @@ export function SessionLayout({
                 onClick={() => setConfirmEnd(false)}
                 className="rounded-full border-white/10 bg-transparent text-slate-100 hover:bg-white/8"
               >
-                Keep ordering
+                {scenario.session.keepActionLabel}
               </Button>
               <Button
                 type="button"
@@ -298,7 +263,7 @@ export function SessionLayout({
                 onClick={onEndSession}
                 className="rounded-full"
               >
-                End order
+                {scenario.session.endActionLabel}
               </Button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 # VoixAI Web App
 
-This app is the customer-facing voice ordering frontend for VoixAI.
+This app is the customer-facing frontend for the VoixAI voice AI system.
 
 It is built with Next.js, React, Tailwind CSS, and LiveKit React components.
 
@@ -8,11 +8,12 @@ It is built with Next.js, React, Tailwind CSS, and LiveKit React components.
 
 - renders the landing screen
 - lets the user choose a voice mode before starting
+- frames the current live scenario
 - requests a token from `apps/api`
 - joins the LiveKit room
 - renders the live transcript
 - renders the voice activity stage
-- renders the order summary and confirmation screen
+- renders the current scenario workspace and confirmation screen
 - shows developer details only behind a disclosure
 
 ## Main Frontend Flow
@@ -23,7 +24,7 @@ It is built with Next.js, React, Tailwind CSS, and LiveKit React components.
 4. The app posts `runtime_config` to `POST /api/livekit/token`.
 5. The frontend joins the LiveKit room with the returned token.
 6. The Python runtime publishes telemetry snapshots.
-7. The frontend renders transcript, voice state, and order summary from that session state.
+7. The frontend renders transcript, voice state, and the active scenario workspace from that session state.
 
 ## Important Current Behavior
 
@@ -51,6 +52,14 @@ The live session UI includes:
 - transcript timeline
 - order summary panel
 - text fallback composer
+
+### Current scenario
+
+The current live scenario is:
+
+- `Wingstop inbound ordering`
+
+VoixAI should be understood as the reusable system, with this Wingstop flow acting as the first packaged scenario.
 
 ## Key Files
 

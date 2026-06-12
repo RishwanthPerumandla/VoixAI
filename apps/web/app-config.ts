@@ -2,6 +2,8 @@ export interface AppConfig {
   pageTitle: string;
   pageDescription: string;
   companyName: string;
+  activeScenarioId: string;
+  activeChannelId: string;
   roomName: string;
   participantName: string;
   apiBaseUrl: string;
@@ -38,9 +40,12 @@ export interface AppConfig {
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
   companyName: 'VoixAI',
-  pageTitle: 'Place an order by voice',
+  pageTitle: 'VoixAI Voice AI System',
   pageDescription:
-    'Speak naturally, make changes, and confirm your mock order in seconds.',
+    'VoixAI is a core voice AI system. The current live scenario is Wingstop inbound ordering.',
+  activeScenarioId:
+    process.env.NEXT_PUBLIC_ACTIVE_SCENARIO_ID ?? 'wingstop_inbound_ordering',
+  activeChannelId: process.env.NEXT_PUBLIC_ACTIVE_CHANNEL_ID ?? 'web',
   roomName: process.env.NEXT_PUBLIC_LIVEKIT_ROOM_NAME ?? 'voixai-mvp-demo',
   participantName: process.env.NEXT_PUBLIC_PARTICIPANT_NAME ?? 'web-user',
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000',
@@ -59,7 +64,7 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   accent: '#c8642a',
   logoDark: '/favicon.ico',
   accentDark: '#ff9254',
-  startButtonText: 'Start voice order',
+  startButtonText: 'Start demo',
 
   // optional: audio visualization configuration
   // audioVisualizerType: 'bar',

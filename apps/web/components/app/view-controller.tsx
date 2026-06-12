@@ -7,6 +7,8 @@ import { DeveloperDetails } from '@/components/app/developer-details';
 import { LandingHero } from '@/components/app/landing-hero';
 import { SessionLayout } from '@/components/app/session-layout';
 import { useSessionTelemetry } from '@/hooks/useSessionTelemetry';
+import { getChannelConfig } from '@/lib/channel-config';
+import { getScenarioConfig } from '@/lib/scenario-config';
 import { type RuntimeConfig } from '@/lib/runtime-config';
 
 interface ViewControllerProps {
@@ -58,6 +60,8 @@ export function ViewController({
   const telemetrySnapshot = useSessionTelemetry();
   const developerMode = process.env.NEXT_PUBLIC_DEVELOPER_MODE === 'true';
   const activeRuntimeConfig = buildActiveRuntimeConfig(runtimeConfig, telemetrySnapshot);
+  const scenario = getScenarioConfig(appConfig.activeScenarioId);
+  const channel = getChannelConfig(appConfig.activeChannelId);
 
   const handleEndSession = async () => {
     await end();
@@ -67,6 +71,8 @@ export function ViewController({
   if (!isConnected) {
     return (
       <LandingHero
+        scenario={scenario}
+        channel={channel}
         onStartCall={start}
         onUseText={start}
         runtimeConfig={runtimeConfig}
@@ -85,6 +91,8 @@ export function ViewController({
 
   return (
     <SessionLayout
+      scenario={scenario}
+      channel={channel}
       runtimeConfig={activeRuntimeConfig}
       telemetrySnapshot={telemetrySnapshot}
       developerMode={developerMode}

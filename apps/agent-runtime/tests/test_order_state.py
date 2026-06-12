@@ -3,6 +3,8 @@ import pytest
 from types import SimpleNamespace
 
 from agent import (
+    DEFAULT_CHANNEL_ID,
+    DEFAULT_SCENARIO_ID,
     ACCEPTABLE_E2E_LATENCY_MS,
     SUPPORTED_VOICE_PROVIDERS,
     VOICE_PROVIDER_CLASSIC,
@@ -26,6 +28,7 @@ from agent import (
     _runtime_profile_payload,
     _snapshot_payload,
     _preload_optional_realtime_plugins,
+    _resolve_runtime_config,
     _validate_runtime_config,
     _voice_engine_for_provider,
     summarize_order_state,
@@ -100,6 +103,8 @@ def test_create_mock_order_generates_expected_shape() -> None:
 
 def test_snapshot_payload_includes_order_and_latency_targets() -> None:
     session_state = SessionState(
+        scenario_id=DEFAULT_SCENARIO_ID,
+        channel_id=DEFAULT_CHANNEL_ID,
         order=OrderState(
             pickup_or_delivery="pickup",
             items=["wings"],
@@ -131,13 +136,53 @@ def test_snapshot_payload_includes_order_and_latency_targets() -> None:
     payload = _snapshot_payload(session_state, reason="assistant_turn_metrics")
 
     assert payload["type"] == "session_snapshot"
+    assert payload["scenario_id"] == DEFAULT_SCENARIO_ID
+    assert payload["channel_id"] == DEFAULT_CHANNEL_ID
     assert payload["reason"] == "assistant_turn_metrics"
     assert payload["target_e2e_latency_ms"] == TARGET_E2E_LATENCY_MS
     assert payload["acceptable_e2e_latency_ms"] == ACCEPTABLE_E2E_LATENCY_MS
     assert payload["turn_count"] == 3
     assert payload["order"]["items"] == ["wings"]
+    assert payload["runtime_profile"]["scenario_id"] == DEFAULT_SCENARIO_ID
+    assert payload["runtime_profile"]["channel_id"] == DEFAULT_CHANNEL_ID
     assert payload["runtime_profile"]["voice_engine"] == "openai_realtime"
     assert payload["assistant_turn_metrics"]["e2e_latency"] == 0.71
+
+
+def test_runtime_profile_payload_includes_scenario_id() -> None:
+    payload = _runtime_profile_payload(
+        RuntimeConfig(
+            scenario_id=DEFAULT_SCENARIO_ID,
+            channel_id=DEFAULT_CHANNEL_ID,
+        )
+    )
+
+    assert payload["scenario_id"] == DEFAULT_SCENARIO_ID
+    assert payload["channel_id"] == DEFAULT_CHANNEL_ID
+
+
+def test_resolve_runtime_config_falls_back_to_default_scenario() -> None:
+    runtime_config = RuntimeConfig(
+        scenario_id="unknown_scenario",
+        voice_provider=VOICE_PROVIDER_CLASSIC,
+        voice_engine=VOICE_ENGINE_PIPELINE,
+    )
+
+    resolved = _resolve_runtime_config(runtime_config)
+
+    assert resolved.scenario_id == DEFAULT_SCENARIO_ID
+
+
+def test_resolve_runtime_config_falls_back_to_default_channel() -> None:
+    runtime_config = RuntimeConfig(
+        channel_id="unknown_channel",
+        voice_provider=VOICE_PROVIDER_CLASSIC,
+        voice_engine=VOICE_ENGINE_PIPELINE,
+    )
+
+    resolved = _resolve_runtime_config(runtime_config)
+
+    assert resolved.channel_id == DEFAULT_CHANNEL_ID
 
 
 def test_supported_voice_engines_cover_pipeline_and_realtime_modes() -> None:

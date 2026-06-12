@@ -1,18 +1,19 @@
 'use client';
 
+import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/shadcn/utils';
 
-export interface OrderSummaryItem {
+export interface WingstopOrderItem {
   name: string;
   flavor?: string | null;
   style?: string | null;
   notes?: string | null;
 }
 
-interface OrderSummaryPanelProps {
+interface WingstopOrderPanelProps {
   service: string | null;
-  items: OrderSummaryItem[];
+  items: WingstopOrderItem[];
   pickupTime: string | null;
   drink: string | null;
   total: string | null;
@@ -25,6 +26,49 @@ interface OrderSummaryPanelProps {
   className?: string;
 }
 
+function toTitleCase(value: string) {
+  return value
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function buildWingstopOrderItems(
+  snapshot: SessionTelemetrySnapshot | null
+): WingstopOrderItem[] {
+  const order = snapshot?.order;
+  if (!order || order.items.length === 0) {
+    return [];
+  }
+
+  return order.items.map((item) => ({
+    name: toTitleCase(item),
+    flavor: order.flavor,
+    style: order.classic_or_boneless,
+  }));
+}
+
+export function buildWingstopMissingDetails(snapshot: SessionTelemetrySnapshot | null) {
+  const order = snapshot?.order;
+  if (!order) {
+    return ['Service', 'Items', 'Pickup time'];
+  }
+
+  const missing: string[] = [];
+  if (!order.pickup_or_delivery) missing.push('Service');
+  if (order.items.length === 0) missing.push('Items');
+  if (!order.drink) missing.push('Drink');
+  if (!order.pickup_time) missing.push('Pickup time');
+  if (!order.classic_or_boneless && order.items.some((item) => item.toLowerCase().includes('wings'))) {
+    missing.push('Style');
+  }
+  return missing;
+}
+
+export function buildWingstopConfirmationItems(snapshot: SessionTelemetrySnapshot) {
+  return snapshot.order.items.map(toTitleCase);
+}
+
 function MissingDetailsList({ items }: { items: string[] }) {
   if (items.length === 0) {
     return (
@@ -35,7 +79,10 @@ function MissingDetailsList({ items }: { items: string[] }) {
   return (
     <ul className="space-y-2.5 text-sm text-slate-300">
       {items.map((item) => (
-        <li key={item} className="flex items-center gap-2 rounded-full border border-white/6 bg-white/[0.035] px-3 py-2">
+        <li
+          key={item}
+          className="flex items-center gap-2 rounded-full border border-white/6 bg-white/[0.035] px-3 py-2"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
           {item}
         </li>
@@ -44,7 +91,7 @@ function MissingDetailsList({ items }: { items: string[] }) {
   );
 }
 
-export function OrderSummaryPanel({
+export function WingstopOrderPanel({
   service,
   items,
   pickupTime,
@@ -57,7 +104,7 @@ export function OrderSummaryPanel({
   confirmDisabled,
   confirmHelperText,
   className,
-}: OrderSummaryPanelProps) {
+}: WingstopOrderPanelProps) {
   return (
     <aside
       className={cn(
@@ -69,12 +116,13 @@ export function OrderSummaryPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-slate-50">Order summary</h2>
+          <p className="mt-1 text-sm text-slate-300">Wingstop inbound ordering</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             {isConfirmed
               ? 'Review before confirming.'
               : items.length > 0
-                ? 'Building your order live.'
-                : 'Your order will appear here as you speak.'}
+                ? 'Building the Wingstop workflow live.'
+                : 'The active Wingstop order will appear here as you speak.'}
           </p>
         </div>
         {items.length > 0 && (
@@ -105,16 +153,23 @@ export function OrderSummaryPanel({
         <section>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-400">Items</p>
-            {items.length > 0 && <p className="text-xs text-slate-500">{items.length} item{items.length === 1 ? '' : 's'}</p>}
+            {items.length > 0 && (
+              <p className="text-xs text-slate-500">
+                {items.length} item{items.length === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
           {items.length === 0 ? (
             <p className="mt-3 rounded-[22px] border border-dashed border-white/10 bg-white/[0.025] px-4 py-5 text-sm leading-6 text-slate-300">
-              Your items will appear here as you order.
+              Wingstop items will appear here as you order.
             </p>
           ) : (
             <div className="mt-3 space-y-3">
               {items.map((item, index) => (
-                <article key={`${item.name}-${index}`} className="rounded-[24px] border border-white/8 bg-white/[0.045] p-4">
+                <article
+                  key={`${item.name}-${index}`}
+                  className="rounded-[24px] border border-white/8 bg-white/[0.045] p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-medium text-slate-50">1x {item.name}</p>

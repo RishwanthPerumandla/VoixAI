@@ -1,6 +1,6 @@
 # VoixAI
 
-VoixAI is a voice-ordering demo built around a LiveKit room, a Python voice agent, and a customer-facing Next.js frontend.
+VoixAI is a core voice AI system built around a LiveKit room, a Python voice agent, and a customer-facing Next.js frontend.
 
 The project currently supports three voice paths:
 
@@ -8,9 +8,13 @@ The project currently supports three voice paths:
 - `openai_realtime`: native OpenAI speech-to-speech through the LiveKit realtime plugin
 - `gemini_live`: native Gemini Live speech-to-speech through the LiveKit Google plugin
 
+The current live use case is:
+
+- `Wingstop inbound ordering`
+
 This repo is still an MVP, but it now includes:
 
-- a production-leaning voice ordering UI
+- a production-leaning voice AI session UI
 - room-scoped runtime mode selection
 - session telemetry for transcript and order summary updates
 - fresh-room-per-order behavior so restarting an order does not reuse stale runtime config
@@ -47,6 +51,11 @@ The current end-to-end flow is:
 7. The runtime publishes structured session telemetry back into the room.
 8. The frontend renders transcript, voice state, order summary, and confirmation UI from that session state.
 
+The system should be understood as:
+
+- `VoixAI` = the reusable platform
+- `Wingstop inbound ordering` = the current active scenario
+
 ## Apps
 
 ### `apps/web`
@@ -59,7 +68,7 @@ Primary responsibilities:
 - start and end voice sessions
 - transcript rendering
 - voice activity visualization
-- live order summary
+- scenario workspace rendering
 - confirmation screen
 - hidden developer details panel
 
@@ -84,7 +93,7 @@ Primary responsibilities:
 - load env defaults
 - load room-specific runtime config
 - choose classic/OpenAI/Gemini runtime path
-- maintain in-memory order state
+- maintain the current scenario state
 - publish session telemetry
 - expose order-management tools to the agent
 
@@ -116,6 +125,7 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 - Each new order now starts in a fresh room name, which prevents stale session config from breaking restart behavior.
 - Realtime away prompts are handled safely in the runtime so Gemini/OpenAI sessions do not crash on idle prompts.
 - Developer-facing metrics and internals are hidden behind a disclosure in the UI instead of shown by default.
+- The current product framing is platform-first: VoixAI is the system, and Wingstop inbound ordering is the current live scenario.
 
 ## Quick Start
 

@@ -37,6 +37,8 @@ export interface TelemetryAssistantTurnMetrics {
 }
 
 export interface TelemetryRuntimeProfile {
+  scenario_id?: string;
+  channel_id?: string;
   voice_engine: string;
   requested_voice_engine: string | null;
   llm_model: string;
@@ -58,6 +60,8 @@ export interface TelemetryRuntimeProfile {
 
 export interface SessionTelemetrySnapshot {
   type: 'session_snapshot';
+  scenario_id?: string;
+  channel_id?: string;
   reason: string;
   timestamp: number;
   target_e2e_latency_ms: number;

@@ -58,6 +58,8 @@ async def test_create_livekit_token_persists_runtime_config(
         room_name="voixai-demo-room",
         participant_name="web-user",
         runtime_config={
+            "scenario_id": "wingstop_inbound_ordering",
+            "channel_id": "web",
             "voice_engine": "gemini_live",
             "preset_id": "gemini-live-voice",
         },
@@ -72,6 +74,8 @@ async def test_create_livekit_token_persists_runtime_config(
     config_path = tmp_path / "voixai-demo-room.json"
     assert config_path.exists()
     assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "scenario_id": "wingstop_inbound_ordering",
+        "channel_id": "web",
         "voice_engine": "gemini_live",
         "preset_id": "gemini-live-voice",
     }

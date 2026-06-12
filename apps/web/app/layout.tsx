@@ -76,7 +76,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
               {companyName}
             </div>
             <div className="rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur">
-              Voice Ordering Demo
+              Voice AI System
             </div>
           </header>
 
