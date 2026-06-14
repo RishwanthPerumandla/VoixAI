@@ -137,10 +137,8 @@ See:
 Short version:
 
 1. Copy env files.
-2. Start `apps/api`.
-3. Start `apps/agent-runtime`.
-4. Start `apps/web`.
-5. Open `http://localhost:3000`.
+2. Run `.\scripts\start-all.ps1` from the repo root.
+3. Open `http://localhost:3000`.
 
 ## Important Docs
 

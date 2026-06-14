@@ -43,7 +43,55 @@ Frontend mode defaults:
 - `NEXT_PUBLIC_DEFAULT_VOICE_MODE=gemini_live` starts the UI in Gemini Live by default
 - if omitted, the frontend can still derive its default mode from server-side `VOICE_PROVIDER`
 
-## 2. Start the web app
+## 2. Install local dependencies
+
+Web:
+
+```powershell
+cd apps/web
+corepack pnpm install
+```
+
+Agent runtime:
+
+```powershell
+cd apps/agent-runtime
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+python src/agent.py download-files
+```
+
+API:
+
+```powershell
+cd apps/api
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+## 3. Start everything with one command
+
+From the repo root:
+
+```powershell
+.\scripts\start-all.ps1
+```
+
+This opens three PowerShell windows for:
+
+- `apps/api`
+- `apps/agent-runtime`
+- `apps/web`
+
+If you only want to confirm the launch commands without starting them:
+
+```powershell
+.\scripts\start-all.ps1 -DryRun
+```
+
+## 4. Start the web app manually
 
 ```powershell
 cd apps/web
@@ -53,7 +101,7 @@ corepack pnpm dev
 
 Open `http://localhost:3000`.
 
-## 3. Start the agent runtime
+## 5. Start the agent runtime manually
 
 We are using `venv`, not `uv`.
 
@@ -84,7 +132,7 @@ GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
 GOOGLE_REALTIME_VOICE=Puck
 ```
 
-## 4. Start the API
+## 6. Start the API manually
 
 ```powershell
 cd apps/api
@@ -94,7 +142,7 @@ python -m pip install -e .
 python -m uvicorn main:app --reload --port 8000
 ```
 
-## 5. Check the health endpoint
+## 7. Check the health endpoint
 
 ```powershell
 curl.exe http://127.0.0.1:8000/health
@@ -106,7 +154,7 @@ Expected response body:
 {"status":"OK"}
 ```
 
-## 6. Check token generation
+## 8. Check token generation
 
 ```powershell
 curl.exe -X POST http://127.0.0.1:8000/api/livekit/token `
@@ -124,24 +172,22 @@ Expected response shape:
 }
 ```
 
-## 7. Demo run order
+## 9. Demo run order
 
-1. Start `apps/api`.
-2. Start `apps/agent-runtime`.
-3. Start `apps/web`.
-4. Open `http://localhost:3000`.
-5. Choose a voice mode if needed.
-6. Click `Start voice order`.
-7. Allow microphone access when prompted.
-8. Speak with the restaurant agent.
-9. End the order and start another one if you want to test switching modes.
+1. Run `.\scripts\start-all.ps1` from the repo root.
+2. Open `http://localhost:3000`.
+3. Choose a voice mode if needed.
+4. Click `Start voice order`.
+5. Allow microphone access when prompted.
+6. Speak with the restaurant agent.
+7. End the order and start another one if you want to test switching modes.
 
 Important:
 
 - the app now uses a fresh room per new order
 - that prevents stale session config from reusing the previous order's mode
 
-## 8. Verifying the active mode
+## 10. Verifying the active mode
 
 Do not rely only on worker startup log lines like:
 
@@ -165,7 +211,7 @@ Examples:
   - `voice_provider: gemini_live`
   - `voice_engine: gemini_live`
 
-## 9. Watching latency
+## 11. Watching latency
 
 The worker logs include timing hints for each turn. Watch the terminal running:
 
@@ -192,7 +238,7 @@ In `openai_realtime` mode, classic STT/LLM/TTS stage metrics are not emitted bec
 
 In `gemini_live` mode, classic STT/LLM/TTS stage metrics are also not emitted because the realtime model handles the combined audio stack.
 
-## 10. Demo tips
+## 12. Demo tips
 
 - Use the session indicators to verify `Connected`, `Listening`, and `Speaking`.
 - Use the transcript panel to see what the system heard and replied with.
