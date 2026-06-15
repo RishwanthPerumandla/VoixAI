@@ -9,7 +9,9 @@ from __future__ import annotations
 import pytest
 
 from voix_ordering.menu import (
+    MENU_ITEMS,
     _resolve_item_id,
+    build_menu_for_prompt,
     category_summary,
     find_category,
     menu_overview_summary,
@@ -98,3 +100,12 @@ def test_category_summary_falls_back_to_overview_when_unspecific() -> None:
     assert category_summary("wings") == menu_overview_summary()
     assert category_summary("xyzzy") == menu_overview_summary()
     assert "Available categories are" in menu_overview_summary()
+
+
+def test_build_menu_for_prompt_lists_every_item() -> None:
+    # The menu given to the LLM must stay complete and in sync with the data.
+    menu_text = build_menu_for_prompt()
+    for item in MENU_ITEMS.values():
+        assert item.display_name in menu_text
+    assert "Flavors:" in menu_text
+    assert "Combos include one flavor" in menu_text

@@ -1154,6 +1154,45 @@ def category_summary(query: str) -> str:
     return f"{category} options: {', '.join(category_items(category))}."
 
 
+def build_menu_for_prompt() -> str:
+    """The full menu as readable text, generated from the menu data so it stays
+    in sync. Injected into the agent so the LLM understands and resolves orders
+    itself (the backend remains the source of truth for totals and placement)."""
+    by_category: dict[str, list[MenuItem]] = {}
+    for menu_item in MENU_ITEMS.values():
+        by_category.setdefault(menu_item.category, []).append(menu_item)
+
+    lines: list[str] = ["# Voix Wings Demo menu", ""]
+    for category in menu_categories():
+        lines.append(f"{category}:")
+        for menu_item in by_category[category]:
+            price = menu_item.base_price.quantize(Decimal("0.01"))
+            lines.append(f"- {menu_item.display_name} (${price})")
+        lines.append("")
+
+    flavors = ", ".join(f.display_name for f in FLAVOR_OPTIONS.values() if f.available)
+    sides = ", ".join(
+        MODIFIER_OPTIONS[o].display_name for o in MODIFIER_GROUPS["combo_side_choice"].option_ids
+    )
+    drinks = ", ".join(
+        MODIFIER_OPTIONS[o].display_name for o in MODIFIER_GROUPS["combo_drink_choice"].option_ids
+    )
+    dips = ", ".join(
+        MODIFIER_OPTIONS[o].display_name for o in MODIFIER_GROUPS["dip_selection"].option_ids
+    )
+
+    lines.append(f"Flavors: {flavors}.")
+    lines.append(
+        f"Combos include one flavor, one side ({sides}), and one drink ({drinks})."
+    )
+    lines.append(f"Dips: {dips}.")
+    lines.append(
+        "Classic bone-in wings can be all flats or all drums for a small upcharge; "
+        "boneless wings cannot."
+    )
+    return "\n".join(lines)
+
+
 def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
