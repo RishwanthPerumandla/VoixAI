@@ -98,6 +98,18 @@ This opens three PowerShell windows for:
 - `apps/agent-runtime`
 - `apps/web`
 
+All three **hot-reload on code changes** — no manual restart needed:
+
+- `apps/web` via Next.js fast refresh
+- `apps/api` via `uvicorn --reload`, watching both `apps/api` and the shared
+  `packages/ordering/src`
+- `apps/agent-runtime` via `watchfiles`, restarting the worker on changes in
+  both `src` and `packages/ordering/src`
+
+Because the shared `packages/ordering` domain is watched by both Python
+services, editing the menu/pricing/validation/state-machine code restarts the
+API and the worker automatically.
+
 If you only want to confirm the launch commands without starting them:
 
 ```powershell
