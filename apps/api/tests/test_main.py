@@ -82,6 +82,68 @@ async def test_create_livekit_token_persists_runtime_config(
 
 
 @pytest.mark.asyncio
+async def test_create_livekit_token_passes_runtime_config_as_dispatch_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from storage import SqliteStorage
+
+    monkeypatch.setattr(api_main, "SESSION_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(api_main, "ORDER_STORAGE", SqliteStorage(tmp_path / "s.db"))
+    monkeypatch.setattr(api_main, "LIVEKIT_URL", "wss://example.livekit.cloud")
+    monkeypatch.setattr(api_main, "LIVEKIT_API_KEY", "lk-key")
+    monkeypatch.setattr(api_main, "LIVEKIT_API_SECRET", "lk-secret")
+    monkeypatch.setattr(api_main, "AGENT_NAME", "metadata-agent")
+
+    captured: dict[str, object] = {}
+
+    class FakeDispatch:
+        def __init__(self, agent_name: str, metadata: str = "") -> None:
+            captured["agent_name"] = agent_name
+            captured["metadata"] = metadata
+
+    class FakeRoomConfiguration:
+        def __init__(self, agents: list) -> None:
+            captured["agents"] = agents
+
+    class FakeAccessToken:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def with_identity(self, _identity: str):
+            return self
+
+        def with_name(self, _name: str):
+            return self
+
+        def with_grants(self, _grants):
+            return self
+
+        def with_room_config(self, _room_config):
+            return self
+
+        def to_jwt(self) -> str:
+            return "fake-jwt-token"
+
+    monkeypatch.setattr(api_main, "RoomAgentDispatch", FakeDispatch)
+    monkeypatch.setattr(api_main, "RoomConfiguration", FakeRoomConfiguration)
+    monkeypatch.setattr(api_main, "AccessToken", FakeAccessToken)
+
+    payload = api_main.TokenRequest(
+        room_name="voixai-meta-room",
+        participant_name="web-user",
+        runtime_config={"voice_engine": "gemini_live", "scenario_id": "wingstop_inbound_ordering"},
+    )
+
+    await api_main.create_livekit_token(payload)
+
+    assert captured["agent_name"] == "metadata-agent"
+    assert json.loads(captured["metadata"]) == {
+        "voice_engine": "gemini_live",
+        "scenario_id": "wingstop_inbound_ordering",
+    }
+
+
+@pytest.mark.asyncio
 async def test_resolve_menu_selection_returns_combo_requirements() -> None:
     response = await api_main.resolve_menu_selection(
         api_main.MenuResolveRequest(

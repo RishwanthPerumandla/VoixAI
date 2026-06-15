@@ -22,6 +22,7 @@ from agent import (
     TARGET_E2E_LATENCY_MS,
     _normalize_voice_provider,
     _preload_optional_realtime_plugins,
+    _runtime_config_from_metadata,
     _needs_tts_fallback_for_forced_speech,
     _resolve_runtime_config,
     _runtime_profile_payload,
@@ -457,6 +458,25 @@ def test_voice_engine_mapping_uses_pipeline_for_classic_provider() -> None:
         == VOICE_ENGINE_OPENAI_REALTIME
     )
     assert _voice_engine_for_provider(VOICE_PROVIDER_GEMINI_LIVE) == VOICE_ENGINE_GEMINI_LIVE
+
+
+def test_runtime_config_from_metadata_parses_dispatch_json() -> None:
+    config = _runtime_config_from_metadata(
+        '{"voice_engine": "gemini_live", "scenario_id": "wingstop_inbound_ordering"}'
+    )
+
+    assert config is not None
+    assert config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE
+    assert config.voice_engine == VOICE_ENGINE_GEMINI_LIVE
+    assert config.scenario_id == "wingstop_inbound_ordering"
+
+
+def test_runtime_config_from_metadata_returns_none_for_unusable_input() -> None:
+    assert _runtime_config_from_metadata(None) is None
+    assert _runtime_config_from_metadata("") is None
+    assert _runtime_config_from_metadata("   ") is None
+    assert _runtime_config_from_metadata("not json") is None
+    assert _runtime_config_from_metadata("[1, 2, 3]") is None
 
 
 def test_realtime_validation_requires_openai_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

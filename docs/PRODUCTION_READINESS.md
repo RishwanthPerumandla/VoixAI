@@ -380,12 +380,20 @@ starter test unrelated to this work.)
 - Tests: `apps/api/tests/test_orders.py` (idempotency, server-side gate,
   durability, read-back) — API suite now 10/10.
 
+- **Config via dispatch metadata** — runtime config is now attached to the agent
+  dispatch (`RoomAgentDispatch.metadata`) and read by the worker from
+  `ctx.job.metadata`, removing the shared-filesystem requirement (3.4). The
+  `.voixai/session-configs` file is still written as a single-host fallback, and
+  the worker falls back to it if metadata is absent. (Final delivery to the
+  worker needs a live LiveKit session to verify; the protos round-trip the field
+  and the parse/fallback paths are unit-tested.)
+
 Remaining for M3:
 
-- **Config via room/dispatch metadata** (or Redis) to replace
-  `.voixai/session-configs` files and the shared-filesystem assumption (3.4).
 - **In-progress order rehydration** on worker reconnect (hot store).
 - **Postgres adapter** behind `DATABASE_URL` for true multi-instance durability.
+- Drop the `.voixai/session-configs` file fallback once metadata delivery is
+  verified end-to-end against live LiveKit.
 
 ---
 

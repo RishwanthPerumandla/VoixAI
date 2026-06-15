@@ -449,7 +449,14 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
             ),
         )
 
+    runtime_config_json = (
+        json.dumps(payload.runtime_config) if payload.runtime_config is not None else ""
+    )
+
     if payload.runtime_config is not None:
+        # Fallback handoff for single-host/local dev. The primary handoff is the
+        # dispatch metadata below, which travels with the agent job and works
+        # across hosts (no shared filesystem required).
         SESSION_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         _session_config_path(payload.room_name).write_text(
             json.dumps(payload.runtime_config, indent=2),
@@ -460,14 +467,16 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
             await asyncio.to_thread(
                 ORDER_STORAGE.upsert_session,
                 payload.room_name,
-                json.dumps(payload.runtime_config),
+                runtime_config_json,
             )
         except Exception:
             logger.exception("Failed to record session for room %s", payload.room_name)
 
     identity = f"{payload.participant_name}-{uuid4().hex[:8]}"
+    # Primary runtime-config handoff: attach it to the agent dispatch metadata so
+    # the worker reads it from the job, not from a shared file.
     room_config = RoomConfiguration(
-        agents=[RoomAgentDispatch(agent_name=AGENT_NAME)]
+        agents=[RoomAgentDispatch(agent_name=AGENT_NAME, metadata=runtime_config_json)]
     )
 
     token = (

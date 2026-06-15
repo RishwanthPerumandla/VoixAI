@@ -57,9 +57,10 @@ the actual voice path.
 2. On "start", the web app `POST`s `room_name`, `participant_name`, and
    `runtime_config` to `apps/api` → `POST /api/livekit/token`
    ([app.tsx](../apps/web/components/app/app.tsx), [runtime-config.ts](../apps/web/lib/runtime-config.ts)).
-3. The API writes the requested runtime config to
-   `.voixai/session-configs/<room>.json` and mints a participant JWT that
-   carries a `RoomConfiguration` dispatching `AGENT_NAME`
+3. The API mints a participant JWT that carries a `RoomConfiguration`
+   dispatching `AGENT_NAME`, with the requested runtime config attached as the
+   dispatch **metadata** (the primary, filesystem-free handoff). It also writes
+   `.voixai/session-configs/<room>.json` as a single-host fallback
    ([main.py](../apps/api/main.py)).
 4. LiveKit dispatches the agent worker into the room.
 5. The browser joins the same room.
@@ -195,7 +196,7 @@ what structurally blocks).
 
 | Concern | Where it lives | Durability |
 |---------|----------------|------------|
-| Per-room runtime config | `.voixai/session-configs/<room>.json` (written by API, read by worker) | local file, never cleaned up |
+| Per-room runtime config | primary: agent dispatch metadata (`ctx.job.metadata`); fallback: `.voixai/session-configs/<room>.json` | metadata travels with the job (no shared FS); file is a single-host fallback |
 | Order state (in progress) | `SessionState.order` in worker process memory | lost on disconnect/restart (rehydration is a remaining M3 item) |
 | Placed order | `orders` table in SQLite (`.voixai/voixai.db`) via `POST /api/orders` | durable + idempotent (M3); local fallback if API unreachable |
 | Session record | `sessions` table in SQLite (best-effort on token mint) | durable (M3) |

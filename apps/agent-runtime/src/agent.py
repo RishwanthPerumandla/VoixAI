@@ -261,6 +261,29 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
     )
 
 
+def _runtime_config_from_metadata(metadata: str | None) -> RuntimeConfig | None:
+    """Parse runtime config from the agent dispatch/job metadata.
+
+    This is the primary handoff path: the config travels with the agent job, so
+    it works across hosts without a shared filesystem. Returns ``None`` when no
+    usable metadata is present so the caller can fall back to the file.
+    """
+    if not metadata or not metadata.strip():
+        return None
+
+    try:
+        payload = json.loads(metadata)
+    except Exception:
+        logger.warning("Failed to parse job metadata as runtime config JSON")
+        return None
+
+    if not isinstance(payload, Mapping):
+        logger.warning("Job metadata runtime config was not an object")
+        return None
+
+    return _runtime_config_from_payload(payload)
+
+
 def _load_runtime_config_for_room(room_name: str) -> RuntimeConfig:
     config_path = _session_config_path(room_name)
     if not config_path.exists():
@@ -277,6 +300,18 @@ def _load_runtime_config_for_room(room_name: str) -> RuntimeConfig:
         return RuntimeConfig()
 
     return _runtime_config_from_payload(payload)
+
+
+def _resolve_runtime_config_for_job(ctx: JobContext) -> RuntimeConfig:
+    """Prefer dispatch metadata, fall back to the room-scoped config file."""
+    job_metadata = getattr(getattr(ctx, "job", None), "metadata", None)
+    metadata_config = _runtime_config_from_metadata(job_metadata)
+    if metadata_config is not None:
+        logger.info("Loaded runtime config from job metadata")
+        return _resolve_runtime_config(metadata_config)
+
+    logger.info("No job metadata runtime config; falling back to room config file")
+    return _resolve_runtime_config(_load_runtime_config_for_room(ctx.room.name))
 
 
 def _runtime_profile_payload(runtime_config: RuntimeConfig) -> dict[str, object]:
@@ -933,7 +968,7 @@ async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
-    runtime_config = _resolve_runtime_config(_load_runtime_config_for_room(ctx.room.name))
+    runtime_config = _resolve_runtime_config_for_job(ctx)
     _validate_runtime_config(runtime_config)
     scenario = get_scenario_definition(runtime_config.scenario_id)
     channel = get_channel_definition(runtime_config.channel_id)
