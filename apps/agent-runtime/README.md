@@ -8,7 +8,9 @@ It joins the same LiveKit room as the browser client, selects the correct voice 
 
 - loads env defaults and room-scoped runtime config
 - supports `classic`, `openai_realtime`, and `gemini_live`
-- maintains in-memory order state for the current session
+- maintains structured in-memory order state for the current session
+- resolves menu items and validates order changes against backend-backed menu tools
+- produces priced order quotes before confirmation through the backend pricing path
 - exposes order tools to the agent
 - publishes transcript/order/latency snapshots on the telemetry topic
 
@@ -54,6 +56,9 @@ Current default model:
 Important note:
 
 - Gemini 3.1 has limited mid-session update support, so instructions/context/tool changes may not apply until the next session.
+- The runtime avoids `generate_reply(...)` for Gemini 3.1 greeting and away-prompt turns because that model path is not compatible with forced `generate_reply` calls.
+- Gemini 3.1 sessions attach a small TTS fallback so those forced greeting and away-prompt turns can still use `say(...)` safely.
+- The Google realtime plugin is pinned from `charan632-dev/agents` instead of the stock PyPI plugin while this Gemini Live fix path is in use.
 
 ## Runtime Config Resolution
 
@@ -75,10 +80,12 @@ The runtime publishes structured session snapshots to the room on:
 These snapshots include:
 
 - order state
+- price quote state
 - mock order state
 - runtime profile
 - turn count
 - classic latency metrics when available
+- assistant guardrail violations when detected
 
 The frontend consumes those snapshots to drive:
 
@@ -140,5 +147,8 @@ apps\agent-runtime\.venv\Scripts\python.exe -m pytest apps\agent-runtime\tests\t
 ## Current Notes
 
 - away prompts now use a realtime-safe path for Gemini/OpenAI sessions
+- Gemini 3.1 greeting-first behavior relies on a TTS-backed fallback path for forced startup speech
 - fresh room-per-order behavior is handled by the frontend, not by this runtime
 - order state is in memory only and resets when the session ends
+- the current restaurant is `Voix Wings Demo`, not an official Wingstop menu
+- pricing and menu availability are still demo data and should be replaced by a real POS-backed source in production

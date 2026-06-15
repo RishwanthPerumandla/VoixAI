@@ -79,3 +79,43 @@ async def test_create_livekit_token_persists_runtime_config(
         "voice_engine": "gemini_live",
         "preset_id": "gemini-live-voice",
     }
+
+
+@pytest.mark.asyncio
+async def test_resolve_menu_selection_returns_combo_requirements() -> None:
+    response = await api_main.resolve_menu_selection(
+        api_main.MenuResolveRequest(
+            item_name="6 piece boneless combo",
+            quantity=1,
+            flavors=["original cajun"],
+        )
+    )
+
+    assert response.item_id == "combo_boneless_6"
+    assert response.flavor_ids == ["cajun"]
+    assert "This combo requires a drink selection." in response.line_errors
+    assert "This combo requires a side selection." in response.line_errors
+
+
+@pytest.mark.asyncio
+async def test_price_menu_order_returns_backend_quote_for_combo() -> None:
+    response = await api_main.price_menu_order(
+        api_main.OrderPayload(
+            items=[
+                api_main.OrderLinePayload(
+                    line_id="line-1",
+                    item_id="combo_boneless_6",
+                    quantity=1,
+                    selected_flavor_ids=["cajun"],
+                    selected_modifier_ids=["regular_seasoned_fries", "ranch", "coke"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    assert response.errors == []
+    assert response.price_quote is not None
+    assert response.price_quote.subtotal == "$11.99"
+    assert response.price_quote.total == "$12.98"

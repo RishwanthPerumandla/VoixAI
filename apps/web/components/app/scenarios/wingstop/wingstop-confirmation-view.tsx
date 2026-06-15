@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 
@@ -22,6 +23,14 @@ export function WingstopConfirmationView({
   onStartNewOrder,
   onBackToDemo,
 }: WingstopConfirmationViewProps) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onBackToDemo();
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
+  }, [onBackToDemo]);
+
   return (
     <section className="mx-auto flex min-h-[calc(100svh-7rem)] w-full max-w-4xl items-center px-6 pb-12 pt-24 md:px-10">
       <div className="w-full rounded-[32px] border border-emerald-400/20 bg-[linear-gradient(180deg,rgba(8,18,26,0.96),rgba(10,24,24,0.96))] p-8 shadow-2xl shadow-black/20 md:p-12">

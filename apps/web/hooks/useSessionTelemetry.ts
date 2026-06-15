@@ -9,17 +9,56 @@ export const VOIXAI_TELEMETRY_TOPIC = 'voixai.telemetry';
 export interface TelemetryOrderState {
   pickup_or_delivery: string | null;
   items: string[];
+  line_items?: Array<{
+    line_id: string;
+    item_id: string;
+    name: string;
+    category: string;
+    quantity: number;
+    flavors: string[];
+    modifiers: string[];
+    notes: string | null;
+    style: string | null;
+  }>;
+  modifiers?: string[];
+  quantity?: number;
+  order_type?: string | null;
+  customer_name?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  status?: string | null;
   flavor: string | null;
   classic_or_boneless: string | null;
   drink: string | null;
   pickup_time: string | null;
   confirmed: boolean;
+  total_shown?: boolean;
+  recap_readback?: boolean;
+  pos_validation_passed?: boolean;
+  validation_errors?: string[];
 }
 
 export interface TelemetryMockOrder {
   order_number: string;
   total: string;
   summary: string;
+  kitchen_ticket?: string;
+}
+
+export interface TelemetryPriceQuote {
+  subtotal: string;
+  tax: string;
+  total: string;
+  eta_minutes: number;
+  pricing_source: string;
+  line_items: Array<{
+    line_id: string;
+    name: string;
+    quantity: number;
+    unit_price: string;
+    line_subtotal: string;
+    breakdown: string[];
+  }>;
 }
 
 export interface TelemetryUserTurnMetrics {
@@ -68,10 +107,12 @@ export interface SessionTelemetrySnapshot {
   acceptable_e2e_latency_ms: number;
   turn_count: number;
   order: TelemetryOrderState;
+  price_quote?: TelemetryPriceQuote | null;
   mock_order: TelemetryMockOrder | null;
   runtime_profile: TelemetryRuntimeProfile | null;
   user_turn_metrics: TelemetryUserTurnMetrics | null;
   assistant_turn_metrics: TelemetryAssistantTurnMetrics | null;
+  assistant_guardrail_violations?: string[];
 }
 
 function isTelemetrySnapshot(value: unknown): value is SessionTelemetrySnapshot {

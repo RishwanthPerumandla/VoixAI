@@ -33,10 +33,9 @@ from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_defin
 from scenarios.wingstop import (
     MockOrder,
     OrderState,
-    build_confirmation_summary,
-    calculate_order_total,
-    create_mock_order,
-    summarize_order_state,
+    PriceQuote,
+    audit_assistant_response,
+    build_initial_greeting,
 )
 
 logger = logging.getLogger("agent")
@@ -134,12 +133,14 @@ class SessionState:
     scenario_id: str = DEFAULT_SCENARIO_ID
     channel_id: str = DEFAULT_CHANNEL_ID
     order: OrderState = field(default_factory=OrderState)
+    price_quote: PriceQuote | None = None
     mock_order: MockOrder | None = None
     user_turn_metrics: dict[str, float | None] | None = None
     assistant_turn_metrics: dict[str, float | None] | None = None
     turn_count: int = 0
     waiting_for_customer: bool = False
     runtime_profile: dict[str, object] | None = None
+    assistant_guardrail_violations: list[str] = field(default_factory=list)
     room: rtc.Room | None = field(default=None, repr=False, compare=False)
 
     async def publish_snapshot(self, *, reason: str) -> None:
@@ -409,6 +410,19 @@ def _is_text_only_realtime_engine(engine: str) -> bool:
         VOICE_ENGINE_OPENAI_REALTIME_TEXT,
         VOICE_ENGINE_GEMINI_LIVE_TEXT,
     }
+
+
+def _supports_generate_reply(runtime_config: RuntimeConfig) -> bool:
+    if runtime_config.voice_provider != VOICE_PROVIDER_GEMINI_LIVE:
+        return True
+
+    return not runtime_config.google_realtime_model.lower().startswith("gemini-3.1")
+
+
+def _needs_tts_fallback_for_forced_speech(runtime_config: RuntimeConfig) -> bool:
+    return runtime_config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE and not _supports_generate_reply(
+        runtime_config
+    )
 
 
 def _has_module(module_name: str) -> bool:
@@ -759,7 +773,7 @@ def _build_realtime_session(
         "userdata": SessionState(),
     }
 
-    if text_only:
+    if text_only or _needs_tts_fallback_for_forced_speech(runtime_config):
         kwargs["tts"] = inference.TTS(
             model=runtime_config.tts_model,
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
@@ -847,7 +861,9 @@ def _log_runtime_profile(runtime_config: RuntimeConfig) -> None:
 
 
 def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: RuntimeConfig) -> None:
-    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
         session.say(
             "Are you still there?",
             allow_interruptions=True,
@@ -858,6 +874,29 @@ def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: Ru
     session.generate_reply(
         instructions=(
             "The user went silent. Ask only one short question: are you still there?"
+        ),
+    )
+
+
+def _trigger_initial_greeting(
+    session: AgentSession[SessionState],
+    runtime_config: RuntimeConfig,
+    greeting_text: str,
+) -> None:
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
+        session.say(
+            greeting_text,
+            allow_interruptions=True,
+            add_to_chat_ctx=True,
+        )
+        return
+
+    session.generate_reply(
+        instructions=(
+            "Greet the customer first. Use this exact greeting content naturally and only once: "
+            f"{greeting_text}"
         ),
     )
 
@@ -977,6 +1016,18 @@ async def my_agent(ctx: JobContext):
                 }
             else:
                 session.userdata.assistant_turn_metrics = None
+            assistant_text = getattr(item, "text_content", "") or ""
+            session.userdata.assistant_guardrail_violations = audit_assistant_response(
+                assistant_text,
+                session.userdata.order,
+                session.userdata.price_quote,
+                session.userdata.mock_order,
+            )
+            if session.userdata.assistant_guardrail_violations:
+                logger.warning(
+                    "Assistant response guardrail violations: %s",
+                    " | ".join(session.userdata.assistant_guardrail_violations),
+                )
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
             )
@@ -993,6 +1044,11 @@ async def my_agent(ctx: JobContext):
         agent=scenario.agent_factory(assistant_llm, channel),
         room=ctx.room,
         room_options=_build_room_options(),
+    )
+    _trigger_initial_greeting(
+        session,
+        runtime_config,
+        build_initial_greeting(channel),
     )
     await _publish_session_snapshot(session.userdata, reason="session_started")
 

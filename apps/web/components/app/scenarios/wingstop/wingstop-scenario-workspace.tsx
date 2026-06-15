@@ -43,7 +43,7 @@ export function WingstopScenarioWorkspace({
       items={orderItems}
       pickupTime={telemetrySnapshot?.order.pickup_time ?? null}
       drink={telemetrySnapshot?.order.drink ?? null}
-      total={telemetrySnapshot?.mock_order?.total ?? null}
+      total={telemetrySnapshot?.mock_order?.total ?? telemetrySnapshot?.price_quote?.total ?? null}
       missingDetails={missingDetails}
       isConfirmed={Boolean(telemetrySnapshot?.order.confirmed)}
       onEditOrder={onEditWorkflow}

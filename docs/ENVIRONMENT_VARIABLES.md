@@ -53,6 +53,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `OPENAI_API_KEY`: required for OpenAI Realtime
 - `GOOGLE_API_KEY`: required for Gemini Live
 - `AGENT_NAME`: worker registration name, default `my-agent`
+- `VOIXAI_API_BASE_URL`: backend base URL for menu lookup, validation, and pricing, default `http://127.0.0.1:8000`
 - `VOICE_PROVIDER`: worker runtime mode, `classic`, `openai_realtime`, or `gemini_live`
 - `LLM_MODEL`: pipeline LLM model, default `openai/gpt-5.3-chat-latest`
 - `STT_MODEL`: pipeline speech-to-text model, default `deepgram/flux-general`
@@ -73,6 +74,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `classic`: uses Deepgram STT, OpenAI text generation, and Cartesia TTS through the existing LiveKit pipeline path
 - `openai_realtime`: uses the LiveKit OpenAI Realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live`: uses the LiveKit Google realtime plugin inside the Python worker while the browser still connects only to LiveKit
+- `gemini_live` on `gemini-3.1-flash-live-preview` also uses the worker TTS model for forced greeting and away-prompt speech because that model does not support the same `generate_reply(...)` path as Gemini 2.5
 - `OPENAI_API_KEY` belongs only in the worker or shared server-side env files
 - `GOOGLE_API_KEY` belongs only in the worker or shared server-side env files
 - `apps/api` does not need `OPENAI_API_KEY` for the existing token endpoint
@@ -107,3 +109,5 @@ and not just the worker startup provider log.
 ## Current API note
 
 The API uses these variables to mint browser participant tokens, persist room-scoped runtime config, connect the web client to a fresh room for each new order, and dispatch the Python agent by name.
+
+For the current Wingstop scenario, the API also serves the backend-backed menu lookup, order validation, and pricing endpoints used by the agent runtime.

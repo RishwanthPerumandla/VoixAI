@@ -41,6 +41,18 @@ export function buildWingstopOrderItems(
     return [];
   }
 
+  if (order.line_items && order.line_items.length > 0) {
+    return order.line_items.map((item) => ({
+      name: item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name,
+      flavor: item.flavors.length > 0 ? item.flavors.join(', ') : null,
+      style: item.style,
+      notes:
+        item.modifiers.length > 0
+          ? item.modifiers.join(', ')
+          : item.notes,
+    }));
+  }
+
   return order.items.map((item) => ({
     name: toTitleCase(item),
     flavor: order.flavor,
@@ -57,8 +69,10 @@ export function buildWingstopMissingDetails(snapshot: SessionTelemetrySnapshot |
   const missing: string[] = [];
   if (!order.pickup_or_delivery) missing.push('Service');
   if (order.items.length === 0) missing.push('Items');
-  if (!order.drink) missing.push('Drink');
-  if (!order.pickup_time) missing.push('Pickup time');
+  if (order.validation_errors && order.validation_errors.length > 0) {
+    return [...new Set([...missing, ...order.validation_errors])];
+  }
+  if (!order.drink && order.items.some((item) => item.toLowerCase().includes('combo'))) missing.push('Drink');
   if (!order.classic_or_boneless && order.items.some((item) => item.toLowerCase().includes('wings'))) {
     missing.push('Style');
   }
@@ -66,6 +80,12 @@ export function buildWingstopMissingDetails(snapshot: SessionTelemetrySnapshot |
 }
 
 export function buildWingstopConfirmationItems(snapshot: SessionTelemetrySnapshot) {
+  if (snapshot.order.line_items && snapshot.order.line_items.length > 0) {
+    return snapshot.order.line_items.map((item) =>
+      item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name
+    );
+  }
+
   return snapshot.order.items.map(toTitleCase);
 }
 

@@ -62,6 +62,10 @@ python -m pip install -e .
 python src/agent.py download-files
 ```
 
+Note:
+
+- `apps/agent-runtime` now pulls `livekit-plugins-google` from `https://github.com/charan632-dev/agents` via the package metadata, so the first install may take a little longer than the stock PyPI path.
+
 API:
 
 ```powershell
@@ -131,6 +135,10 @@ GOOGLE_API_KEY=...
 GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
 GOOGLE_REALTIME_VOICE=Puck
 ```
+
+Gemini Live note:
+
+- `gemini-3.1-flash-live-preview` does not support the same forced `generate_reply(...)` startup path as Gemini 2.5, so the worker now attaches a TTS fallback and uses `say(...)` for the first greeting and idle away prompt on Gemini 3.1 sessions.
 
 ## 6. Start the API manually
 

@@ -80,6 +80,7 @@ Primary responsibilities:
 
 - `GET /health`
 - `POST /api/livekit/token`
+- backend menu lookup, order validation, and pricing endpoints for the Wingstop scenario
 - persist room-scoped runtime config
 - mint browser participant tokens
 - dispatch the Python agent into the room
@@ -119,6 +120,11 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 
 - `gemini-3.1-flash-live-preview`
 
+Current runtime note:
+
+- Gemini 3.1 does not support the same forced `generate_reply(...)` path as Gemini 2.5, so the worker now attaches a small TTS fallback and uses `say(...)` for the initial greeting and away prompt on Gemini 3.1 sessions.
+- The agent runtime dependency is pinned to the `charan632-dev/agents` Google plugin fork for the current Gemini Live fix path.
+
 ## Key Current Behaviors
 
 - The frontend default voice mode can follow env instead of always booting in classic mode.
@@ -126,6 +132,8 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 - Realtime away prompts are handled safely in the runtime so Gemini/OpenAI sessions do not crash on idle prompts.
 - Developer-facing metrics and internals are hidden behind a disclosure in the UI instead of shown by default.
 - The current product framing is platform-first: VoixAI is the system, and Wingstop inbound ordering is the current live scenario.
+- The current Wingstop scenario now uses a structured demo menu, structured order state, confirmation-gated mock order creation, and bilingual English/Spanish ordering behavior.
+- Menu resolution, order validation, and pricing for the Wingstop scenario now come from backend-backed tools instead of relying only on prompt-embedded menu text.
 
 ## Quick Start
 
@@ -137,8 +145,10 @@ See:
 Short version:
 
 1. Copy env files.
-2. Run `.\scripts\start-all.ps1` from the repo root.
-3. Open `http://localhost:3000`.
+2. Start `apps/api`.
+3. Start `apps/agent-runtime`.
+4. Start `apps/web`.
+5. Open `http://localhost:3000`.
 
 ## Important Docs
 
@@ -148,6 +158,7 @@ Short version:
 - [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
 - [docs/OPENAI_REALTIME.md](./docs/OPENAI_REALTIME.md)
 - [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md)
+- [docs/MOCK_MENU.md](./docs/MOCK_MENU.md)
 
 ## Current Limitations
 
