@@ -72,7 +72,17 @@ python src/agent.py download-files
 
 Note:
 
-- `apps/agent-runtime` now pulls `livekit-plugins-google` from `https://github.com/charan632-dev/agents` via the package metadata, so the first install may take a little longer than the stock PyPI path.
+- `apps/agent-runtime` pulls `livekit-plugins-google` from the `charan632-dev/agents`
+  fork (it adds forced-`generate_reply` support for Gemini 3.1 so the model greets
+  in its own voice). The `pip install -e .` above should install it from the
+  pinned git URL, but if a stock PyPI build slipped in (which causes a duplicate
+  Gemini greeting in two voices), force the fork and verify:
+
+  ```powershell
+  .\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps "livekit-plugins-google @ git+https://github.com/charan632-dev/agents.git#subdirectory=livekit-plugins/livekit-plugins-google"
+  # confirm the fork is installed (must show the git url):
+  Get-Content .\.venv\Lib\site-packages\livekit_plugins_google-*.dist-info\direct_url.json
+  ```
 
 API:
 
@@ -160,7 +170,7 @@ GOOGLE_REALTIME_VOICE=Puck
 
 Gemini Live note:
 
-- `gemini-3.1-flash-live-preview` does not support the same forced `generate_reply(...)` startup path as Gemini 2.5, so the worker now attaches a TTS fallback and uses `say(...)` for the first greeting and idle away prompt on Gemini 3.1 sessions.
+- `gemini-3.1-flash-live-preview` greets in its own voice via native `generate_reply(...)`, which requires the `charan632-dev/agents` Google plugin fork (it adds forced-`generate_reply` support for Gemini 3.1). If the stock PyPI plugin is installed instead, you get a duplicate greeting in two different voices. Ensure the fork is installed (see below).
 
 ## 6. Start the API manually
 

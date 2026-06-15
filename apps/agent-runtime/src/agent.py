@@ -448,16 +448,17 @@ def _is_text_only_realtime_engine(engine: str) -> bool:
 
 
 def _supports_generate_reply(runtime_config: RuntimeConfig) -> bool:
-    if runtime_config.voice_provider != VOICE_PROVIDER_GEMINI_LIVE:
-        return True
-
-    return not runtime_config.google_realtime_model.lower().startswith("gemini-3.1")
+    # The forked Google realtime plugin (charan632-dev/agents) supports a forced
+    # generate_reply() for Gemini 3.1, so every realtime model can greet in its
+    # own voice. Previously Gemini 3.1 used a TTS say() fallback, which produced
+    # a second voice and a duplicate greeting alongside the model's own.
+    return True
 
 
 def _needs_tts_fallback_for_forced_speech(runtime_config: RuntimeConfig) -> bool:
-    return runtime_config.voice_provider == VOICE_PROVIDER_GEMINI_LIVE and not _supports_generate_reply(
-        runtime_config
-    )
+    # No realtime provider needs a separate TTS voice for forced startup speech
+    # anymore; the model speaks the greeting itself via generate_reply().
+    return False
 
 
 def _has_module(module_name: str) -> bool:

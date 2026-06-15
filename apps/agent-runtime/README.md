@@ -55,10 +55,14 @@ Current default model:
 
 Important note:
 
-- Gemini 3.1 has limited mid-session update support, so instructions/context/tool changes may not apply until the next session.
-- The runtime avoids `generate_reply(...)` for Gemini 3.1 greeting and away-prompt turns because that model path is not compatible with forced `generate_reply` calls.
-- Gemini 3.1 sessions attach a small TTS fallback so those forced greeting and away-prompt turns can still use `say(...)` safely.
-- The Google realtime plugin is pinned from `charan632-dev/agents` instead of the stock PyPI plugin while this Gemini Live fix path is in use.
+- Gemini 3.1 greets and prompts in its own voice via native `generate_reply(...)`. The previous TTS `say(...)` fallback was removed — it caused a duplicate greeting in a second (Cartesia) voice alongside the model's own.
+- This native path requires the `charan632-dev/agents` Google plugin fork, which adds forced-`generate_reply` support for Gemini 3.1. The stock PyPI plugin does not have it, so installing stock reintroduces the duplicate-greeting bug.
+- Install the fork into the runtime venv and verify it is the fork:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps "livekit-plugins-google @ git+https://github.com/charan632-dev/agents.git#subdirectory=livekit-plugins/livekit-plugins-google"
+  # verify: .venv\Lib\site-packages\livekit_plugins_google-*.dist-info\direct_url.json shows the git url
+  ```
+- Gemini 3.1 still has limited mid-session update support, so instruction/context/tool changes may not apply until the next session.
 
 ## Runtime Config Resolution
 
@@ -152,8 +156,8 @@ apps\agent-runtime\.venv\Scripts\python.exe -m pytest apps\agent-runtime\tests\t
 
 ## Current Notes
 
-- away prompts now use a realtime-safe path for Gemini/OpenAI sessions
-- Gemini 3.1 greeting-first behavior relies on a TTS-backed fallback path for forced startup speech
+- greeting and away prompts use native `generate_reply(...)` for all realtime sessions (Gemini/OpenAI); classic uses `say(...)`
+- Gemini 3.1 greets in its own voice via the forked Google plugin; no TTS fallback voice is attached
 - fresh room-per-order behavior is handled by the frontend, not by this runtime
 - order state is in memory only and resets when the session ends
 - the current restaurant is `Voix Wings Demo`, not an official Wingstop menu

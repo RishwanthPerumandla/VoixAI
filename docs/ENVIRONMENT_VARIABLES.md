@@ -74,7 +74,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `classic`: uses Deepgram STT, OpenAI text generation, and Cartesia TTS through the existing LiveKit pipeline path
 - `openai_realtime`: uses the LiveKit OpenAI Realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live`: uses the LiveKit Google realtime plugin inside the Python worker while the browser still connects only to LiveKit
-- `gemini_live` on `gemini-3.1-flash-live-preview` also uses the worker TTS model for forced greeting and away-prompt speech because that model does not support the same `generate_reply(...)` path as Gemini 2.5
+- `gemini_live` on `gemini-3.1-flash-live-preview` greets and prompts in its own voice via native `generate_reply(...)`; no separate worker TTS voice is used (requires the `charan632-dev/agents` Google plugin fork)
 - `OPENAI_API_KEY` belongs only in the worker or shared server-side env files
 - `GOOGLE_API_KEY` belongs only in the worker or shared server-side env files
 - `apps/api` does not need `OPENAI_API_KEY` for the existing token endpoint

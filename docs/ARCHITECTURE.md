@@ -149,11 +149,13 @@ Provider/engine resolution has a **graceful-fallback** path: if a realtime
 plugin or key is missing, the worker falls back to the classic pipeline and
 records `fallback_reason` ([agent.py:571-634](../apps/agent-runtime/src/agent.py)).
 
-**Gemini 3.1 caveats** (handled in code): it does not support forced
-`generate_reply(...)` for greeting/away prompts, so those sessions attach a TTS
-fallback and use `say(...)`; affective-dialog/proactivity flags are ignored;
-mid-session instruction/tool updates may not apply until the next session. The
-Google plugin is pinned to the `charan632-dev/agents` fork for this fix path.
+**Gemini 3.1 notes:** greeting and away prompts use native `generate_reply(...)`
+so the model speaks in its own voice (one greeting, one voice). This requires
+the `charan632-dev/agents` Google plugin fork, which adds forced-`generate_reply`
+support for Gemini 3.1; the stock PyPI plugin lacks it and reintroduces a
+duplicate greeting in a second (Cartesia) voice. Affective-dialog/proactivity
+flags are ignored, and mid-session instruction/tool updates may not apply until
+the next session.
 
 ## 5. Order-Taking Subsystem (the scenario)
 

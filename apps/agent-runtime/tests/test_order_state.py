@@ -590,7 +590,7 @@ def test_trigger_away_prompt_uses_generate_reply_for_realtime() -> None:
     ]
 
 
-def test_trigger_away_prompt_uses_say_for_gemini_31_realtime() -> None:
+def test_trigger_away_prompt_uses_generate_reply_for_gemini_31_realtime() -> None:
     calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     class FakeSession:
@@ -609,11 +609,15 @@ def test_trigger_away_prompt_uses_say_for_gemini_31_realtime() -> None:
         ),
     )
 
+    # Gemini 3.1 now greets/prompts in its own voice via generate_reply (forked
+    # plugin), not the TTS say() fallback.
     assert calls == [
         (
-            "say",
-            ("Are you still there?",),
-            {"allow_interruptions": True, "add_to_chat_ctx": False},
+            "generate_reply",
+            (),
+            {
+                "instructions": "The user went silent. Ask only one short question: are you still there?"
+            },
         )
     ]
 
@@ -674,7 +678,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_realtime() -> None:
     ]
 
 
-def test_trigger_initial_greeting_uses_say_for_gemini_31_realtime() -> None:
+def test_trigger_initial_greeting_uses_generate_reply_for_gemini_31_realtime() -> None:
     calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
 
     class FakeSession:
@@ -694,31 +698,22 @@ def test_trigger_initial_greeting_uses_say_for_gemini_31_realtime() -> None:
         "Welcome to Voix Wings Demo.",
     )
 
+    # Gemini 3.1 now greets once in its own voice via generate_reply, so there is
+    # no separate TTS say() greeting and no duplicate.
     assert calls == [
         (
-            "say",
-            ("Welcome to Voix Wings Demo.",),
-            {"allow_interruptions": True, "add_to_chat_ctx": True},
+            "generate_reply",
+            (),
+            {
+                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Welcome to Voix Wings Demo."
+            },
         )
     ]
 
 
-def test_supports_generate_reply_rejects_gemini_31() -> None:
+def test_supports_generate_reply_for_gemini_31() -> None:
     assert (
         _supports_generate_reply(
-            RuntimeConfig(
-                voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
-                voice_engine=VOICE_ENGINE_GEMINI_LIVE,
-                google_realtime_model="gemini-3.1-flash-live-preview",
-            )
-        )
-        is False
-    )
-
-
-def test_needs_tts_fallback_for_forced_speech_for_gemini_31() -> None:
-    assert (
-        _needs_tts_fallback_for_forced_speech(
             RuntimeConfig(
                 voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
                 voice_engine=VOICE_ENGINE_GEMINI_LIVE,
@@ -729,7 +724,20 @@ def test_needs_tts_fallback_for_forced_speech_for_gemini_31() -> None:
     )
 
 
-def test_build_realtime_session_adds_tts_for_gemini_31(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_tts_fallback_for_forced_speech_on_gemini_31() -> None:
+    assert (
+        _needs_tts_fallback_for_forced_speech(
+            RuntimeConfig(
+                voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
+                voice_engine=VOICE_ENGINE_GEMINI_LIVE,
+                google_realtime_model="gemini-3.1-flash-live-preview",
+            )
+        )
+        is False
+    )
+
+
+def test_build_realtime_session_skips_tts_for_gemini_31(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeAgentSession:
@@ -753,7 +761,8 @@ def test_build_realtime_session_adds_tts_for_gemini_31(monkeypatch: pytest.Monke
         text_only=False,
     )
 
-    assert "tts" in captured
+    # Gemini 3.1 speaks natively now; no separate Cartesia TTS voice attached.
+    assert "tts" not in captured
 
 
 def test_build_realtime_session_skips_tts_for_gemini_25_voice(monkeypatch: pytest.MonkeyPatch) -> None:

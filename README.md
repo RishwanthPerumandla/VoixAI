@@ -122,8 +122,8 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 
 Current runtime note:
 
-- Gemini 3.1 does not support the same forced `generate_reply(...)` path as Gemini 2.5, so the worker now attaches a small TTS fallback and uses `say(...)` for the initial greeting and away prompt on Gemini 3.1 sessions.
-- The agent runtime dependency is pinned to the `charan632-dev/agents` Google plugin fork for the current Gemini Live fix path.
+- Gemini 3.1 greets in its own voice via native `generate_reply(...)`. This requires the `charan632-dev/agents` Google plugin fork, which adds forced-`generate_reply` support for Gemini 3.1. The previous TTS `say(...)` fallback was removed because it produced a second voice and a duplicate greeting alongside the model's own.
+- The agent runtime dependency is pinned to the `charan632-dev/agents` Google plugin fork — install it into the runtime venv (see docs/LOCAL_SETUP.md) and verify with `pip show`/`direct_url.json`, since a stray stock PyPI install reintroduces the duplicate-greeting bug.
 
 ## Key Current Behaviors
 
