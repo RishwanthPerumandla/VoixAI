@@ -103,6 +103,8 @@ Endpoints:
 - `POST /api/menu/resolve-selection`
 - `POST /api/menu/validate-order`
 - `POST /api/menu/price-order`
+- `POST /api/orders` — idempotent order submission (re-runs the submit gate server-side, persists the order)
+- `GET /api/orders/{order_number}` — read back a persisted order
 
 Key file: [main.py](../apps/api/main.py).
 
@@ -194,8 +196,9 @@ what structurally blocks).
 | Concern | Where it lives | Durability |
 |---------|----------------|------------|
 | Per-room runtime config | `.voixai/session-configs/<room>.json` (written by API, read by worker) | local file, never cleaned up |
-| Order state | `SessionState.order` in worker process memory | lost on disconnect/restart |
-| Placed order | `MockOrder` (random `MOCK-#####`) | none — never persisted |
+| Order state (in progress) | `SessionState.order` in worker process memory | lost on disconnect/restart (rehydration is a remaining M3 item) |
+| Placed order | `orders` table in SQLite (`.voixai/voixai.db`) via `POST /api/orders` | durable + idempotent (M3); local fallback if API unreachable |
+| Session record | `sessions` table in SQLite (best-effort on token mint) | durable (M3) |
 | Telemetry | LiveKit data channel `voixai.telemetry` | ephemeral, not stored |
 | Secrets | `.env` files loaded in each app | env-only |
 

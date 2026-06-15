@@ -294,6 +294,14 @@ async def _price_order_via_backend(order: OrderState) -> tuple[list[str], PriceQ
     )
 
 
+async def _submit_order_via_backend(room_name: str, order: OrderState) -> dict[str, object]:
+    return await _backend_request_async(
+        "POST",
+        "/api/orders",
+        {"room_name": room_name, "order": _order_payload(order)},
+    )
+
+
 def _tool_backend_error() -> str:
     return (
         "I could not reach the menu system just now, so I cannot safely validate or price that order yet."
@@ -758,7 +766,26 @@ class WingstopAssistant(Agent):
             session_state.price_quote = build_price_quote(order)
 
         if session_state.mock_order is None:
-            session_state.mock_order = create_mock_order(order, session_state.price_quote)
+            room = getattr(session_state, "room", None)
+            room_name = getattr(room, "name", "") or "demo-room"
+            try:
+                # Persist the order through the backend so it is durable and
+                # idempotent (a retry returns the same order number).
+                submitted = await _submit_order_via_backend(room_name, order)
+                session_state.mock_order = MockOrder(
+                    order_number=str(submitted["order_number"]),
+                    total=str(submitted["total"]),
+                    summary=summarize_order_state(order),
+                    kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
+                )
+            except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
+                # Keep the demo resilient: if the backend is unreachable, fall
+                # back to a local (non-persisted) order so the call still closes.
+                logger.warning(
+                    "Order persistence backend unavailable; using local fallback order",
+                    exc_info=True,
+                )
+                session_state.mock_order = create_mock_order(order, session_state.price_quote)
             machine.mark_submitted()
 
         logger.debug("Mock order created: %s", asdict(session_state.mock_order))

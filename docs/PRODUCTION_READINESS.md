@@ -339,7 +339,7 @@ Each milestone is independently shippable and keeps the demo working.
 |---|------|-------|---------|--------|
 | **M1** | Extract `packages/ordering`; delete importlib hack | 3.1, 3.6 (partial) | One source of truth; API decoupled from runtime internals | ✅ Done (2026-06-15) |
 | **M2** | `OrderStateMachine` + hard pre-submit guard | 3.2 | Placement reliable regardless of model | ✅ Done (2026-06-15) |
-| **M3** | Postgres + Redis: persist sessions/orders, rehydrate state, config via metadata/Redis | 3.3, 3.4 | Survives restarts; real order records; multi-instance safe | Next |
+| **M3** | Persist sessions/orders (idempotent), rehydrate state, config via metadata/Redis | 3.3, 3.4 | Survives restarts; real order records; multi-instance safe | 🟡 In progress |
 | **M4** | Auth + rate limit + CORS + client-scoped rooms | 3.5 | Safe to expose; cost-abuse closed | |
 | **M5** | Analytics + cost metering + LiveKit insights | 3.7 | Per-call cost, latency, completion visible | |
 | **M6** | Eval harness + integration + E2E in CI | 3.8 | Prompt/model changes are regression-tested | |
@@ -363,8 +363,29 @@ Tests: API 4/4, runtime `test_order_state.py` 36/36, domain
 `packages/ordering/tests` 7/7. (`tests/test_agent.py` is a pre-existing stale
 starter test unrelated to this work.)
 
-**Next: M3** (persistence) — it unblocks real order records, idempotency, and
-multi-instance operation.
+**M3 is in progress.** Shipped this iteration:
+
+- A storage **port** (`apps/api/storage.py`) with a SQLite adapter — durable
+  with zero external infra (the local demo still needs no Postgres/Redis). A
+  Postgres adapter is a drop-in via the same surface, gated on `DATABASE_URL`.
+- `POST /api/orders` — **idempotent** order submission (unique idempotency key
+  derived from room + canonical order; a retry returns the original order, never
+  a duplicate) that **re-runs the submit gate server-side** as defense in depth,
+  so the backend — not the model — is the authority on placement.
+- `GET /api/orders/{order_number}` — read back a persisted order.
+- The runtime `create_mock_order` tool now persists through the backend and
+  falls back to a local order only if the backend is unreachable (resilient
+  demo).
+- Best-effort `sessions` row written on token mint.
+- Tests: `apps/api/tests/test_orders.py` (idempotency, server-side gate,
+  durability, read-back) — API suite now 10/10.
+
+Remaining for M3:
+
+- **Config via room/dispatch metadata** (or Redis) to replace
+  `.voixai/session-configs` files and the shared-filesystem assumption (3.4).
+- **In-progress order rehydration** on worker reconnect (hot store).
+- **Postgres adapter** behind `DATABASE_URL` for true multi-instance durability.
 
 ---
 

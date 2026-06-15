@@ -1,6 +1,11 @@
+import asyncio
+import hashlib
 import json
+import logging
 import os
+import random
 import re
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -20,9 +25,11 @@ from voix_ordering import (
     MODIFIER_OPTIONS,
     OrderLineItem,
     OrderState,
+    OrderStateMachine,
     build_price_quote,
     validate_order,
 )
+from voix_ordering.confirmation import _build_kitchen_ticket
 from voix_ordering.menu import (
     _resolve_flavor_id,
     _resolve_item_id,
@@ -30,10 +37,17 @@ from voix_ordering.menu import (
 )
 from voix_ordering.validation import _validation_errors_for_line
 
+from storage import DuplicateKeyError, OrderRecord, build_storage
+
+logger = logging.getLogger("voixai.api")
+
 
 API_DIR = Path(__file__).resolve().parent
 ROOT_DIR = API_DIR.parent.parent
 SESSION_CONFIG_DIR = ROOT_DIR / ".voixai" / "session-configs"
+
+# Durable persistence (M3). Orders are idempotent and survive restarts.
+ORDER_STORAGE = build_storage()
 
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "apps" / "agent-runtime" / ".env")
@@ -139,6 +153,25 @@ class OrderPricingResponse(BaseModel):
     price_quote: PriceQuoteResponse | None = None
 
 
+class OrderSubmitRequest(BaseModel):
+    room_name: str = Field(min_length=1)
+    order: OrderPayload
+    # Optional client-supplied key; if omitted the server derives a stable one
+    # from the room + canonical order so retries never double-submit.
+    idempotency_key: str | None = None
+
+
+class OrderSubmitResponse(BaseModel):
+    order_number: str
+    status: str
+    subtotal: str
+    tax: str
+    total: str
+    eta_minutes: int
+    kitchen_ticket: str
+    idempotent_replay: bool = False
+
+
 def _session_config_path(room_name: str) -> Path:
     safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in room_name).strip("-")
     return SESSION_CONFIG_DIR / f"{safe_name or 'default-room'}.json"
@@ -188,6 +221,29 @@ def _closest_menu_suggestions(raw_name: str) -> list[str]:
 
     scored.sort(key=lambda entry: (-entry[0], entry[1]))
     return [name for _, name in scored[:3]]
+
+
+def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:
+    canonical = json.dumps(payload.model_dump(mode="json"), sort_keys=True)
+    digest = hashlib.sha256(f"{room_name}\n{canonical}".encode("utf-8")).hexdigest()
+    return f"{room_name}:{digest[:32]}"
+
+
+def _new_order_number() -> str:
+    return f"MOCK-{random.randint(10001, 99999)}"
+
+
+def _order_record_to_response(record: OrderRecord, *, idempotent_replay: bool) -> "OrderSubmitResponse":
+    return OrderSubmitResponse(
+        order_number=record.order_number,
+        status=record.status,
+        subtotal=record.subtotal,
+        tax=record.tax,
+        total=record.total,
+        eta_minutes=record.eta_minutes,
+        kitchen_ticket=record.kitchen_ticket,
+        idempotent_replay=idempotent_replay,
+    )
 
 
 app = FastAPI(title="VoixAI MVP API", version="0.2.0")
@@ -318,6 +374,70 @@ async def price_menu_order(payload: OrderPayload) -> OrderPricingResponse:
     )
 
 
+@app.post("/api/orders", response_model=OrderSubmitResponse)
+async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
+    order = _order_state_from_payload(payload.order)
+
+    # Defense in depth: the API re-runs the hard submit gate even though the
+    # runtime already checked it. The backend is the authority on placement, so
+    # an invalid or unconfirmed order can never be persisted.
+    decision = OrderStateMachine(order).authorize_submit()
+    if not decision.authorized:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "errors": decision.validation_errors,
+                "reasons": decision.confirmation_reasons,
+            },
+        )
+
+    key = payload.idempotency_key or _derive_idempotency_key(payload.room_name, payload.order)
+
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
+    if existing is not None:
+        return _order_record_to_response(existing, idempotent_replay=True)
+
+    quote = build_price_quote(order)
+    order_json = json.dumps(payload.order.model_dump(mode="json"))
+
+    for _ in range(5):
+        order_number = _new_order_number()
+        candidate = OrderRecord(
+            order_number=order_number,
+            idempotency_key=key,
+            room_name=payload.room_name,
+            status="submitted",
+            subtotal=quote.subtotal,
+            tax=quote.tax,
+            total=quote.total,
+            eta_minutes=quote.eta_minutes,
+            order_json=order_json,
+            kitchen_ticket=_build_kitchen_ticket(order, quote, order_number),
+            created_at=time.time(),
+        )
+        try:
+            await asyncio.to_thread(ORDER_STORAGE.insert_order, candidate)
+        except DuplicateKeyError:
+            # Either the idempotency key was written concurrently (replay) or the
+            # random order number collided (retry with a new one).
+            replay = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
+            if replay is not None:
+                return _order_record_to_response(replay, idempotent_replay=True)
+            continue
+        logger.info("Persisted order %s for room %s", candidate.order_number, candidate.room_name)
+        return _order_record_to_response(candidate, idempotent_replay=False)
+
+    raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
+
+
+@app.get("/api/orders/{order_number}", response_model=OrderSubmitResponse)
+async def get_order(order_number: str) -> OrderSubmitResponse:
+    record = await asyncio.to_thread(ORDER_STORAGE.get_order_by_number, order_number)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return _order_record_to_response(record, idempotent_replay=False)
+
+
 @app.post("/api/livekit/token", response_model=TokenResponse)
 async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
     if not LIVEKIT_URL or not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
@@ -335,6 +455,15 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
             json.dumps(payload.runtime_config, indent=2),
             encoding="utf-8",
         )
+        # Record the session (best-effort; never block token issuance on it).
+        try:
+            await asyncio.to_thread(
+                ORDER_STORAGE.upsert_session,
+                payload.room_name,
+                json.dumps(payload.runtime_config),
+            )
+        except Exception:
+            logger.exception("Failed to record session for room %s", payload.room_name)
 
     identity = f"{payload.participant_name}-{uuid4().hex[:8]}"
     room_config = RoomConfiguration(
