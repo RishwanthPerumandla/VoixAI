@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import textwrap
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -114,6 +115,8 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - Only mention prices returned by the price_order tool or review_order_for_confirmation tool.
     - Only say an order was placed after create_mock_order succeeds.
     - If the user asks for unavailable or unknown items, offer the closest available menu option.
+    - Combos and wings come in specific sizes. If the customer names a combo or wings without a size (for example "classic combo" or "boneless wings"), ask which size before adding it instead of guessing.
+    - When the customer asks what is on the menu, call get_menu_summary and read back real options; never invent items.
     - After you know whether the order is pickup or delivery, collect the name for the order early in the conversation.
     - Before submitting an order, always read back the order, total, order type, and customer name or phone if needed.
     - If uncertain, ask one short clarification question.
@@ -210,6 +213,10 @@ def _order_payload(order: OrderState) -> dict[str, object]:
     }
 
 
+_BACKEND_TIMEOUT_SECONDS = 8.0
+_BACKEND_ATTEMPTS = 3
+
+
 def _backend_request(
     method: str,
     path: str,
@@ -222,9 +229,27 @@ def _backend_request(
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(request, timeout=5) as response:
-        raw = response.read().decode("utf-8")
-    return json.loads(raw) if raw else {}
+
+    # Retry transient connection/timeout failures (e.g. the API briefly
+    # reloading). HTTP status errors are NOT retried — they are real answers.
+    # All these endpoints are reads or idempotent, so retrying is safe.
+    last_exc: Exception | None = None
+    for attempt in range(_BACKEND_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(request, timeout=_BACKEND_TIMEOUT_SECONDS) as response:
+                raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_exc = exc
+            if attempt + 1 < _BACKEND_ATTEMPTS:
+                time.sleep(0.3 * (attempt + 1))
+                continue
+            raise
+    if last_exc is not None:  # pragma: no cover - defensive
+        raise last_exc
+    return {}
 
 
 async def _backend_request_async(

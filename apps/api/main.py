@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import random
-import re
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -34,6 +33,7 @@ from voix_ordering.menu import (
     _resolve_flavor_id,
     _resolve_item_id,
     _resolve_modifier_id,
+    suggest_item_names,
 )
 from voix_ordering.validation import _validation_errors_for_line
 
@@ -208,19 +208,9 @@ def _order_state_from_payload(payload: OrderPayload) -> OrderState:
 
 
 def _closest_menu_suggestions(raw_name: str) -> list[str]:
-    tokens = {token for token in re.split(r"[^a-z0-9]+", raw_name.lower()) if token}
-    if not tokens:
-        return []
-
-    scored: list[tuple[int, str]] = []
-    for item in MENU_ITEMS.values():
-        haystack = item.display_name.lower()
-        score = sum(1 for token in tokens if token in haystack)
-        if score:
-            scored.append((score, item.display_name))
-
-    scored.sort(key=lambda entry: (-entry[0], entry[1]))
-    return [name for _, name in scored[:3]]
+    # Delegate to the domain's tokenized matcher (number-aware, alias-aware) so
+    # suggestions match how items are actually resolved.
+    return suggest_item_names(raw_name, limit=3)
 
 
 def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:

@@ -8,6 +8,7 @@ changing any consumer that imports the lookups below).
 
 from __future__ import annotations
 
+import difflib
 import re
 from decimal import Decimal
 
@@ -934,6 +935,164 @@ for group in MODIFIER_GROUPS.values():
         OPTION_TO_GROUP_IDS.setdefault(option_id, set()).add(group.id)
 
 
+# --- Robust item resolution -------------------------------------------------
+# Exact alias matching is brittle for voice input: a customer says "6 piece
+# classic combo" but the alias list has "6 piece classic combo" only in one
+# exact spelling/word order. The token matcher below resolves natural phrasings
+# safely: spoken number words become digits, filler words are dropped, any
+# number in the request must match the item's size exactly, and a request that
+# could mean two different items (e.g. "classic combo" without a size) resolves
+# to nothing so the agent asks instead of guessing.
+
+_NUMBER_WORDS = {
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "fifteen": "15",
+    "twenty": "20",
+    "thirty": "30",
+    "forty": "40",
+    "fifty": "50",
+}
+
+# Words that do not distinguish one menu item from another.
+_ITEM_STOPWORDS = {
+    "piece",
+    "pieces",
+    "pc",
+    "pcs",
+    "wing",
+    "wings",
+    "order",
+    "orders",
+    "the",
+    "a",
+    "an",
+    "of",
+    "please",
+    "some",
+    "get",
+    "want",
+    "like",
+    "with",
+    "and",
+    "plus",
+    "just",
+    "add",
+    "me",
+    "my",
+    "i",
+}
+
+
+def _item_match_tokens(name: str) -> set[str]:
+    tokens: list[str] = []
+    for raw in _normalize_lookup_key(name).split():
+        token = _NUMBER_WORDS.get(raw, raw)
+        if token in _ITEM_STOPWORDS:
+            continue
+        tokens.append(token)
+    return set(tokens)
+
+
+# (token_set, item_id) for every display name and alias, using the matcher's
+# tokenization so query and candidate are compared on equal footing.
+ITEM_FUZZY_INDEX: list[tuple[frozenset[str], str]] = []
+for menu_item in MENU_ITEMS.values():
+    for label in (menu_item.display_name, *menu_item.aliases):
+        token_set = frozenset(_item_match_tokens(label))
+        if token_set:
+            ITEM_FUZZY_INDEX.append((token_set, menu_item.id))
+
+
+def _fuzzy_item_scores(name: str) -> list[tuple[str, float]]:
+    """Rank menu items for a (non-exact) request. Higher score = tighter match.
+
+    Numbers in the request must match the candidate's size exactly, and every
+    non-number request word must appear in the candidate, so wrong-size or
+    wrong-item matches are filtered out rather than guessed.
+    """
+    query = _item_match_tokens(name)
+    if not query:
+        return []
+
+    query_numbers = {token for token in query if token.isdigit()}
+    query_words = query - query_numbers
+
+    best_by_item: dict[str, float] = {}
+    for token_set, item_id in ITEM_FUZZY_INDEX:
+        candidate_numbers = {token for token in token_set if token.isdigit()}
+
+        # A requested size must match exactly; a sized request can't match an
+        # unsized item (and vice versa).
+        if query_numbers != candidate_numbers and query_numbers:
+            continue
+
+        candidate_words = token_set - candidate_numbers
+        if query_words and not query_words.issubset(candidate_words):
+            continue
+
+        overlap = len(query & token_set)
+        precision = overlap / len(token_set)
+        recall = overlap / len(query)
+        score = precision + 0.001 * recall  # tie-break toward fuller coverage
+        if score > best_by_item.get(item_id, 0.0):
+            best_by_item[item_id] = score
+
+    return sorted(best_by_item.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
+def _resolve_item_id(name: str) -> str | None:
+    key = _normalize_lookup_key(name)
+    if not key:
+        return None
+
+    exact = ITEM_ALIAS_TO_ID.get(key)
+    if exact is not None:
+        return exact
+
+    scores = _fuzzy_item_scores(name)
+    if not scores:
+        return None
+    if len(scores) == 1:
+        return scores[0][0]
+    # Only resolve when there is a single clear winner; otherwise let the agent
+    # clarify rather than silently pick (e.g. a size) for the customer.
+    if scores[0][1] > scores[1][1]:
+        return scores[0][0]
+    return None
+
+
+def suggest_item_names(name: str, limit: int = 3) -> list[str]:
+    """Closest available item display names for a request we could not resolve."""
+    ranked = [MENU_ITEMS[item_id].display_name for item_id, _ in _fuzzy_item_scores(name)]
+    if ranked:
+        return ranked[:limit]
+
+    # Looser fallback: rank all items by string similarity to the raw request so
+    # even an off-menu request gets nearby suggestions.
+    key = _normalize_lookup_key(name)
+    if not key:
+        return []
+    scored = sorted(
+        MENU_ITEMS.values(),
+        key=lambda item: difflib.SequenceMatcher(
+            None, key, _normalize_lookup_key(item.display_name)
+        ).ratio(),
+        reverse=True,
+    )
+    return [item.display_name for item in scored[:limit]]
+
+
 def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
@@ -944,10 +1103,6 @@ def _normalize_note(value: str | None) -> str:
     if not value:
         return ""
     return value.strip()
-
-
-def _resolve_item_id(name: str) -> str | None:
-    return ITEM_ALIAS_TO_ID.get(_normalize_lookup_key(name))
 
 
 def _resolve_flavor_id(name: str) -> str | None:
