@@ -1093,6 +1093,67 @@ def suggest_item_names(name: str, limit: int = 3) -> list[str]:
     return [item.display_name for item in scored[:limit]]
 
 
+# --- Category lookup (for menu-discovery questions) -------------------------
+# Customers say "combos" but the category is "Wing Combos"; exact matching made
+# the agent answer "combos aren't available". Match categories by singularized
+# tokens instead, and never fail hard — fall back to the category overview.
+
+
+def menu_categories() -> list[str]:
+    categories: list[str] = []
+    for menu_item in MENU_ITEMS.values():
+        if menu_item.category not in categories:
+            categories.append(menu_item.category)
+    return categories
+
+
+def _singularize(token: str) -> str:
+    return token[:-1] if len(token) > 3 and token.endswith("s") else token
+
+
+def _category_tokens(text: str) -> set[str]:
+    return {_singularize(token) for token in _normalize_lookup_key(text).split()}
+
+
+def find_category(query: str) -> str | None:
+    """Resolve a spoken category name (e.g. "combos") to a real category, or
+    None when the request is empty or matches more than one category."""
+    key = _normalize_lookup_key(query)
+    if not key:
+        return None
+
+    categories = menu_categories()
+    for category in categories:
+        if _normalize_lookup_key(category) == key:
+            return category
+
+    query_tokens = _category_tokens(query)
+    if not query_tokens:
+        return None
+    matches = [c for c in categories if query_tokens.issubset(_category_tokens(c))]
+    return matches[0] if len(matches) == 1 else None
+
+
+def category_items(category: str) -> list[str]:
+    return [item.display_name for item in MENU_ITEMS.values() if item.category == category]
+
+
+def menu_overview_summary() -> str:
+    categories = sorted(set(menu_categories()))
+    if len(categories) == 1:
+        return f"The available category is {categories[0]}."
+    return "Available categories are " + ", ".join(categories[:-1]) + f", and {categories[-1]}."
+
+
+def category_summary(query: str) -> str:
+    """A spoken summary for a category question. Always returns real menu info:
+    the matched category's items, or the category overview when not specific."""
+    category = find_category(query)
+    if category is None:
+        return menu_overview_summary()
+    return f"{category} options: {', '.join(category_items(category))}."
+
+
 def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []

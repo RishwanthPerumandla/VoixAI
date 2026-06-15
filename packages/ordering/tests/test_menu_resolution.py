@@ -8,7 +8,13 @@ from __future__ import annotations
 
 import pytest
 
-from voix_ordering.menu import _resolve_item_id, suggest_item_names
+from voix_ordering.menu import (
+    _resolve_item_id,
+    category_summary,
+    find_category,
+    menu_overview_summary,
+    suggest_item_names,
+)
 
 
 @pytest.mark.parametrize(
@@ -57,3 +63,38 @@ def test_suggest_item_names_returns_relevant_options() -> None:
     suggestions = suggest_item_names("classic combo", limit=3)
     assert suggestions
     assert any("Classic Wing Combo" in name for name in suggestions)
+
+
+@pytest.mark.parametrize(
+    ("phrase", "expected_category"),
+    [
+        ("combos", "Wing Combos"),
+        ("combo", "Wing Combos"),
+        ("boneless", "Boneless Wings"),
+        ("tenders", "Crispy Tenders"),
+        ("desserts", "Desserts"),
+        ("drinks", "Drinks"),
+        ("group packs", "Group Packs"),
+        ("Wing Combos", "Wing Combos"),  # exact still works
+    ],
+)
+def test_find_category_matches_spoken_names(phrase: str, expected_category: str) -> None:
+    assert find_category(phrase) == expected_category
+
+
+def test_find_category_returns_none_when_ambiguous() -> None:
+    # "wings" spans Wing Combos, Wings By The Piece, and Boneless Wings.
+    assert find_category("wings") is None
+
+
+def test_category_summary_lists_combos() -> None:
+    summary = category_summary("combos")
+    assert "Wing Combos options:" in summary
+    assert "6 Piece Classic Wing Combo" in summary
+
+
+def test_category_summary_falls_back_to_overview_when_unspecific() -> None:
+    # An ambiguous or unknown category never claims "not available".
+    assert category_summary("wings") == menu_overview_summary()
+    assert category_summary("xyzzy") == menu_overview_summary()
+    assert "Available categories are" in menu_overview_summary()

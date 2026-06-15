@@ -33,6 +33,8 @@ from voix_ordering.menu import (
     _resolve_flavor_id,
     _resolve_item_id,
     _resolve_modifier_id,
+    category_summary,
+    menu_overview_summary,
     suggest_item_names,
 )
 from voix_ordering.validation import _validation_errors_for_line
@@ -253,25 +255,12 @@ async def health() -> dict[str, str]:
 
 @app.get("/api/menu/summary", response_model=MenuSummaryResponse)
 async def get_menu_summary(category: str | None = Query(default=None)) -> MenuSummaryResponse:
-    if category:
-        normalized_category = category.strip().lower()
-        matching_items = [
-            item.display_name
-            for item in MENU_ITEMS.values()
-            if item.category.strip().lower() == normalized_category
-        ]
-        if not matching_items:
-            raise HTTPException(status_code=404, detail="That category is not available in this demo menu.")
-        return MenuSummaryResponse(summary=f"{category.title()} options: {', '.join(matching_items)}.")
-
-    categories = sorted({item.category for item in MENU_ITEMS.values()})
-    return MenuSummaryResponse(
-        summary=(
-            "Available categories are "
-            + ", ".join(categories[:-1])
-            + f", and {categories[-1]}."
-        )
-    )
+    # Category names are matched by tokens (so "combos" finds "Wing Combos") and
+    # never fail hard: an unknown/ambiguous category falls back to the overview,
+    # so the agent always gets real menu info instead of "not available".
+    if category and category.strip():
+        return MenuSummaryResponse(summary=category_summary(category))
+    return MenuSummaryResponse(summary=menu_overview_summary())
 
 
 @app.post("/api/menu/resolve-selection", response_model=MenuResolveResponse)
