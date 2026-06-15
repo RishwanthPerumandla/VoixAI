@@ -128,9 +128,15 @@ cd apps/agent-runtime
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python src/agent.py download-files
 python src/agent.py dev
 ```
+
+> Menu, pricing, validation, order state, and the order state machine live in
+> the shared `packages/ordering` package (the single source of truth, also used
+> by `apps/api`). `src/scenarios/wingstop.py` is now just the agent prompt,
+> tools, and telemetry over that domain.
 
 ## Testing
 

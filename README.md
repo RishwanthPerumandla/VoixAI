@@ -152,8 +152,10 @@ Short version:
 
 ## Important Docs
 
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — accurate current-state system design
+- [docs/PRODUCTION_READINESS.md](./docs/PRODUCTION_READINESS.md) — gap analysis, target architecture, and remediation roadmap
+- [docs/direction.md](./docs/direction.md) — long-term platform vision
 - [docs/PROJECT_AUDIT_REPORT.md](./docs/PROJECT_AUDIT_REPORT.md)
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 - [docs/LOCAL_SETUP.md](./docs/LOCAL_SETUP.md)
 - [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
 - [docs/OPENAI_REALTIME.md](./docs/OPENAI_REALTIME.md)

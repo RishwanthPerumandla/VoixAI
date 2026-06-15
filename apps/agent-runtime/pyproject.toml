@@ -13,6 +13,7 @@ dependencies = [
     "livekit-plugins-google @ git+https://github.com/charan632-dev/agents.git#subdirectory=livekit-plugins/livekit-plugins-google",
     "livekit-plugins-ai-coustics~=0.2",
     "python-dotenv",
+    "voix-ordering",
 ]
 
 [dependency-groups]
@@ -21,6 +22,9 @@ dev = [
     "pytest-asyncio",
     "ruff",
 ]
+
+[tool.uv.sources]
+voix-ordering = { path = "../../packages/ordering", editable = true }
 
 [tool.uv]
 # yarl 1.24.1 was published with only a cp310 wheel and no sdist, so it can't

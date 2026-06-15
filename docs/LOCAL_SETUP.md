@@ -45,6 +45,13 @@ Frontend mode defaults:
 
 ## 2. Install local dependencies
 
+> The ordering domain (menu, pricing, validation, order state, order state
+> machine) lives in the shared `packages/ordering` package and is the single
+> source of truth used by both `apps/api` and `apps/agent-runtime`. Each Python
+> venv installs it editable with `python -m pip install -e ../../packages/ordering`
+> (shown in the steps below). For the agent runtime, `uv sync` also picks it up
+> via `[tool.uv.sources]` in `apps/agent-runtime/pyproject.toml`.
+
 Web:
 
 ```powershell
@@ -59,6 +66,7 @@ cd apps/agent-runtime
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python src/agent.py download-files
 ```
 
@@ -73,6 +81,7 @@ cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 ```
 
 ## 3. Start everything with one command
@@ -114,6 +123,7 @@ cd apps/agent-runtime
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python src/agent.py download-files
 python src/agent.py dev
 ```
@@ -147,6 +157,7 @@ cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python -m uvicorn main:app --reload --port 8000
 ```
 

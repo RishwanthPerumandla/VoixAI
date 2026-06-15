@@ -1,9 +1,6 @@
 import json
-import importlib.util
 import os
 import re
-import sys
-import types
 from pathlib import Path
 from uuid import uuid4
 
@@ -15,11 +12,28 @@ from livekit.api import AccessToken, VideoGrants
 from livekit.protocol.agent_dispatch import RoomAgentDispatch
 from livekit.protocol.room import RoomConfiguration
 
+# The ordering domain (menu, pricing, validation, order state) is the single
+# source of truth, shared with the agent runtime via the `voix-ordering` package.
+from voix_ordering import (
+    FLAVOR_OPTIONS,
+    MENU_ITEMS,
+    MODIFIER_OPTIONS,
+    OrderLineItem,
+    OrderState,
+    build_price_quote,
+    validate_order,
+)
+from voix_ordering.menu import (
+    _resolve_flavor_id,
+    _resolve_item_id,
+    _resolve_modifier_id,
+)
+from voix_ordering.validation import _validation_errors_for_line
+
 
 API_DIR = Path(__file__).resolve().parent
 ROOT_DIR = API_DIR.parent.parent
 SESSION_CONFIG_DIR = ROOT_DIR / ".voixai" / "session-configs"
-AGENT_RUNTIME_SRC_DIR = ROOT_DIR / "apps" / "agent-runtime" / "src"
 
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(ROOT_DIR / "apps" / "agent-runtime" / ".env")
@@ -33,74 +47,6 @@ ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 ).split(",")
-
-
-def _load_wingstop_backend_module():
-    if "livekit.agents" not in sys.modules:
-        livekit_module = sys.modules.setdefault("livekit", types.ModuleType("livekit"))
-        agents_module = types.ModuleType("livekit.agents")
-
-        class Agent:  # noqa: D401
-            """API stub."""
-
-        class RunContext:  # noqa: D401
-            """API stub."""
-
-        def function_tool(fn):
-            return fn
-
-        agents_module.Agent = Agent
-        agents_module.RunContext = RunContext
-        agents_module.function_tool = function_tool
-        sys.modules["livekit.agents"] = agents_module
-        setattr(livekit_module, "agents", agents_module)
-
-    if "channels" not in sys.modules:
-        channels_module = types.ModuleType("channels")
-
-        class ChannelDefinition:  # noqa: D401
-            """API stub."""
-
-        channels_module.ChannelDefinition = ChannelDefinition
-        sys.modules["channels"] = channels_module
-
-    scenarios_package = sys.modules.setdefault("scenarios", types.ModuleType("scenarios"))
-    if "scenarios.base" not in sys.modules:
-        scenarios_base_module = types.ModuleType("scenarios.base")
-
-        class ScenarioDefinition:  # noqa: D401
-            """API stub."""
-
-            def __init__(self, **kwargs) -> None:
-                self.__dict__.update(kwargs)
-
-        scenarios_base_module.ScenarioDefinition = ScenarioDefinition
-        sys.modules["scenarios.base"] = scenarios_base_module
-        setattr(scenarios_package, "base", scenarios_base_module)
-
-    module_path = AGENT_RUNTIME_SRC_DIR / "scenarios" / "wingstop.py"
-    spec = importlib.util.spec_from_file_location("voixai_wingstop_backend", module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load wingstop backend module from {module_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_wingstop_backend = _load_wingstop_backend_module()
-MENU_ITEMS = _wingstop_backend.MENU_ITEMS
-MODIFIER_OPTIONS = _wingstop_backend.MODIFIER_OPTIONS
-FLAVOR_OPTIONS = _wingstop_backend.FLAVOR_OPTIONS
-OrderLineItem = _wingstop_backend.OrderLineItem
-OrderState = _wingstop_backend.OrderState
-_resolve_flavor_id = _wingstop_backend._resolve_flavor_id
-_resolve_item_id = _wingstop_backend._resolve_item_id
-_resolve_modifier_id = _wingstop_backend._resolve_modifier_id
-_validation_errors_for_line = _wingstop_backend._validation_errors_for_line
-build_price_quote = _wingstop_backend.build_price_quote
-validate_order = _wingstop_backend.validate_order
 
 
 class TokenRequest(BaseModel):
