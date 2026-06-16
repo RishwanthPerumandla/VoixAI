@@ -160,6 +160,33 @@ async def test_resolve_menu_selection_returns_combo_requirements() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resolve_incomplete_combo_is_lenient_when_not_validating_line() -> None:
+    # An incomplete combo (no side/drink yet) must still resolve so it can enter
+    # the cart and be completed over the conversation. This is what add_menu_item
+    # relies on (validate_line=False); the strict check still applies on demand.
+    lenient = await api_main.resolve_menu_selection(
+        api_main.MenuResolveRequest(
+            item_name="chicken sandwich combo",
+            flavors=["original hot"],
+            validate_line=False,
+        )
+    )
+    assert lenient.item_id == "chicken_sandwich_combo"
+    assert lenient.line_errors == []
+
+    strict = await api_main.resolve_menu_selection(
+        api_main.MenuResolveRequest(
+            item_name="chicken sandwich combo",
+            flavors=["original hot"],
+            validate_line=True,
+        )
+    )
+    assert strict.item_id == "chicken_sandwich_combo"
+    assert "This combo requires a side selection." in strict.line_errors
+    assert "This combo requires a drink selection." in strict.line_errors
+
+
+@pytest.mark.asyncio
 async def test_price_menu_order_returns_backend_quote_for_combo() -> None:
     response = await api_main.price_menu_order(
         api_main.OrderPayload(

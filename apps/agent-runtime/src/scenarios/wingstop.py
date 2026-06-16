@@ -116,6 +116,8 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - You may quote a single item's listed price, but state the order subtotal, tax, and total only from the price_order or review_order_for_confirmation tool, because sizes, modifiers, and tax change the math.
     - Only say an order was placed after create_mock_order succeeds.
     - Combos and wings come in specific sizes. If the customer names a combo or wings without a size (for example "classic combo" or "boneless wings"), ask which size before adding it instead of guessing.
+    - A combo is one item that includes a flavor, a side, and a drink. Add the combo with add_menu_item and pass the side and drink as its modifiers, or add the combo first and then attach the side and drink to it with update_last_item. Never add a combo's side or drink as separate items, and never add a drink like Coke as its own item — sides and drinks are selections that belong to the combo.
+    - You can add an item before every detail is known; the order will simply show what is still needed, and you can fill it in as the customer tells you. Do not refuse to add an item just because a detail is missing.
     - When the customer asks what is on the menu, answer from the menu below; never say something is unavailable when it is listed.
     - After you know whether the order is pickup or delivery, collect the name for the order early in the conversation.
     - Before submitting an order, always read back the order, total, order type, and customer name or phone if needed.
@@ -452,12 +454,19 @@ class WingstopAssistant(Agent):
         order = session_state.order
         previous_order = copy.deepcopy(order)
         try:
+            # Add leniently: resolve the item/flavors/modifiers but do NOT reject
+            # an incomplete line (e.g. a combo still missing its side or drink).
+            # The item enters the cart and order-level validation reports what is
+            # still needed, so combos can be built up over the conversation.
+            # Pricing and placement re-validate, so an incomplete order can never
+            # be quoted or placed.
             resolved = await _resolve_selection_via_backend(
                 item_name=item_name,
                 quantity=quantity,
                 flavors=_split_csv(flavors),
                 modifiers=_split_csv(modifiers),
                 special_instructions=special_instructions,
+                validate_line=False,
             )
         except (OSError, urllib.error.URLError, urllib.error.HTTPError):
             return _tool_backend_error()
@@ -581,10 +590,8 @@ class WingstopAssistant(Agent):
         if special_instructions is not None:
             line.notes = _normalize_note(special_instructions)
 
-        line_errors = _validation_errors_for_line(line)
-        if line_errors:
-            return " ".join(line_errors)
-
+        # Apply the change even if the line is still incomplete; order-level
+        # validation below reports anything still needed instead of blocking.
         order.quantity = sum(existing_line.quantity for existing_line in order.items)
         _mark_order_dirty(session_state)
         try:
