@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Check, Phone } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -12,6 +13,13 @@ import { motion, useReducedMotion } from 'motion/react';
  */
 export function AgentPreview() {
   const reduceMotion = useReducedMotion();
+  // Only animate after mount. `useReducedMotion` differs between server (false)
+  // and client (a user's real preference), so gating motion-only DOM behind a
+  // mounted flag keeps SSR and the first client render identical (no hydration
+  // mismatch).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const animate = mounted && !reduceMotion;
   const bars = [0.45, 0.8, 0.35, 0.95, 0.6, 0.85, 0.4];
 
   return (
@@ -49,7 +57,7 @@ export function AgentPreview() {
 
         {/* Orb */}
         <div className="relative my-6 flex h-40 items-center justify-center">
-          {!reduceMotion &&
+          {animate &&
             [0, 1, 2].map((i) => (
               <motion.span
                 key={i}
@@ -69,7 +77,7 @@ export function AgentPreview() {
               boxShadow:
                 '0 0 50px -8px rgba(99,102,241,0.7), inset 0 2px 12px rgba(255,255,255,0.35)',
             }}
-            animate={reduceMotion ? undefined : { scale: [1, 1.05, 1] }}
+            animate={animate ? { scale: [1, 1.05, 1] } : undefined}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           >
             <div className="flex items-end gap-1">
@@ -78,7 +86,7 @@ export function AgentPreview() {
                   key={i}
                   className="w-1 rounded-full bg-white/90"
                   style={{ height: 10 + h * 22 }}
-                  animate={reduceMotion ? undefined : { scaleY: [0.5, 1, 0.6, 0.95, 0.5] }}
+                  animate={animate ? { scaleY: [0.5, 1, 0.6, 0.95, 0.5] } : undefined}
                   transition={{
                     duration: 1.1,
                     repeat: Infinity,
