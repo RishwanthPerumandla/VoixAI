@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -28,6 +29,7 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from call_recorder import finalize_call, open_call
 from channels import CHANNEL_REGISTRY, DEFAULT_CHANNEL_ID, get_channel_definition
 from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_definition
 from scenarios.wingstop import (
@@ -142,6 +144,12 @@ class SessionState:
     runtime_profile: dict[str, object] | None = None
     assistant_guardrail_violations: list[str] = field(default_factory=list)
     room: rtc.Room | None = field(default=None, repr=False, compare=False)
+    # Call telemetry (dashboard): a rolling transcript + lifetime guardrail count
+    # so the call can be finalized on shutdown.
+    call_id: str | None = None
+    call_started_at: float | None = None
+    transcript: list[dict[str, object]] = field(default_factory=list)
+    guardrail_violation_count: int = 0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -1018,6 +1026,14 @@ async def my_agent(ctx: JobContext):
         if not isinstance(item, ChatMessage):
             return
 
+        # Capture the turn for the call transcript (dashboard replay). Best-effort:
+        # we only record user/assistant text turns.
+        turn_text = (getattr(item, "text_content", "") or "").strip()
+        if turn_text and item.role in {"user", "assistant"}:
+            session.userdata.transcript.append(
+                {"role": item.role, "text": turn_text, "ts": time.time()}
+            )
+
         metrics = item.metrics if isinstance(item.metrics, Mapping) else None
 
         if item.role == "user":
@@ -1060,6 +1076,9 @@ async def my_agent(ctx: JobContext):
                 session.userdata.mock_order,
             )
             if session.userdata.assistant_guardrail_violations:
+                session.userdata.guardrail_violation_count += len(
+                    session.userdata.assistant_guardrail_violations
+                )
                 logger.warning(
                     "Assistant response guardrail violations: %s",
                     " | ".join(session.userdata.assistant_guardrail_violations),
@@ -1071,6 +1090,48 @@ async def my_agent(ctx: JobContext):
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
     session.on("conversation_item_added", _on_conversation_item)
+
+    # --- Call telemetry (dashboard) ---------------------------------------
+    # Open a call record now and finalize it on shutdown. All of this is
+    # best-effort: a telemetry failure must never affect the live call.
+    call_id = f"call-{uuid4().hex[:12]}"
+    call_started_at = time.time()
+    session.userdata.call_id = call_id
+    session.userdata.call_started_at = call_started_at
+
+    asyncio.create_task(
+        asyncio.to_thread(
+            open_call,
+            call_id=call_id,
+            room_name=ctx.room.name,
+            scenario=scenario.id,
+            channel=channel.id,
+            voice_provider=runtime_config.voice_provider,
+            llm_model=runtime_config.llm_model,
+            language=session.userdata.order.language,
+            started_at=call_started_at,
+        )
+    )
+
+    async def _finalize_call_on_shutdown() -> None:
+        userdata = session.userdata
+        mock_order = userdata.mock_order
+        try:
+            await asyncio.to_thread(
+                finalize_call,
+                call_id=call_id,
+                started_at=call_started_at,
+                transcript=list(userdata.transcript),
+                turn_count=userdata.turn_count,
+                order_number=getattr(mock_order, "order_number", None) if mock_order else None,
+                order_total=getattr(mock_order, "total", None) if mock_order else None,
+                guardrail_violations=userdata.guardrail_violation_count,
+                language=userdata.order.language,
+            )
+        except Exception:
+            logger.exception("Failed to finalize call telemetry for %s", call_id)
+
+    ctx.add_shutdown_callback(_finalize_call_on_shutdown)
 
     # Connect the worker to the assigned room before starting the voice session.
     await ctx.connect()

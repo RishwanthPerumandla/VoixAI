@@ -39,7 +39,7 @@ from voix_ordering.menu import (
 )
 from voix_ordering.validation import _validation_errors_for_line
 
-from storage import DuplicateKeyError, OrderRecord, build_storage
+from storage import CallRecord, DuplicateKeyError, OrderRecord, build_storage
 
 logger = logging.getLogger("voixai.api")
 
@@ -238,6 +238,178 @@ def _order_record_to_response(record: OrderRecord, *, idempotent_replay: bool) -
     )
 
 
+# ---------------------------------------------------------------------------
+# Call telemetry + analytics (dashboard)
+# ---------------------------------------------------------------------------
+
+
+class TranscriptTurn(BaseModel):
+    role: str
+    text: str
+    ts: float | None = None
+
+
+class CallStartRequest(BaseModel):
+    call_id: str = Field(min_length=1)
+    room_name: str = Field(min_length=1)
+    scenario: str = ""
+    channel: str = ""
+    voice_provider: str = ""
+    llm_model: str = ""
+    language: str = "english"
+    started_at: float | None = None
+
+
+class CallUpdateRequest(BaseModel):
+    status: str | None = None
+    outcome: str | None = None
+    ended_at: float | None = None
+    duration_seconds: float | None = None
+    turn_count: int | None = None
+    sentiment: float | None = None
+    language: str | None = None
+    order_number: str | None = None
+    guardrail_violations: int | None = None
+    error: str | None = None
+    transcript: list[TranscriptTurn] | None = None
+
+
+class CallSummary(BaseModel):
+    call_id: str
+    room_name: str
+    scenario: str
+    channel: str
+    voice_provider: str
+    llm_model: str
+    status: str
+    outcome: str
+    started_at: float
+    ended_at: float | None
+    duration_seconds: float | None
+    turn_count: int
+    sentiment: float | None
+    language: str
+    order_number: str | None
+    guardrail_violations: int
+
+
+class CallDetail(CallSummary):
+    transcript: list[TranscriptTurn] = Field(default_factory=list)
+    error: str | None = None
+
+
+class CallListResponse(BaseModel):
+    calls: list[CallSummary] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+class OrderListItem(BaseModel):
+    order_number: str
+    room_name: str
+    status: str
+    customer_name: str
+    item_count: int
+    item_summary: list[str] = Field(default_factory=list)
+    subtotal: str
+    tax: str
+    total: str
+    eta_minutes: int
+    order_type: str | None = None
+    created_at: float
+
+
+class OrderListResponse(BaseModel):
+    orders: list[OrderListItem] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+class TimeBucket(BaseModel):
+    label: str
+    start: float
+    calls: int
+    orders: int
+    completed: int
+
+
+class AnalyticsOverview(BaseModel):
+    window_hours: int
+    total_calls: int
+    completed_calls: int
+    in_progress_calls: int
+    failed_calls: int
+    success_rate: float
+    containment_rate: float
+    orders_placed: int
+    revenue_total: str
+    avg_duration_seconds: float
+    avg_turns: float
+    avg_sentiment: float | None
+    transfers: int
+    abandoned: int
+    outcomes: dict[str, int]
+    sentiment_breakdown: dict[str, int]
+    series: list[TimeBucket]
+
+
+class HealthComponent(BaseModel):
+    name: str
+    status: str  # operational | degraded | down
+    detail: str
+
+
+class ObservabilitySnapshot(BaseModel):
+    status: str
+    uptime_seconds: float
+    components: list[HealthComponent]
+    total_calls: int
+    failed_calls: int
+    error_rate: float
+    orders_total: int
+    avg_duration_seconds: float
+    p95_duration_seconds: float
+    guardrail_violations: int
+
+
+def _call_to_summary(record: CallRecord) -> CallSummary:
+    return CallSummary(
+        call_id=record.call_id,
+        room_name=record.room_name,
+        scenario=record.scenario,
+        channel=record.channel,
+        voice_provider=record.voice_provider,
+        llm_model=record.llm_model,
+        status=record.status,
+        outcome=record.outcome,
+        started_at=record.started_at,
+        ended_at=record.ended_at,
+        duration_seconds=record.duration_seconds,
+        turn_count=record.turn_count,
+        sentiment=record.sentiment,
+        language=record.language,
+        order_number=record.order_number,
+        guardrail_violations=record.guardrail_violations,
+    )
+
+
+def _call_to_detail(record: CallRecord) -> CallDetail:
+    try:
+        turns = json.loads(record.transcript_json) if record.transcript_json else []
+    except (ValueError, TypeError):
+        turns = []
+    return CallDetail(
+        **_call_to_summary(record).model_dump(),
+        transcript=[TranscriptTurn(**t) for t in turns if isinstance(t, dict)],
+        error=record.error,
+    )
+
+
+_SERVER_STARTED_AT = time.time()
+
+
 app = FastAPI(title="VoixAI MVP API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
@@ -409,12 +581,308 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
     raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
 
 
+def _summarize_order_json(order_json: str) -> tuple[str, int, list[str], str | None]:
+    """Extract (customer_name, item_count, item_summary, order_type) from a stored
+    order payload for the dashboard list view."""
+    try:
+        data = json.loads(order_json)
+    except (ValueError, TypeError):
+        return "", 0, [], None
+    items = data.get("items", []) if isinstance(data, dict) else []
+    summary: list[str] = []
+    count = 0
+    for line in items:
+        if not isinstance(line, dict):
+            continue
+        qty = int(line.get("quantity", 1) or 1)
+        count += qty
+        item_id = line.get("item_id", "")
+        name = MENU_ITEMS[item_id].display_name if item_id in MENU_ITEMS else item_id
+        summary.append(f"{qty}× {name}")
+    return (
+        str(data.get("customer_name", "") or ""),
+        count,
+        summary,
+        data.get("order_type"),
+    )
+
+
+@app.get("/api/orders", response_model=OrderListResponse)
+async def list_orders(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> OrderListResponse:
+    records, total = await asyncio.to_thread(ORDER_STORAGE.list_orders, limit=limit, offset=offset)
+    orders: list[OrderListItem] = []
+    for r in records:
+        customer, count, summary, order_type = _summarize_order_json(r.order_json)
+        orders.append(
+            OrderListItem(
+                order_number=r.order_number,
+                room_name=r.room_name,
+                status=r.status,
+                customer_name=customer,
+                item_count=count,
+                item_summary=summary,
+                subtotal=r.subtotal,
+                tax=r.tax,
+                total=r.total,
+                eta_minutes=r.eta_minutes,
+                order_type=order_type,
+                created_at=r.created_at,
+            )
+        )
+    return OrderListResponse(orders=orders, total=total, limit=limit, offset=offset)
+
+
 @app.get("/api/orders/{order_number}", response_model=OrderSubmitResponse)
 async def get_order(order_number: str) -> OrderSubmitResponse:
     record = await asyncio.to_thread(ORDER_STORAGE.get_order_by_number, order_number)
     if record is None:
         raise HTTPException(status_code=404, detail="Order not found.")
     return _order_record_to_response(record, idempotent_replay=False)
+
+
+@app.post("/api/calls", response_model=CallDetail)
+async def start_call(payload: CallStartRequest) -> CallDetail:
+    """Open a call record at session start. Idempotent on ``call_id`` — a retried
+    start returns the existing record rather than erroring."""
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, payload.call_id)
+    if existing is not None:
+        return _call_to_detail(existing)
+
+    now = time.time()
+    record = CallRecord(
+        call_id=payload.call_id,
+        room_name=payload.room_name,
+        scenario=payload.scenario,
+        channel=payload.channel,
+        voice_provider=payload.voice_provider,
+        llm_model=payload.llm_model,
+        status="in_progress",
+        outcome="unknown",
+        started_at=payload.started_at or now,
+        ended_at=None,
+        duration_seconds=None,
+        turn_count=0,
+        sentiment=None,
+        language=payload.language,
+        order_number=None,
+        transcript_json="[]",
+        guardrail_violations=0,
+        error=None,
+        created_at=now,
+    )
+    try:
+        await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
+    except DuplicateKeyError:
+        replay = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, payload.call_id)
+        if replay is not None:
+            return _call_to_detail(replay)
+        raise HTTPException(status_code=409, detail="Call already exists.")
+    logger.info("Opened call %s for room %s", record.call_id, record.room_name)
+    return _call_to_detail(record)
+
+
+@app.patch("/api/calls/{call_id}", response_model=CallDetail)
+async def update_call(call_id: str, payload: CallUpdateRequest) -> CallDetail:
+    """Finalize or amend a call record (end time, transcript, outcome, sentiment)."""
+    fields = payload.model_dump(exclude_none=True)
+    transcript = fields.pop("transcript", None)
+    if transcript is not None:
+        fields["transcript_json"] = json.dumps(transcript)
+    record = await asyncio.to_thread(ORDER_STORAGE.update_call, call_id, **fields)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    return _call_to_detail(record)
+
+
+@app.get("/api/calls", response_model=CallListResponse)
+async def list_calls(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+) -> CallListResponse:
+    records, total = await asyncio.to_thread(
+        ORDER_STORAGE.list_calls,
+        limit=limit,
+        offset=offset,
+        status=status,
+        outcome=outcome,
+        search=search,
+    )
+    return CallListResponse(
+        calls=[_call_to_summary(r) for r in records],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/calls/{call_id}", response_model=CallDetail)
+async def get_call(call_id: str) -> CallDetail:
+    record = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    return _call_to_detail(record)
+
+
+def _money_to_float(value: str) -> float:
+    try:
+        return float(str(value).replace("$", "").replace(",", "").strip() or 0)
+    except ValueError:
+        return 0.0
+
+
+@app.get("/api/analytics/overview", response_model=AnalyticsOverview)
+async def analytics_overview(
+    window_hours: int = Query(default=24, ge=1, le=24 * 90),
+    buckets: int = Query(default=12, ge=1, le=96),
+) -> AnalyticsOverview:
+    now = time.time()
+    since = now - window_hours * 3600
+    records = await asyncio.to_thread(ORDER_STORAGE.list_calls_since, since)
+
+    total = len(records)
+    completed = sum(1 for r in records if r.status == "completed")
+    in_progress = sum(1 for r in records if r.status == "in_progress")
+    failed = sum(1 for r in records if r.status == "failed")
+    finished = [r for r in records if r.status != "in_progress"]
+    orders_placed = sum(1 for r in records if r.order_number)
+    transfers = sum(1 for r in records if r.outcome == "transfer")
+    abandoned = sum(1 for r in records if r.outcome == "abandoned")
+
+    durations = [r.duration_seconds for r in records if r.duration_seconds is not None]
+    avg_duration = sum(durations) / len(durations) if durations else 0.0
+    turns = [r.turn_count for r in records if r.turn_count]
+    avg_turns = sum(turns) / len(turns) if turns else 0.0
+    sentiments = [r.sentiment for r in records if r.sentiment is not None]
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else None
+
+    outcomes: dict[str, int] = {}
+    for r in records:
+        outcomes[r.outcome] = outcomes.get(r.outcome, 0) + 1
+
+    sentiment_breakdown = {"positive": 0, "neutral": 0, "negative": 0}
+    for s in sentiments:
+        if s >= 0.66:
+            sentiment_breakdown["positive"] += 1
+        elif s >= 0.4:
+            sentiment_breakdown["neutral"] += 1
+        else:
+            sentiment_breakdown["negative"] += 1
+
+    # Revenue: look up each linked order's total.
+    revenue = 0.0
+    for r in records:
+        if not r.order_number:
+            continue
+        order = await asyncio.to_thread(ORDER_STORAGE.get_order_by_number, r.order_number)
+        if order is not None:
+            revenue += _money_to_float(order.total)
+
+    # Time series buckets across the window.
+    bucket_span = (window_hours * 3600) / buckets
+    series: list[TimeBucket] = []
+    for i in range(buckets):
+        b_start = since + i * bucket_span
+        b_end = b_start + bucket_span
+        in_bucket = [r for r in records if b_start <= r.started_at < b_end]
+        label = time.strftime("%H:%M", time.localtime(b_start)) if window_hours <= 48 else time.strftime("%m/%d", time.localtime(b_start))
+        series.append(
+            TimeBucket(
+                label=label,
+                start=b_start,
+                calls=len(in_bucket),
+                orders=sum(1 for r in in_bucket if r.order_number),
+                completed=sum(1 for r in in_bucket if r.status == "completed"),
+            )
+        )
+
+    success_rate = (completed / len(finished)) if finished else 0.0
+    containment_rate = (1 - (transfers / len(finished))) if finished else 0.0
+
+    return AnalyticsOverview(
+        window_hours=window_hours,
+        total_calls=total,
+        completed_calls=completed,
+        in_progress_calls=in_progress,
+        failed_calls=failed,
+        success_rate=round(success_rate, 4),
+        containment_rate=round(containment_rate, 4),
+        orders_placed=orders_placed,
+        revenue_total=f"${revenue:,.2f}",
+        avg_duration_seconds=round(avg_duration, 1),
+        avg_turns=round(avg_turns, 1),
+        avg_sentiment=round(avg_sentiment, 3) if avg_sentiment is not None else None,
+        transfers=transfers,
+        abandoned=abandoned,
+        outcomes=outcomes,
+        sentiment_breakdown=sentiment_breakdown,
+        series=series,
+    )
+
+
+@app.get("/api/observability/health", response_model=ObservabilitySnapshot)
+async def observability_health() -> ObservabilitySnapshot:
+    now = time.time()
+    records = await asyncio.to_thread(ORDER_STORAGE.list_calls_since, now - 7 * 24 * 3600)
+    total = len(records)
+    failed = sum(1 for r in records if r.status == "failed")
+    error_rate = (failed / total) if total else 0.0
+    durations = sorted(r.duration_seconds for r in records if r.duration_seconds is not None)
+    avg_duration = sum(durations) / len(durations) if durations else 0.0
+    p95 = durations[int(len(durations) * 0.95) - 1] if durations else 0.0
+    guardrails = sum(r.guardrail_violations for r in records)
+    orders_total = await asyncio.to_thread(ORDER_STORAGE.count_orders)
+
+    db_ok = True
+    try:
+        await asyncio.to_thread(ORDER_STORAGE.count_orders)
+    except Exception:
+        db_ok = False
+
+    livekit_configured = bool(LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET)
+
+    components = [
+        HealthComponent(
+            name="API service",
+            status="operational",
+            detail="FastAPI request handler responding",
+        ),
+        HealthComponent(
+            name="Order datastore",
+            status="operational" if db_ok else "down",
+            detail=f"SQLite WAL · {orders_total} orders persisted" if db_ok else "Datastore unreachable",
+        ),
+        HealthComponent(
+            name="Realtime transport",
+            status="operational" if livekit_configured else "degraded",
+            detail="LiveKit credentials configured" if livekit_configured else "LiveKit credentials missing",
+        ),
+        HealthComponent(
+            name="Idempotency guard",
+            status="operational",
+            detail="Order submission deduplicated on idempotency key",
+        ),
+    ]
+    statuses = {c.status for c in components}
+    overall = "down" if "down" in statuses else ("degraded" if "degraded" in statuses else "operational")
+
+    return ObservabilitySnapshot(
+        status=overall,
+        uptime_seconds=round(now - _SERVER_STARTED_AT, 1),
+        components=components,
+        total_calls=total,
+        failed_calls=failed,
+        error_rate=round(error_rate, 4),
+        orders_total=orders_total,
+        avg_duration_seconds=round(avg_duration, 1),
+        p95_duration_seconds=round(p95, 1),
+        guardrail_violations=guardrails,
+    )
 
 
 @app.post("/api/livekit/token", response_model=TokenResponse)

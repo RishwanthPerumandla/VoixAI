@@ -47,7 +47,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   const hdrs = await headers();
   const appConfig = await getAppConfig(hdrs);
   const styles = getStyles(appConfig);
-  const { pageTitle, pageDescription, companyName } = appConfig;
+  const { pageTitle, pageDescription } = appConfig;
 
   return (
     <html
@@ -65,21 +65,9 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         <meta name="description" content={pageDescription} />
       </head>
       <body className="overflow-x-hidden">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <header className="fixed top-0 left-0 z-50 hidden w-full justify-between p-6 md:flex">
-            <div className="rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm font-semibold text-slate-50 shadow-sm backdrop-blur">
-              {companyName}
-            </div>
-            <div className="rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm text-slate-300 shadow-sm backdrop-blur">
-              Voice AI System
-            </div>
-          </header>
-
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          {/* Each view (landing, dashboard, in-session) owns its own branding/
+              chrome, so no global floating header is rendered here. */}
           {children}
           <div className="group fixed bottom-0 left-1/2 z-50 mb-2 -translate-x-1/2">
             <ThemeToggle className="translate-y-20 transition-transform delay-150 duration-300 group-hover:translate-y-0" />

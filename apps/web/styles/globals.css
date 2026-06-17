@@ -141,3 +141,34 @@
       linear-gradient(180deg, #07111f 0%, #0b1728 100%);
   }
 }
+
+/*
+ * Light theme scope for the dashboard. The dashboard renders independently of
+ * the app's dark voice UI: this class re-maps the shared --voix-* tokens to a
+ * clean, soft light palette (indigo primary, white cards, subtle shadows).
+ */
+.dashboard-light {
+  color-scheme: light;
+  --voix-bg-primary: #f4f5f8;
+  --voix-bg-elevated: #ffffff;
+  --voix-bg-subtle: #f3f5f9;
+  --voix-bg-inset: #fafbfc;
+  --voix-border-subtle: rgba(15, 23, 42, 0.07);
+  --voix-border-strong: rgba(15, 23, 42, 0.14);
+  --voix-text-primary: #0f172a;
+  --voix-text-secondary: #475569;
+  --voix-text-muted: #94a3b8;
+  --voix-accent: #6366f1;
+  --voix-accent-hover: #4f46e5;
+  --voix-accent-foreground: #ffffff;
+  --voix-accent-soft: #eef2ff;
+  --voix-success: #10b981;
+  --voix-warning: #f59e0b;
+  --voix-danger: #ef4444;
+  --voix-info: #3b82f6;
+  --voix-sidebar-bg: #ffffff;
+  --voix-topbar-bg: rgba(255, 255, 255, 0.82);
+  --voix-card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 16px -6px rgba(16, 24, 40, 0.08);
+  --voix-card-shadow-hover:
+    0 2px 4px rgba(16, 24, 40, 0.05), 0 12px 28px -8px rgba(16, 24, 40, 0.14);
+}
