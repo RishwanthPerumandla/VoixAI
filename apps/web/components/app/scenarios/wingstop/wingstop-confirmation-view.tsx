@@ -32,47 +32,52 @@ export function WingstopConfirmationView({
   }, [onBackToDemo]);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100svh-7rem)] w-full max-w-4xl items-center px-6 pb-12 pt-24 md:px-10">
-      <div className="w-full rounded-[32px] border border-emerald-400/20 bg-[linear-gradient(180deg,rgba(8,18,26,0.96),rgba(10,24,24,0.96))] p-8 shadow-2xl shadow-black/20 md:p-12">
+    <section className="mx-auto flex min-h-svh w-full max-w-4xl items-center px-6 pt-12 pb-12 md:px-10">
+      <div
+        className="w-full rounded-[32px] border border-emerald-200 bg-[var(--voix-bg-elevated)] p-8 md:p-12"
+        style={{ boxShadow: 'var(--voix-card-shadow-hover)' }}
+      >
         <div className="mx-auto max-w-2xl text-center">
-          <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-1.5 text-xs font-medium tracking-[0.16em] text-emerald-200">
+          <div className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-xs font-medium tracking-[0.16em] text-emerald-700">
             Wingstop inbound ordering
           </div>
-          <CheckCircleIcon size={56} className="mx-auto mt-6 text-emerald-300" weight="fill" />
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-50">
+          <CheckCircleIcon size={56} className="mx-auto mt-6 text-emerald-500" weight="fill" />
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-[var(--voix-text-primary)]">
             Order confirmed
           </h1>
-          <p className="mt-3 text-lg text-slate-300">Your mock pickup order is ready.</p>
+          <p className="mt-3 text-lg text-[var(--voix-text-secondary)]">
+            Your mock pickup order is ready.
+          </p>
 
-          <div className="mt-8 rounded-[24px] border border-white/10 bg-white/[0.05] p-6 text-left">
-            <h2 className="text-lg font-semibold text-slate-50">Summary</h2>
-            <dl className="mt-4 space-y-3 text-sm text-slate-300">
+          <div className="mt-8 rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] p-6 text-left">
+            <h2 className="text-lg font-semibold text-[var(--voix-text-primary)]">Summary</h2>
+            <dl className="mt-4 space-y-3 text-sm text-[var(--voix-text-secondary)]">
               <div className="flex justify-between gap-4">
-                <dt>Service</dt>
+                <dt className="text-[var(--voix-text-muted)]">Service</dt>
                 <dd>{service ?? 'Not set'}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt>Items</dt>
+                <dt className="text-[var(--voix-text-muted)]">Items</dt>
                 <dd className="text-right">
                   {items.length > 0 ? items.join(', ') : 'No items listed'}
                 </dd>
               </div>
               {pickupTime && (
                 <div className="flex justify-between gap-4">
-                  <dt>Pickup time</dt>
+                  <dt className="text-[var(--voix-text-muted)]">Pickup time</dt>
                   <dd>{pickupTime}</dd>
                 </div>
               )}
               {total && (
                 <div className="flex justify-between gap-4">
-                  <dt>Total</dt>
-                  <dd>{total}</dd>
+                  <dt className="text-[var(--voix-text-muted)]">Total</dt>
+                  <dd className="font-semibold text-[var(--voix-text-primary)]">{total}</dd>
                 </div>
               )}
               {orderNumber && (
                 <div className="flex justify-between gap-4">
-                  <dt>Order number</dt>
-                  <dd>{orderNumber}</dd>
+                  <dt className="text-[var(--voix-text-muted)]">Order number</dt>
+                  <dd className="font-mono text-[var(--voix-accent-hover)]">{orderNumber}</dd>
                 </div>
               )}
             </dl>
@@ -82,7 +87,7 @@ export function WingstopConfirmationView({
             <Button
               type="button"
               onClick={onStartNewOrder}
-              className="h-12 rounded-full bg-[color:var(--voix-accent)] px-7 text-[color:var(--voix-accent-foreground)] hover:bg-[color:var(--voix-accent-hover)]"
+              className="h-12 rounded-full bg-[color:var(--voix-accent)] px-7 text-white hover:bg-[color:var(--voix-accent-hover)]"
             >
               Start new order
             </Button>
@@ -90,7 +95,7 @@ export function WingstopConfirmationView({
               type="button"
               variant="outline"
               onClick={onBackToDemo}
-              className="h-12 rounded-full border-white/10 bg-transparent px-7 text-slate-100 hover:bg-white/8"
+              className="h-12 rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] px-7 text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)]"
             >
               Back to demo
             </Button>

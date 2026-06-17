@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react';
-import type { RuntimeConfig } from '@/lib/runtime-config';
 import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
+import type { RuntimeConfig } from '@/lib/runtime-config';
 import { cn } from '@/lib/shadcn/utils';
 
 interface DeveloperDetailsProps {
@@ -16,9 +16,9 @@ interface DeveloperDetailsProps {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-t border-white/8 py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <dt className="text-xs text-slate-400">{label}</dt>
-      <dd className="max-w-[60%] text-right text-sm text-slate-100">{value}</dd>
+    <div className="flex items-start justify-between gap-4 border-t border-[var(--voix-border-subtle)] py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <dt className="text-xs text-[var(--voix-text-muted)]">{label}</dt>
+      <dd className="max-w-[60%] text-right text-sm text-[var(--voix-text-primary)]">{value}</dd>
     </div>
   );
 }
@@ -42,9 +42,10 @@ export function DeveloperDetails({
   return (
     <section
       className={cn(
-        'rounded-[20px] border border-white/10 bg-slate-950/70 p-4 shadow-lg shadow-black/10',
+        'rounded-[20px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-4',
         className
       )}
+      style={{ boxShadow: 'var(--voix-card-shadow)' }}
     >
       <button
         type="button"
@@ -53,10 +54,14 @@ export function DeveloperDetails({
         className="flex w-full items-center justify-between gap-3 text-left"
       >
         <div>
-          <p className="text-sm font-medium text-slate-50">Developer details</p>
-          <p className="mt-1 text-xs text-slate-400">Internal voice session details for demos and QA.</p>
+          <p className="text-sm font-medium text-[var(--voix-text-primary)]">Developer details</p>
+          <p className="mt-1 text-xs text-[var(--voix-text-muted)]">
+            Internal voice session details for demos and QA.
+          </p>
         </div>
-        {open ? <CaretUpIcon size={16} /> : <CaretDownIcon size={16} />}
+        <span className="text-[var(--voix-text-muted)]">
+          {open ? <CaretUpIcon size={16} /> : <CaretDownIcon size={16} />}
+        </span>
       </button>
 
       {open && (

@@ -2,8 +2,8 @@
 
 import { type ReactNode, useEffect, useRef } from 'react';
 import { type ReceivedMessage } from '@livekit/components-react';
-import { TranscriptMessage } from '@/components/app/transcript-message';
 import { type UserFacingSessionState } from '@/components/app/session-status';
+import { TranscriptMessage } from '@/components/app/transcript-message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/shadcn/utils';
 
@@ -40,14 +40,15 @@ export function ConversationTranscript({
   return (
     <section
       className={cn(
-        'overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(11,18,32,0.92),rgba(9,15,27,0.98))] shadow-[0_26px_80px_rgba(0,0,0,0.24)]',
+        'overflow-hidden rounded-[30px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)]',
         className
       )}
+      style={{ boxShadow: 'var(--voix-card-shadow)' }}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-4 md:px-6">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--voix-border-subtle)] px-5 py-4 md:px-6">
         <div>
-          <h2 className="text-base font-semibold text-slate-50">Conversation</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-base font-semibold text-[var(--voix-text-primary)]">Conversation</h2>
+          <p className="mt-1 text-sm text-[var(--voix-text-muted)]">
             {messages.length > 0
               ? 'Follow the conversation as your order takes shape.'
               : state === 'listening' || state === 'userSpeaking'
@@ -60,7 +61,7 @@ export function ConversationTranscript({
             type="button"
             variant="ghost"
             onClick={onToggleCollapsed}
-            className="rounded-full px-4 text-sm text-slate-300 hover:bg-white/8 hover:text-slate-50"
+            className="rounded-full px-4 text-sm text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)] hover:text-[var(--voix-text-primary)]"
           >
             {collapsed ? 'Show' : 'Hide'}
           </Button>
@@ -74,7 +75,7 @@ export function ConversationTranscript({
           className="max-h-[440px] space-y-4 overflow-y-auto px-4 py-5 [scrollbar-width:thin] md:px-6"
         >
           {messages.length > 0 ? null : (
-            <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.025] px-5 py-8 text-center text-sm leading-7 text-slate-400">
+            <div className="rounded-[22px] border border-dashed border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] px-5 py-8 text-center text-sm leading-7 text-[var(--voix-text-muted)]">
               Your conversation will appear here once you start talking.
             </div>
           )}
@@ -89,7 +90,11 @@ export function ConversationTranscript({
         </div>
       )}
 
-      {footer && <div className="border-t border-white/8 px-4 py-4 md:px-6">{footer}</div>}
+      {footer && (
+        <div className="border-t border-[var(--voix-border-subtle)] px-4 py-4 md:px-6">
+          {footer}
+        </div>
+      )}
     </section>
   );
 }

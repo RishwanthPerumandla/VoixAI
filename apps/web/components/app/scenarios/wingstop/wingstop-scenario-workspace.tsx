@@ -1,12 +1,12 @@
 'use client';
 
-import type { UserFacingSessionState } from '@/components/app/session-status';
-import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import {
   WingstopOrderPanel,
   buildWingstopMissingDetails,
   buildWingstopOrderItems,
 } from '@/components/app/scenarios/wingstop/wingstop-order-panel';
+import type { UserFacingSessionState } from '@/components/app/session-status';
+import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 
 interface WingstopScenarioWorkspaceProps {
   telemetrySnapshot: SessionTelemetrySnapshot | null;
@@ -50,7 +50,7 @@ export function WingstopScenarioWorkspace({
       onConfirmOrder={onConfirmWorkflow}
       confirmDisabled={confirmDisabled}
       confirmHelperText={confirmHelperText}
-      className="border-white/8 bg-[linear-gradient(180deg,rgba(13,20,35,0.82),rgba(8,14,26,0.9))] shadow-none"
+      className="border-transparent bg-transparent p-0 shadow-none"
     />
   );
 }

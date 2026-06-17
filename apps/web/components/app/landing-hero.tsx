@@ -1,10 +1,11 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, BarChart3, Globe2, PhoneCall, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { ChartLineUpIcon, MicrophoneIcon } from '@phosphor-icons/react';
 import { AgentPreview } from '@/components/app/agent-preview';
+import { VoiceModeDialog } from '@/components/app/voice-mode-dialog';
 import { VoiceModeSelector } from '@/components/app/voice-mode-selector';
 import { Button } from '@/components/ui/button';
 import type { ChannelConfig } from '@/lib/channel-config';
@@ -61,6 +62,8 @@ export function LandingHero({
   developerDetails,
 }: LandingHeroProps) {
   const steps = resolveScenarioCopy(scenario.landing.howItWorksSteps, channel) as string[];
+  const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
+  const openVoiceDialog = () => setVoiceDialogOpen(true);
 
   return (
     <div className="dashboard-light relative min-h-svh w-full overflow-hidden bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
@@ -114,7 +117,7 @@ export function LandingHero({
               Dashboard
             </Link>
             <Button
-              onClick={onStartCall}
+              onClick={openVoiceDialog}
               className="h-9 rounded-full bg-[color:var(--voix-accent)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
             >
               Start demo
@@ -148,7 +151,7 @@ export function LandingHero({
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button
                 size="lg"
-                onClick={onStartCall}
+                onClick={openVoiceDialog}
                 className="h-12 gap-2 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-white shadow-[0_8px_24px_-8px_rgba(99,102,241,0.7)] transition hover:bg-[color:var(--voix-accent-hover)]"
               >
                 <MicrophoneIcon size={18} weight="fill" />
@@ -325,7 +328,7 @@ export function LandingHero({
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button
               size="lg"
-              onClick={onStartCall}
+              onClick={openVoiceDialog}
               className="h-12 gap-2 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
             >
               <MicrophoneIcon size={18} weight="fill" />
@@ -364,6 +367,17 @@ export function LandingHero({
           </div>
         </div>
       </footer>
+
+      <VoiceModeDialog
+        open={voiceDialogOpen}
+        onOpenChange={setVoiceDialogOpen}
+        runtimeConfig={runtimeConfig}
+        onRuntimeConfigChange={onRuntimeConfigChange}
+        onStart={onStartCall}
+        onUseText={onUseText}
+        startLabel="Start call"
+        textLabel={scenario.landing.secondaryActionLabel}
+      />
     </div>
   );
 }

@@ -99,8 +99,8 @@ export function VoiceVisualizer({ state, className }: VoiceVisualizerProps) {
         ))}
 
       {/* Static guide rings */}
-      <div className="absolute inset-[18px] rounded-full border border-white/10" />
-      <div className="absolute inset-[34px] rounded-full border border-white/8" />
+      <div className="absolute inset-[18px] rounded-full border border-slate-900/10" />
+      <div className="absolute inset-[34px] rounded-full border border-slate-900/[0.06]" />
 
       {/* Slowly rotating gradient halo for thinking/connecting */}
       {isSpinning && !reduceMotion && (
@@ -119,10 +119,13 @@ export function VoiceVisualizer({ state, className }: VoiceVisualizerProps) {
         />
       )}
 
-      {/* Core orb */}
+      {/* Core orb — a glossy, state-tinted sphere that reads on a light stage */}
       <motion.div
-        className="relative z-10 flex h-[188px] w-[188px] items-center justify-center overflow-hidden rounded-full border border-white/12 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.18),rgba(255,255,255,0.04)_28%,rgba(7,17,31,0.12)_62%,rgba(7,17,31,0.92)_100%)] md:h-[220px] md:w-[220px]"
-        style={{ boxShadow: `0 0 60px -12px ${accent}66, 0 30px 120px rgba(0,0,0,0.45)` }}
+        className="relative z-10 flex h-[188px] w-[188px] items-center justify-center overflow-hidden rounded-full md:h-[220px] md:w-[220px]"
+        style={{
+          background: `radial-gradient(circle at 32% 26%, rgba(255,255,255,0.92), ${accent} 46%, color-mix(in oklab, ${accent} 78%, black) 100%)`,
+          boxShadow: `0 0 70px -10px ${accent}88, inset 0 3px 18px rgba(255,255,255,0.45), inset 0 -10px 24px rgba(0,0,0,0.18)`,
+        }}
         animate={reduceMotion ? undefined : { scale: isActive ? [1, 1.025, 1] : 1 }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
       >
@@ -131,7 +134,7 @@ export function VoiceVisualizer({ state, className }: VoiceVisualizerProps) {
             isChatOpen={false}
             audioVisualizerType="bar"
             audioVisualizerBarCount={5}
-            audioVisualizerColor={accent as `#${string}`}
+            audioVisualizerColor={'#ffffff'}
             className={cn(
               'pointer-events-none scale-[0.46] md:scale-[0.5]',
               reduceMotion && 'opacity-90'

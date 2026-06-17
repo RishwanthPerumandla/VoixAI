@@ -50,14 +50,14 @@ export function TextFallbackInput({ onSend }: TextFallbackInputProps) {
         }}
         rows={1}
         placeholder="Type your order or correction..."
-        className="min-h-12 flex-1 resize-none rounded-[22px] border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 shadow-inner shadow-black/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--voix-focus-ring)]"
+        className="min-h-12 flex-1 resize-none rounded-[22px] border border-[var(--voix-border-strong)] bg-[var(--voix-bg-subtle)] px-4 py-3 text-sm text-[var(--voix-text-primary)] placeholder:text-[var(--voix-text-muted)] focus:outline-none focus-visible:border-[color:var(--voix-accent)] focus-visible:ring-2 focus-visible:ring-[color:var(--voix-accent)]/30"
       />
       <Button
         type="submit"
         size="icon"
         aria-label="Send text message"
         disabled={isSending || value.trim().length === 0}
-        className="h-12 w-12 rounded-full bg-[color:var(--voix-accent)] text-[color:var(--voix-accent-foreground)] shadow-[0_14px_30px_rgba(240,138,67,0.28)] hover:bg-[color:var(--voix-accent-hover)]"
+        className="h-12 w-12 rounded-full bg-[color:var(--voix-accent)] text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
       >
         <SendHorizontal />
       </Button>
