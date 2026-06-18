@@ -85,6 +85,12 @@ TELEMETRY_TOPIC = "voixai.telemetry"
 # Tools `await` snapshot publishing, so cap it hard — telemetry must never stall
 # a live turn even if the LiveKit data publisher is unhealthy.
 TELEMETRY_PUBLISH_TIMEOUT_SECONDS = 2.0
+# After this many consecutive publish failures, back off for the cooldown then
+# retry. Telemetry must NEVER go permanently dark for the rest of a call after a
+# transient blip — the whole live UI (transcript, order, confirmation) rides on
+# it, so it has to self-heal when the transport recovers.
+TELEMETRY_PUBLISH_FAILURE_THRESHOLD = 3
+TELEMETRY_PUBLISH_COOLDOWN_SECONDS = 8.0
 TARGET_E2E_LATENCY_MS = 800
 ACCEPTABLE_E2E_LATENCY_MS = 1500
 
@@ -155,9 +161,8 @@ class SessionState:
     call_started_at: float | None = None
     transcript: list[dict[str, object]] = field(default_factory=list)
     guardrail_violation_count: int = 0
-    telemetry_publish_enabled: bool = True
     telemetry_publish_failures: int = 0
-    telemetry_publish_disabled_reason: str | None = None
+    telemetry_cooldown_until: float = 0.0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -377,39 +382,42 @@ def _snapshot_payload(session_state: SessionState, *, reason: str) -> dict[str, 
 
 
 async def _publish_session_snapshot(session_state: SessionState, *, reason: str) -> None:
-    if session_state.room is None or not session_state.telemetry_publish_enabled:
+    room = session_state.room
+    if room is None:
+        return
+
+    now = time.time()
+    # While in a short cooldown after repeated failures, skip publishing — but we
+    # always come back and retry. Telemetry is the lifeline for the whole live UI
+    # (transcript, order panel, order-placed confirmation), so it must self-heal
+    # if the data transport recovers, never go dark for the rest of the call.
+    if now < session_state.telemetry_cooldown_until:
         return
 
     try:
         # Hard-bound the publish: tools `await` this, so a slow/broken publisher
-        # must never stall the conversation. If it can't flush in a couple
-        # seconds the transport is unhealthy — disable telemetry so subsequent
-        # turns return instantly instead of stalling the agent.
+        # must never stall the conversation by more than the timeout.
         await asyncio.wait_for(
-            session_state.room.local_participant.publish_data(
+            room.local_participant.publish_data(
                 json.dumps(_snapshot_payload(session_state, reason=reason)),
                 reliable=True,
                 topic=TELEMETRY_TOPIC,
             ),
             timeout=TELEMETRY_PUBLISH_TIMEOUT_SECONDS,
         )
+        session_state.telemetry_publish_failures = 0
     except Exception as exc:
         session_state.telemetry_publish_failures += 1
-        if isinstance(exc, asyncio.TimeoutError) or _is_publisher_connection_failure_error(exc):
-            session_state.telemetry_publish_enabled = False
-            session_state.telemetry_publish_disabled_reason = (
-                "publish timed out" if isinstance(exc, asyncio.TimeoutError) else str(exc)
-            )
+        if session_state.telemetry_publish_failures >= TELEMETRY_PUBLISH_FAILURE_THRESHOLD:
+            session_state.telemetry_cooldown_until = now + TELEMETRY_PUBLISH_COOLDOWN_SECONDS
+            session_state.telemetry_publish_failures = 0
             logger.warning(
-                "Disabling session telemetry publishing after LiveKit publisher failure",
-                extra={
-                    "room": getattr(session_state.room, "name", None),
-                    "reason": session_state.telemetry_publish_disabled_reason,
-                },
+                "Telemetry publish failing; backing off %.0fs before retrying",
+                TELEMETRY_PUBLISH_COOLDOWN_SECONDS,
+                extra={"room": getattr(room, "name", None), "reason": str(exc)},
             )
-            return
-
-        logger.exception("Failed to publish session telemetry snapshot")
+        else:
+            logger.debug("Telemetry publish failed (reason=%s): %s; will retry", reason, exc)
 
 
 def _is_publisher_connection_timeout_error(exc: Exception) -> bool:
