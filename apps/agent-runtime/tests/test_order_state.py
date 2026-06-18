@@ -1,7 +1,10 @@
 import agent as agent_module
+import logging
+import urllib.error
 import pytest
 import scenarios.wingstop as wingstop_module
 from decimal import Decimal
+from livekit.agents.llm import ChatMessage
 from types import SimpleNamespace
 
 from agent import (
@@ -21,6 +24,15 @@ from agent import (
     SessionState,
     SUPPORTED_VOICE_ENGINES,
     TARGET_E2E_LATENCY_MS,
+    _publish_session_snapshot,
+    _is_closed_connection_error,
+    _is_publisher_connection_failure_error,
+    _is_publisher_connection_timeout_error,
+    _probe_realtime_publisher_connection,
+    _fallback_runtime_config_to_classic,
+    _format_duration_metric,
+    _handle_conversation_item,
+    _should_fallback_to_classic_after_probe,
     _normalize_voice_provider,
     _preload_optional_realtime_plugins,
     _runtime_config_from_metadata,
@@ -29,6 +41,7 @@ from agent import (
     _runtime_profile_payload,
     _supports_generate_reply,
     _snapshot_payload,
+    _speech_duration_metric,
     _trigger_initial_greeting,
     _trigger_away_prompt,
     _validate_runtime_config,
@@ -109,6 +122,43 @@ def test_summarize_order_state_with_structured_items() -> None:
 
 def test_summarize_order_state_empty() -> None:
     assert summarize_order_state(OrderState()) == "No order details yet."
+
+
+def test_format_duration_metric_formats_numbers_and_missing_values() -> None:
+    assert _format_duration_metric(0.333) == "0.33s"
+    assert _format_duration_metric(None) == "n/a"
+
+
+def test_speech_duration_metric_uses_started_and_stopped_times() -> None:
+    assert _speech_duration_metric(
+        {
+            "started_speaking_at": 1781810330.72,
+            "stopped_speaking_at": 1781810334.45,
+        }
+    ) == pytest.approx(3.73)
+    assert _speech_duration_metric({"started_speaking_at": 4.0, "stopped_speaking_at": 3.0}) is None
+
+
+def test_handle_conversation_item_logs_clean_assistant_latency_metrics(caplog: pytest.LogCaptureFixture) -> None:
+    message = ChatMessage.model_construct(
+        role="assistant",
+        content=[],
+        metrics={
+            "started_speaking_at": 1781810330.72,
+            "stopped_speaking_at": 1781810334.45,
+        },
+    )
+
+    with caplog.at_level(logging.INFO, logger="agent"):
+        _handle_conversation_item(SimpleNamespace(item=message))
+
+    assert "llm_ttft=n/a" in caplog.text
+    assert "tts_ttfb=n/a" in caplog.text
+    assert "e2e_latency=n/a" in caplog.text
+    assert "speech_duration=3.73s" in caplog.text
+    assert "n/as" not in caplog.text
+    assert "started_speaking_at" not in caplog.text
+    assert "stopped_speaking_at" not in caplog.text
 
 
 def test_validate_order_rejects_all_flats_on_boneless() -> None:
@@ -385,6 +435,42 @@ async def test_update_last_item_blank_optional_fields_do_not_clear_existing_flav
 
 
 @pytest.mark.asyncio
+async def test_add_menu_item_falls_back_to_local_resolution_when_backend_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_resolve_selection_via_backend(**_: object) -> dict[str, object]:
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fail_resolve_selection_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.add_menu_item(
+        context,
+        item_name="10 bone in wings",
+        quantity=1,
+        flavors="lemon pepper",
+    )
+
+    assert session_state.order.items[0].item_id == "classic_10"
+    assert session_state.order.items[0].selected_flavor_ids == ["lemon_pepper"]
+    assert "10 Classic Wings" in response
+
+
+@pytest.mark.asyncio
 async def test_update_last_item_reclassifies_standalone_side_from_modifier_bundle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -606,6 +692,89 @@ async def test_update_last_item_can_switch_boneless_back_to_classic_and_placeabl
     assert "$23.24" in price_response
 
 
+@pytest.mark.asyncio
+async def test_update_last_item_falls_back_to_local_resolution_when_backend_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_resolve_selection_via_backend(**_: object) -> dict[str, object]:
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fail_resolve_selection_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="classic_10",
+                    quantity=1,
+                    selected_flavor_ids=["plain"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.update_last_item(
+        context,
+        flavors="lemon pepper, mango habanero",
+        add_modifiers="all flats",
+    )
+
+    assert session_state.order.items[0].selected_flavor_ids == ["lemon_pepper", "mango_habanero"]
+    assert "all_flats" in session_state.order.items[0].selected_modifier_ids
+    assert "Lemon Pepper" in response
+
+
+@pytest.mark.asyncio
+async def test_review_order_for_confirmation_falls_back_to_local_quote_when_backend_pricing_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        _ = order
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    order = OrderState(
+        items=[
+            OrderLineItem(
+                line_id="line-1",
+                item_id="classic_10",
+                quantity=1,
+                selected_flavor_ids=["plain"],
+            )
+        ],
+        order_type="pickup",
+        customer_name="Rishi",
+    )
+    session_state = SessionState(order=order)
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.review_order_for_confirmation(context)
+
+    assert response == build_confirmation_summary(order, build_price_quote(order))
+    assert session_state.price_quote == build_price_quote(order)
+    assert published_reasons == ["confirmation_review_ready"]
+
+
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:
     order = OrderState(
         items=[OrderLineItem(line_id="line-1", item_id="classic_6", quantity=1, selected_flavor_ids=["plain"])],
@@ -681,6 +850,106 @@ def test_snapshot_payload_includes_price_quote_and_guardrails() -> None:
     assert payload["order"]["line_items"][0]["name"] == "10 Classic Wings"
     assert payload["price_quote"]["total"] == quote.total
     assert payload["assistant_guardrail_violations"] == ["example violation"]
+    assert payload["transcript"] == []
+
+
+@pytest.mark.asyncio
+async def test_publish_session_snapshot_retries_on_transient_publisher_failure() -> None:
+    """A transient publisher blip must NOT take telemetry dark for the rest of
+    the call — the live UI (transcript, order, confirmation) depends on it, so it
+    keeps retrying and only backs off after repeated consecutive failures."""
+    calls = 0
+
+    class FakeParticipant:
+        async def publish_data(self, *_: object, **__: object) -> None:
+            nonlocal calls
+            calls += 1
+            raise RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+
+    session_state = SessionState(
+        room=SimpleNamespace(name="demo-room", local_participant=FakeParticipant()),
+    )
+
+    # Two failures (below the back-off threshold) both still attempt to publish —
+    # telemetry is not permanently disabled after a single blip.
+    await _publish_session_snapshot(session_state, reason="session_started")
+    await _publish_session_snapshot(session_state, reason="order_state_updated")
+
+    assert calls == 2
+    assert session_state.telemetry_publish_failures == 2
+    assert session_state.telemetry_cooldown_until == 0.0
+
+
+def test_is_publisher_connection_timeout_error_detects_livekit_timeout_shape() -> None:
+    assert _is_publisher_connection_timeout_error(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert not _is_publisher_connection_timeout_error(RuntimeError("something else"))
+
+
+def test_is_closed_connection_error_detects_closed_shape() -> None:
+    assert _is_closed_connection_error(RuntimeError("engine: connection error: closed"))
+    assert not _is_closed_connection_error(RuntimeError("engine: connection error: timeout"))
+
+
+def test_is_publisher_connection_failure_error_detects_timeout_and_closed() -> None:
+    assert _is_publisher_connection_failure_error(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert _is_publisher_connection_failure_error(RuntimeError("engine: connection error: closed"))
+
+
+@pytest.mark.asyncio
+async def test_probe_realtime_publisher_connection_streams_probe_bytes() -> None:
+    calls: list[tuple[str, bytes]] = []
+
+    class FakeWriter:
+        async def write(self, data: bytes) -> None:
+            calls.append(("write", data))
+
+        async def aclose(self) -> None:
+            calls.append(("close", b""))
+
+    class FakeParticipant:
+        async def stream_bytes(self, *, name: str, topic: str) -> FakeWriter:
+            assert name.startswith("probe_")
+            assert topic == "voixai.publisher_probe"
+            calls.append(("open", b""))
+            return FakeWriter()
+
+    room = SimpleNamespace(local_participant=FakeParticipant())
+
+    await _probe_realtime_publisher_connection(room)
+
+    assert calls == [("open", b""), ("write", b"ok"), ("close", b"")]
+
+
+def test_should_fallback_to_classic_after_probe_for_publisher_timeout() -> None:
+    assert _should_fallback_to_classic_after_probe(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert not _should_fallback_to_classic_after_probe(RuntimeError("different failure"))
+
+
+def test_fallback_runtime_config_to_classic_sets_runtime_profile_fields() -> None:
+    runtime_config = RuntimeConfig(
+        voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
+        voice_engine=VOICE_ENGINE_GEMINI_LIVE,
+        preset_id="gemini-live-voice",
+        preset_label="Gemini Live",
+        comparison_label="Native Gemini speech to speech",
+    )
+
+    fallback = _fallback_runtime_config_to_classic(
+        runtime_config,
+        reason="Realtime publisher connection failed during startup probe. Falling back to the classic pipeline.",
+    )
+
+    assert fallback.voice_provider == VOICE_PROVIDER_CLASSIC
+    assert fallback.voice_engine == VOICE_ENGINE_PIPELINE
+    assert fallback.preset_id == "classic-pipeline"
+    assert fallback.preset_label == "Classic Voice (fallback)"
+    assert fallback.fallback_reason is not None
 
 
 def test_runtime_profile_payload_includes_scenario_id() -> None:
