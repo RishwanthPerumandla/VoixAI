@@ -11,12 +11,16 @@ import {
 import type { ReceivedMessage } from '@livekit/components-react';
 import { WarningIcon } from '@phosphor-icons/react';
 import { AssistantStage } from '@/components/app/assistant-stage';
-import { ConversationTranscript } from '@/components/app/conversation-transcript';
+import {
+  type ConversationEntry,
+  ConversationTranscript,
+} from '@/components/app/conversation-transcript';
 import { DeveloperDetails } from '@/components/app/developer-details';
 import { getSessionStatusContent, getSessionStatusTone } from '@/components/app/session-status';
 import { VoiceControls } from '@/components/app/voice-controls';
 import { Button } from '@/components/ui/button';
 import { useInputControls } from '@/hooks/agents-ui/use-agent-control-bar';
+import { synthesizeConfirmationSnapshot, useRoomOrder } from '@/hooks/useRoomOrder';
 import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import { useVoicePresenceState } from '@/hooks/useVoicePresenceState';
 import type { ChannelConfig } from '@/lib/channel-config';
@@ -33,13 +37,32 @@ interface SessionLayoutProps {
   onEndSession: () => void;
 }
 
-function getLatestAssistantMessage(messages: ReceivedMessage[]) {
+function getLatestAssistantMessage(messages: ConversationEntry[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (!messages[index].from?.isLocal) {
+    if (messages[index].role === 'assistant') {
       return messages[index].message;
     }
   }
   return null;
+}
+
+function buildTranscriptEntries(
+  sessionMessages: ReceivedMessage[],
+  telemetrySnapshot: SessionTelemetrySnapshot | null
+): ConversationEntry[] {
+  if (sessionMessages.length > 0) {
+    return sessionMessages.map((entry) => ({
+      id: entry.id,
+      role: entry.from?.isLocal ? 'user' : 'assistant',
+      message: entry.message,
+    }));
+  }
+
+  return (telemetrySnapshot?.transcript ?? []).map((entry, index) => ({
+    id: `${entry.role}-${entry.ts}-${index}`,
+    role: entry.role,
+    message: entry.text,
+  }));
 }
 
 const STATUS_TONE_CLASSES: Record<string, string> = {
@@ -61,10 +84,13 @@ export function SessionLayout({
   developerMode,
   onEndSession,
 }: SessionLayoutProps) {
-  const { connectionState, isConnected } = useSessionContext();
+  const { connectionState, isConnected, room } = useSessionContext();
   const { messages } = useSessionMessages();
   const { send } = useChat();
   const agent = useAgent();
+  // Fallback path for the order-placed confirmation: if telemetry never delivers
+  // `mock_order` (flaky data channel), detect the placed order from the backend.
+  const apiRoomOrder = useRoomOrder(room?.name, isConnected && !telemetrySnapshot?.mock_order);
   const [showTranscript, setShowTranscript] = useState(true);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [deviceError, setDeviceError] = useState<Error | null>(null);
@@ -83,7 +109,8 @@ export function SessionLayout({
   });
   const statusCopy = getSessionStatusContent(userFacingState);
   const statusTone = getSessionStatusTone(userFacingState);
-  const latestAssistantPrompt = getLatestAssistantMessage(messages);
+  const transcriptEntries = buildTranscriptEntries(messages, telemetrySnapshot);
+  const latestAssistantPrompt = getLatestAssistantMessage(transcriptEntries);
   const ScenarioWorkspace = scenario.WorkspaceComponent;
   const ScenarioConfirmation = scenario.ConfirmationComponent;
 
@@ -95,11 +122,19 @@ export function SessionLayout({
     await send('confirm');
   };
 
-  if (telemetrySnapshot?.mock_order) {
+  // Prefer the live telemetry confirmation; fall back to the backend-detected
+  // order so the confirmation + auto-redirect still fire without the data channel.
+  const confirmationSnapshot = telemetrySnapshot?.mock_order
+    ? telemetrySnapshot
+    : apiRoomOrder
+      ? synthesizeConfirmationSnapshot(apiRoomOrder, telemetrySnapshot)
+      : null;
+
+  if (confirmationSnapshot) {
     return (
       <div className="dashboard-light min-h-svh w-full bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
         <ScenarioConfirmation
-          telemetrySnapshot={telemetrySnapshot}
+          telemetrySnapshot={confirmationSnapshot}
           onStartNewFlow={onEndSession}
           onBackToDemo={onEndSession}
         />
@@ -179,7 +214,7 @@ export function SessionLayout({
 
             <div className="grid gap-4">
               <ConversationTranscript
-                messages={messages}
+                messages={transcriptEntries}
                 state={userFacingState}
                 collapsed={!showTranscript}
                 onToggleCollapsed={() => setShowTranscript((value) => !value)}

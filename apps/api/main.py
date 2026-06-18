@@ -623,8 +623,11 @@ def _summarize_order_json(order_json: str) -> tuple[str, int, list[str], str | N
 async def list_orders(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    room_name: str | None = Query(default=None),
 ) -> OrderListResponse:
-    records, total = await asyncio.to_thread(ORDER_STORAGE.list_orders, limit=limit, offset=offset)
+    records, total = await asyncio.to_thread(
+        ORDER_STORAGE.list_orders, limit=limit, offset=offset, room_name=room_name
+    )
     orders: list[OrderListItem] = []
     for r in records:
         customer, count, summary, order_type = _summarize_order_json(r.order_json)

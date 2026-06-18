@@ -187,12 +187,18 @@ class SqliteStorage:
             ).fetchone()
         return self._row_to_order(row) if row else None
 
-    def list_orders(self, *, limit: int = 50, offset: int = 0) -> tuple[list[OrderRecord], int]:
+    def list_orders(
+        self, *, limit: int = 50, offset: int = 0, room_name: str | None = None
+    ) -> tuple[list[OrderRecord], int]:
+        where = "WHERE room_name = ?" if room_name else ""
+        params: list[object] = [room_name] if room_name else []
         with self._lock:
-            total = self._conn.execute("SELECT COUNT(*) AS c FROM orders").fetchone()["c"]
+            total = self._conn.execute(
+                f"SELECT COUNT(*) AS c FROM orders {where}", params
+            ).fetchone()["c"]
             rows = self._conn.execute(
-                "SELECT * FROM orders ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                f"SELECT * FROM orders {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
             ).fetchall()
         return [self._row_to_order(r) for r in rows], total
 
