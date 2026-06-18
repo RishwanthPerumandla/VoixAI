@@ -829,6 +829,52 @@ async def test_create_mock_order_recovers_missing_state_from_transcript_before_s
     assert published_reasons == ["mock_order_created"]
 
 
+@pytest.mark.asyncio
+async def test_force_handoff_marks_order_and_publishes_snapshot() -> None:
+    session_state = SessionState(order=OrderState())
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+    session_state.placement_failure_count = 3
+
+    response = await wingstop_module.force_handoff(
+        session_state,
+        reason="Customer explicitly asked for a human.",
+    )
+
+    assert "team member" in response
+    assert session_state.order.status == "handoff_required"
+    assert session_state.order.metrics.handoff_required_count == 1
+    assert session_state.placement_failure_count == 0
+    assert published_reasons == ["handoff_required"]
+
+
+@pytest.mark.asyncio
+async def test_create_mock_order_escalates_to_handoff_after_repeated_failures() -> None:
+    session_state = SessionState(
+        order=OrderState(),
+        placement_failure_count=1,
+    )
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.create_mock_order(context)
+
+    assert "team member" in response
+    assert session_state.order.status == "handoff_required"
+    assert published_reasons == ["handoff_required"]
+
+
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:
     order = OrderState(
         items=[OrderLineItem(line_id="line-1", item_id="classic_6", quantity=1, selected_flavor_ids=["plain"])],

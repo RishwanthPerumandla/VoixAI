@@ -62,6 +62,14 @@ def test_claim_phrases_match_realtime_paraphrases() -> None:
     assert not ws.assistant_claimed_placement("Would you like the total?")
 
 
+def test_handoff_phrase_detectors_match_human_and_frustration_requests() -> None:
+    assert ws.customer_requested_handoff("Can I talk to a real person?")
+    assert ws.customer_requested_handoff("Get me a manager.")
+    assert ws.customer_expressed_frustration("This is not working and I'm frustrated.")
+    assert not ws.customer_requested_handoff("Can I get ranch with that?")
+    assert not ws.customer_expressed_frustration("That sounds good.")
+
+
 @pytest.mark.asyncio
 async def test_autoplaces_valid_confirmed_order_when_model_skips_tool(monkeypatch) -> None:
     submitted = {"order_number": "MOCK-77777", "total": "$18.92", "kitchen_ticket": "TICKET"}

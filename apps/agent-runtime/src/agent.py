@@ -40,6 +40,9 @@ from scenarios.wingstop import (
     PriceQuote,
     audit_assistant_response,
     build_initial_greeting,
+    customer_expressed_frustration,
+    customer_requested_handoff,
+    force_handoff,
     maybe_autoplace_order,
 )
 
@@ -164,6 +167,7 @@ class SessionState:
     guardrail_violation_count: int = 0
     telemetry_publish_failures: int = 0
     telemetry_cooldown_until: float = 0.0
+    placement_failure_count: int = 0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -1020,6 +1024,27 @@ def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: Ru
     )
 
 
+def _respond_with_handoff(session: AgentSession[SessionState], runtime_config: RuntimeConfig) -> None:
+    handoff_message = "I'm sorry about that. I'll connect you with a team member now."
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
+        session.say(
+            handoff_message,
+            allow_interruptions=True,
+            add_to_chat_ctx=True,
+        )
+        return
+
+    session.generate_reply(
+        instructions=(
+            "The customer asked for a human or is clearly frustrated. "
+            "Apologize briefly and say you will connect them with a team member now. "
+            "Do not ask more order questions."
+        ),
+    )
+
+
 def _trigger_initial_greeting(
     session: AgentSession[SessionState],
     runtime_config: RuntimeConfig,
@@ -1173,6 +1198,19 @@ async def my_agent(ctx: JobContext):
                 }
             else:
                 session.userdata.user_turn_metrics = None
+            if customer_requested_handoff(turn_text) or customer_expressed_frustration(turn_text):
+                complaint = customer_expressed_frustration(turn_text)
+                reason = (
+                    "Customer explicitly asked for a human."
+                    if customer_requested_handoff(turn_text)
+                    else "Customer sounded frustrated during the order."
+                )
+
+                async def _force_handoff_response() -> None:
+                    await force_handoff(session.userdata, reason=reason, complaint=complaint)
+                    _respond_with_handoff(session, runtime_config)
+
+                asyncio.create_task(_force_handoff_response())
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )

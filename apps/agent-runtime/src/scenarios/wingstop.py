@@ -42,6 +42,7 @@ from voix_ordering import (  # noqa: F401
     INTENT_CANCEL_ORDER,
     INTENT_CHANGE_FLAVOR,
     INTENT_CHANGE_QUANTITY,
+    INTENT_COMPLAINT,
     INTENT_CONFIRM_ORDER,
     INTENT_HANDOFF_REQUEST,
     INTENT_MODIFY_ITEM,
@@ -675,6 +676,25 @@ def assistant_claimed_placement(text: str) -> bool:
     return bool(_PLACEMENT_CLAIM_RE.search(text or ""))
 
 
+_HANDOFF_REQUEST_RE = re.compile(
+    r"\b(human|real person|real human|manager|supervisor|representative|team member|someone real)\b",
+    re.IGNORECASE,
+)
+_FRUSTRATION_RE = re.compile(
+    r"\b(angry|annoyed|frustrated|upset|ridiculous|this isn't working|this is not working|not working|useless|stupid|terrible|broken|fed up)\b",
+    re.IGNORECASE,
+)
+PLACEMENT_FAILURE_HANDOFF_THRESHOLD = 2
+
+
+def customer_requested_handoff(text: str) -> bool:
+    return bool(_HANDOFF_REQUEST_RE.search(text or ""))
+
+
+def customer_expressed_frustration(text: str) -> bool:
+    return bool(_FRUSTRATION_RE.search(text or ""))
+
+
 _NUMBER_TOKEN_TO_DIGITS = {
     "6": "6",
     "six": "6",
@@ -857,6 +877,27 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
     return recovered
 
 
+async def force_handoff(
+    session_state: Any,
+    *,
+    reason: str,
+    complaint: bool = False,
+) -> str:
+    if derive_phase(session_state.order) != OrderPhase.HANDOFF_REQUIRED:
+        result = apply_order_intent(
+            session_state.order,
+            OrderIntent(
+                name=INTENT_COMPLAINT if complaint else INTENT_HANDOFF_REQUEST,
+                clarification_question=reason,
+            ),
+        )
+        _apply_intent_result(session_state, result)
+    session_state.waiting_for_customer = False
+    setattr(session_state, "placement_failure_count", 0)
+    await session_state.publish_snapshot(reason="handoff_required")
+    return "I'm sorry about that. I'll connect you with a team member now."
+
+
 async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None:
     """Safety net for realtime models that announce an order without calling
     ``create_mock_order``.
@@ -877,6 +918,11 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
     if decision.validation_errors and _recover_order_from_transcript(session_state):
         decision = OrderStateMachine(order).authorize_submit()
     if decision.validation_errors or decision.confirmation_reasons:
+        setattr(
+            session_state,
+            "placement_failure_count",
+            int(getattr(session_state, "placement_failure_count", 0)) + 1,
+        )
         logger.warning(
             "Assistant claimed placement but the order is not submittable; not auto-placing. "
             "validation_errors=%s confirmation_reasons=%s",
@@ -907,6 +953,11 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
         await session_state.publish_snapshot(reason="mock_order_autoplaced")
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
         logger.exception("Auto-placement backend submit failed")
+        setattr(
+            session_state,
+            "placement_failure_count",
+            int(getattr(session_state, "placement_failure_count", 0)) + 1,
+        )
 
 
 def build_wingstop_snapshot(session_state: Any) -> dict[str, object]:
@@ -1442,16 +1493,34 @@ class WingstopAssistant(Agent):
         if decision.validation_errors and _recover_order_from_transcript(session_state):
             decision = machine.authorize_submit()
         if decision.validation_errors:
+            failure_count = int(getattr(session_state, "placement_failure_count", 0)) + 1
+            setattr(session_state, "placement_failure_count", failure_count)
+            if failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
+                return await force_handoff(
+                    session_state,
+                    reason="Repeated placement attempts failed validation during checkout.",
+                    complaint=True,
+                )
             await session_state.publish_snapshot(reason="mock_order_blocked")
             return "I cannot place this order yet. " + " ".join(decision.validation_errors)
 
         if decision.confirmation_reasons:
+            failure_count = int(getattr(session_state, "placement_failure_count", 0)) + 1
+            setattr(session_state, "placement_failure_count", failure_count)
+            if failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
+                return await force_handoff(
+                    session_state,
+                    reason="Repeated confirmation failures blocked checkout.",
+                    complaint=True,
+                )
             await session_state.publish_snapshot(reason="mock_order_blocked")
             return (
                 "I cannot place this order yet because "
                 + ", ".join(decision.confirmation_reasons)
                 + "."
             )
+
+        setattr(session_state, "placement_failure_count", 0)
 
         if session_state.price_quote is None:
             session_state.price_quote = build_price_quote(order)
