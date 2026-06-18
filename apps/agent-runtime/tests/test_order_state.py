@@ -53,6 +53,10 @@ from scenarios.wingstop import (
     serialize_order_state,
     summarize_order_state,
     validate_order,
+    _resolve_flavor_id,
+    _resolve_item_id,
+    _resolve_modifier_id,
+    _validation_errors_for_line,
     _missing_confirmation_reasons,
 )
 
@@ -68,6 +72,13 @@ def test_instructions_require_order_name_before_collecting_items() -> None:
 
     assert "ask for the order name next" in instructions
     assert "before collecting any menu items" in instructions
+
+
+def test_instructions_allow_split_flavors_on_supported_wing_sizes() -> None:
+    instructions = build_wingstop_instructions(get_channel_definition("web"))
+
+    assert "Flavor splits are allowed" in instructions
+    assert "half Lemon Pepper and half Mango Habanero" in instructions
 
 
 def test_summarize_order_state_with_structured_items() -> None:
@@ -135,6 +146,11 @@ def test_validate_order_rejects_too_many_flavors() -> None:
     errors = validate_order(order)
 
     assert "6 Classic Wings can include up to 1 flavor." in errors
+
+
+def test_resolve_flavor_id_accepts_half_split_phrasing() -> None:
+    assert _resolve_flavor_id("half lemon pepper") == "lemon_pepper"
+    assert _resolve_flavor_id("half mango habanero") == "mango_habanero"
 
 
 def test_validate_combo_requires_drink_and_side() -> None:
@@ -366,6 +382,228 @@ async def test_update_last_item_blank_optional_fields_do_not_clear_existing_flav
 
     assert session_state.order.items[-1].selected_flavor_ids == ["original_hot"]
     assert "Please choose a flavor for your wings." not in response
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_reclassifies_standalone_side_from_modifier_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_selection_via_backend(
+        *,
+        item_name: str,
+        quantity: int = 1,
+        flavors: list[str] | None = None,
+        modifiers: list[str] | None = None,
+        special_instructions: str | None = None,
+        validate_line: bool = True,
+    ) -> dict[str, object]:
+        item_id = _resolve_item_id(item_name)
+        assert item_id is not None
+
+        flavor_ids: list[str] = []
+        modifier_ids: list[str] = []
+        line_errors: list[str] = []
+
+        for flavor_name in flavors or []:
+            flavor_id = _resolve_flavor_id(flavor_name)
+            if flavor_id is None:
+                line_errors.append(f"{flavor_name} is not available in this demo menu.")
+                continue
+            if flavor_id not in flavor_ids:
+                flavor_ids.append(flavor_id)
+
+        for modifier_name in modifiers or []:
+            modifier_id = _resolve_modifier_id(modifier_name)
+            if modifier_id is None:
+                line_errors.append(f"{modifier_name} is not a valid option for this demo menu.")
+                continue
+            if modifier_id not in modifier_ids:
+                modifier_ids.append(modifier_id)
+
+        if validate_line and not line_errors:
+            preview_line = OrderLineItem(
+                line_id="line-preview",
+                item_id=item_id,
+                quantity=quantity,
+                selected_flavor_ids=flavor_ids,
+                selected_modifier_ids=modifier_ids,
+                notes=(special_instructions or "").strip(),
+            )
+            line_errors = _validation_errors_for_line(preview_line)
+
+        return {
+            "item_id": item_id,
+            "item_name": MENU_ITEMS[item_id].display_name,
+            "flavor_ids": flavor_ids,
+            "modifier_ids": modifier_ids,
+            "line_errors": line_errors,
+            "suggestions": [],
+        }
+
+    async def fake_validate_order_via_backend(order: OrderState) -> list[str]:
+        return validate_order(order)
+
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        errors = validate_order(order)
+        return errors, (None if errors else build_price_quote(order))
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fake_resolve_selection_via_backend)
+    monkeypatch.setattr(wingstop_module, "_validate_order_via_backend", fake_validate_order_via_backend)
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="classic_10",
+                    quantity=1,
+                    selected_flavor_ids=["lemon_pepper", "mango_habanero"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    update_response = await assistant.update_last_item(
+        context,
+        add_modifiers="all flats, well done, ranch, large seasoned fries, extra crispy",
+    )
+
+    assert "Large Seasoned Fries" in update_response
+    assert len(session_state.order.items) == 2
+    assert session_state.order.items[0].item_id == "classic_10"
+    assert session_state.order.items[0].selected_modifier_ids == ["all_flats", "well_done", "ranch"]
+    assert session_state.order.items[1].item_id == "large_fries"
+    assert session_state.order.items[1].selected_modifier_ids == ["extra_crispy"]
+
+    price_response = await assistant.price_order(context)
+
+    assert "$23.24" in price_response
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_can_switch_boneless_back_to_classic_and_placeable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_selection_via_backend(
+        *,
+        item_name: str,
+        quantity: int = 1,
+        flavors: list[str] | None = None,
+        modifiers: list[str] | None = None,
+        special_instructions: str | None = None,
+        validate_line: bool = True,
+    ) -> dict[str, object]:
+        item_id = _resolve_item_id(item_name)
+        assert item_id is not None
+
+        flavor_ids: list[str] = []
+        modifier_ids: list[str] = []
+        line_errors: list[str] = []
+
+        for flavor_name in flavors or []:
+            flavor_id = _resolve_flavor_id(flavor_name)
+            if flavor_id is None:
+                line_errors.append(f"{flavor_name} is not available in this demo menu.")
+                continue
+            if flavor_id not in flavor_ids:
+                flavor_ids.append(flavor_id)
+
+        for modifier_name in modifiers or []:
+            modifier_id = _resolve_modifier_id(modifier_name)
+            if modifier_id is None:
+                line_errors.append(f"{modifier_name} is not a valid option for this demo menu.")
+                continue
+            if modifier_id not in modifier_ids:
+                modifier_ids.append(modifier_id)
+
+        if validate_line and not line_errors:
+            preview_line = OrderLineItem(
+                line_id="line-preview",
+                item_id=item_id,
+                quantity=quantity,
+                selected_flavor_ids=flavor_ids,
+                selected_modifier_ids=modifier_ids,
+                notes=(special_instructions or "").strip(),
+            )
+            line_errors = _validation_errors_for_line(preview_line)
+
+        return {
+            "item_id": item_id,
+            "item_name": MENU_ITEMS[item_id].display_name,
+            "flavor_ids": flavor_ids,
+            "modifier_ids": modifier_ids,
+            "line_errors": line_errors,
+            "suggestions": [],
+        }
+
+    async def fake_validate_order_via_backend(order: OrderState) -> list[str]:
+        return validate_order(order)
+
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        errors = validate_order(order)
+        return errors, (None if errors else build_price_quote(order))
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fake_resolve_selection_via_backend)
+    monkeypatch.setattr(wingstop_module, "_validate_order_via_backend", fake_validate_order_via_backend)
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="boneless_10",
+                    quantity=1,
+                    selected_flavor_ids=["mango_habanero", "lemon_pepper"],
+                    selected_modifier_ids=["well_done", "all_flats", "ranch"],
+                ),
+                OrderLineItem(
+                    line_id="line-2",
+                    item_id="large_fries",
+                    quantity=1,
+                    selected_modifier_ids=["extra_crispy"],
+                ),
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.update_last_item(
+        context,
+        target_item_name="wings",
+        item_name="10 bone in wings",
+        add_modifiers="all flats",
+    )
+
+    updated_line = session_state.order.items[0]
+
+    assert updated_line.item_id == "classic_10"
+    assert "all_flats" in updated_line.selected_modifier_ids
+    assert "All flats is only available for classic bone-in wings." not in response
+
+    price_response = await assistant.price_order(context)
+
+    assert "$23.24" in price_response
 
 
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:

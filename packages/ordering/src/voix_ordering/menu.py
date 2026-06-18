@@ -1206,7 +1206,21 @@ def _normalize_note(value: str | None) -> str:
 
 
 def _resolve_flavor_id(name: str) -> str | None:
-    return FLAVOR_ALIAS_TO_ID.get(_normalize_lookup_key(name))
+    key = _normalize_lookup_key(name)
+    direct = FLAVOR_ALIAS_TO_ID.get(key)
+    if direct is not None:
+        return direct
+
+    # Voice transcripts often prefix split flavors with "half", "1/2", or
+    # "split" ("half lemon pepper", "split mango habanero"). Normalize those
+    # wrappers away so split-flavor requests resolve to the real menu flavors.
+    key = re.sub(
+        r"^(half|split|one half|1 2|one side|other side|half and half)\s+",
+        "",
+        key,
+    ).strip()
+    key = re.sub(r"\s+(half|split)$", "", key).strip()
+    return FLAVOR_ALIAS_TO_ID.get(key)
 
 
 def _resolve_modifier_id(name: str) -> str | None:

@@ -67,6 +67,7 @@ from voix_ordering import (  # noqa: F401
 )
 from voix_ordering.confirmation import _missing_confirmation_reasons  # noqa: F401
 from voix_ordering.menu import (  # noqa: F401
+    OPTION_TO_GROUP_IDS,
     build_menu_for_prompt,
     _flavor_names,
     _modifier_names,
@@ -134,6 +135,7 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - You already have the full menu below, so you know what exists; get_menu_summary is available if you want to re-list a category, but you do not need it to answer the customer.
     - Use add_menu_item when a customer adds a new item.
     - Use update_last_item when the customer says things like make that two, no onions, all flats, extra crispy, or change the flavor.
+    - Use update_last_item to change the last line item's type too, for example switching boneless to classic bone-in or changing a wing size.
     - Use remove_order_item when the customer removes an item.
     - Use set_order_type when pickup or delivery changes.
     - Use set_customer_details when the caller gives a name or phone number.
@@ -143,6 +145,7 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - Use create_mock_order only after the customer has confirmed.
     - Use wait_more if the customer is clearly thinking or pausing.
     - For combos and wing meals, treat the included ranch or blue cheese as the combo dip selection, not as a separate extra dip, unless the customer asks for extra dips beyond what is included.
+    - Flavor splits are allowed whenever the selected wing item supports more than one flavor. For example, a 10-piece order can be half Lemon Pepper and half Mango Habanero. Record both flavors instead of refusing the split.
 
     # Menu and understanding
 
@@ -367,6 +370,122 @@ def _normalize_optional_tool_text(value: str | None) -> str | None:
     return normalized if normalized else None
 
 
+def _modifier_allowed_for_item(item_id: str, modifier_id: str) -> bool:
+    menu_item = MENU_ITEMS[item_id]
+    allowed_groups = set(menu_item.required_modifier_group_ids) | set(
+        menu_item.optional_modifier_group_ids
+    )
+    modifier_group_ids = OPTION_TO_GROUP_IDS.get(modifier_id, set())
+    return not modifier_group_ids.isdisjoint(allowed_groups)
+
+
+def _next_line_id(order: OrderState) -> str:
+    return f"line-{len(order.items) + 1}"
+
+
+def _find_order_line(order: OrderState, target_item_name: str | None) -> OrderLineItem | None:
+    if not order.items:
+        return None
+    if target_item_name is None:
+        return order.items[-1]
+
+    target_item_id = _resolve_item_id(target_item_name)
+    normalized_target = _normalize_lookup_key(target_item_name)
+
+    for line in reversed(order.items):
+        menu_item = MENU_ITEMS[line.item_id]
+        if target_item_id is not None and line.item_id == target_item_id:
+            return line
+        if normalized_target and normalized_target in {
+            _normalize_lookup_key(menu_item.display_name),
+            _normalize_lookup_key(menu_item.category),
+            _normalize_lookup_key(menu_item.item_kind),
+            _normalize_lookup_key(menu_item.order_style or ""),
+        }:
+            return line
+        if normalized_target in {"wings", "wing"} and "wing" in _normalize_lookup_key(
+            menu_item.display_name
+        ):
+            return line
+        if normalized_target in {"fries", "fry"} and "fries" in _normalize_lookup_key(
+            menu_item.display_name
+        ):
+            return line
+        if normalized_target in {"dip", "dips", "ranch"} and menu_item.item_kind == "dip":
+            return line
+
+    return None
+
+
+def _append_standalone_items_from_modifier_tokens(
+    order: OrderState,
+    base_line: OrderLineItem,
+    raw_modifier_tokens: list[str],
+) -> None:
+    """Recover common realtime bundling mistakes.
+
+    Realtime transcripts often collapse a phrase like "all flats, well done,
+    ranch, and a large seasoned fries extra crispy" into one modifier list for
+    the wing item. If we keep that literally, pricing fails because fries are
+    not valid wing modifiers. This helper peels standalone menu items back out
+    of the modifier stream and attaches following item-specific modifiers to the
+    new line instead of poisoning the base line.
+    """
+
+    index = 0
+    while index < len(raw_modifier_tokens):
+        token = raw_modifier_tokens[index]
+        modifier_id = _resolve_modifier_id(token)
+        item_id = _resolve_item_id(token)
+
+        if modifier_id is not None and _modifier_allowed_for_item(base_line.item_id, modifier_id):
+            if modifier_id not in base_line.selected_modifier_ids:
+                base_line.selected_modifier_ids.append(modifier_id)
+            index += 1
+            continue
+
+        if item_id is None or item_id == base_line.item_id:
+            if modifier_id is not None and modifier_id not in base_line.selected_modifier_ids:
+                # Keep genuinely unknown/invalid-for-item modifiers on the base
+                # line so validation can still surface a real error.
+                base_line.selected_modifier_ids.append(modifier_id)
+            index += 1
+            continue
+
+        new_line = OrderLineItem(
+            line_id=_next_line_id(order),
+            item_id=item_id,
+            quantity=1,
+        )
+        index += 1
+
+        while index < len(raw_modifier_tokens):
+            candidate = raw_modifier_tokens[index]
+            candidate_item_id = _resolve_item_id(candidate)
+            candidate_flavor_id = _resolve_flavor_id(candidate)
+            candidate_modifier_id = _resolve_modifier_id(candidate)
+
+            if candidate_item_id is not None and candidate_item_id != new_line.item_id:
+                break
+
+            if candidate_flavor_id is not None and candidate_flavor_id not in new_line.selected_flavor_ids:
+                new_line.selected_flavor_ids.append(candidate_flavor_id)
+                index += 1
+                continue
+
+            if candidate_modifier_id is not None and _modifier_allowed_for_item(
+                new_line.item_id, candidate_modifier_id
+            ):
+                if candidate_modifier_id not in new_line.selected_modifier_ids:
+                    new_line.selected_modifier_ids.append(candidate_modifier_id)
+                index += 1
+                continue
+
+            break
+
+        order.items.append(new_line)
+
+
 # --- Order correction + guardrail helpers (runtime-only) --------------------
 
 
@@ -500,17 +619,17 @@ class WingstopAssistant(Agent):
 
         item_id = str(resolved["item_id"])
         selected_flavor_ids = [str(flavor_id) for flavor_id in resolved.get("flavor_ids", [])]
-        selected_modifier_ids = [str(modifier_id) for modifier_id in resolved.get("modifier_ids", [])]
 
         line = OrderLineItem(
             line_id=f"line-{len(order.items) + 1}",
             item_id=item_id,
             quantity=max(1, quantity),
             selected_flavor_ids=selected_flavor_ids,
-            selected_modifier_ids=selected_modifier_ids,
+            selected_modifier_ids=[],
             notes=_normalize_note(special_instructions),
         )
         order.items.append(line)
+        _append_standalone_items_from_modifier_tokens(order, line, _split_csv(modifiers))
         order.quantity = sum(existing_line.quantity for existing_line in order.items)
         if MENU_ITEMS[item_id].item_kind == "drink" and not order.order_type:
             order.status = "collecting"
@@ -532,6 +651,8 @@ class WingstopAssistant(Agent):
     async def update_last_item(
         self,
         context: RunContext[Any],
+        target_item_name: str | None = None,
+        item_name: str | None = None,
         quantity: int | None = None,
         flavors: str | None = None,
         add_modifiers: str | None = None,
@@ -544,13 +665,37 @@ class WingstopAssistant(Agent):
             return "There is no item to update yet."
 
         previous_order = copy.deepcopy(order)
-        line = order.items[-1]
+        line = _find_order_line(order, _normalize_optional_tool_text(target_item_name))
+        if line is None:
+            return "I could not find that item on the order yet."
+        item_name = _normalize_optional_tool_text(item_name)
         flavors = _normalize_optional_tool_text(flavors)
         add_modifiers = _normalize_optional_tool_text(add_modifiers)
         remove_modifiers = _normalize_optional_tool_text(remove_modifiers)
         special_instructions = _normalize_optional_tool_text(special_instructions)
         if quantity is not None:
             line.quantity = max(1, quantity)
+
+        if item_name is not None:
+            current_flavor_names = _flavor_names(line.selected_flavor_ids)
+            current_modifier_names = _modifier_names(line.selected_modifier_ids)
+            try:
+                resolved_item = await _resolve_selection_via_backend(
+                    item_name=item_name,
+                    quantity=line.quantity,
+                    flavors=current_flavor_names,
+                    modifiers=current_modifier_names,
+                    special_instructions=line.notes,
+                    validate_line=False,
+                )
+            except (OSError, urllib.error.URLError, urllib.error.HTTPError):
+                return _tool_backend_error()
+
+            item_errors = [str(error) for error in resolved_item.get("line_errors", [])]
+            if item_errors:
+                return " ".join(item_errors)
+
+            line.item_id = str(resolved_item["item_id"])
 
         if flavors is not None:
             selected_flavor_ids: list[str] = []
@@ -576,12 +721,13 @@ class WingstopAssistant(Agent):
             line.selected_flavor_ids = selected_flavor_ids
 
         if add_modifiers is not None:
+            raw_modifier_tokens = _split_csv(add_modifiers)
             try:
                 resolved_modifiers = await _resolve_selection_via_backend(
                     item_name=MENU_ITEMS[line.item_id].display_name,
                     quantity=line.quantity,
                     flavors=[],
-                    modifiers=_split_csv(add_modifiers),
+                    modifiers=raw_modifier_tokens,
                     special_instructions=line.notes,
                     validate_line=False,
                 )
@@ -592,9 +738,7 @@ class WingstopAssistant(Agent):
             if modifier_errors:
                 return " ".join(modifier_errors)
 
-            for modifier_id in resolved_modifiers.get("modifier_ids", []):
-                if modifier_id not in line.selected_modifier_ids:
-                    line.selected_modifier_ids.append(str(modifier_id))
+            _append_standalone_items_from_modifier_tokens(order, line, raw_modifier_tokens)
 
         for modifier_name in _split_csv(remove_modifiers):
             modifier_id = _resolve_modifier_id(modifier_name)
@@ -608,6 +752,15 @@ class WingstopAssistant(Agent):
 
         if special_instructions is not None:
             line.notes = _normalize_note(special_instructions)
+
+        # If the item type changed, keep only modifiers that are valid for the
+        # new line item. This prevents stale piece-preference/cook-choice
+        # options from poisoning placement after a boneless/classic switch.
+        line.selected_modifier_ids = [
+            modifier_id
+            for modifier_id in line.selected_modifier_ids
+            if _modifier_allowed_for_item(line.item_id, modifier_id)
+        ]
 
         # Apply the change even if the line is still incomplete; order-level
         # validation below reports anything still needed instead of blocking.

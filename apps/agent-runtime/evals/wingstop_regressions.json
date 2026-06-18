@@ -189,6 +189,125 @@
     }
   },
   {
+    "name": "pickup_split_flavor_bone_in_correction_with_fries_and_ranch_submits_cleanly",
+    "description": "A pickup order with split-flavor classic wings, fries, and ranch survives a temporary boneless correction and still prices and submits cleanly.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "10 bone in wings",
+          "flavors": "half mango habanero, half lemon pepper",
+          "modifiers": "well done, all flats, ranch, large seasoned fries, extra crispy"
+        },
+        "response_contains": [
+          "10 Classic Wings",
+          "Large Seasoned Fries"
+        ]
+      },
+      {
+        "tool": "update_last_item",
+        "kwargs": {
+          "target_item_name": "wings",
+          "item_name": "10 boneless wings"
+        },
+        "response_contains": [
+          "10 Boneless Wings"
+        ],
+        "response_not_contains": [
+          "All flats is only available for classic bone-in wings."
+        ]
+      },
+      {
+        "tool": "update_last_item",
+        "kwargs": {
+          "target_item_name": "wings",
+          "item_name": "10 bone in wings",
+          "add_modifiers": "all flats"
+        },
+        "response_contains": [
+          "10 Classic Wings",
+          "All Flats"
+        ]
+      },
+      {
+        "tool": "price_order",
+        "kwargs": {},
+        "response_contains": [
+          "Subtotal is",
+          "total is $23.24"
+        ]
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "10 Classic Wings",
+          "Mango Habanero",
+          "Lemon Pepper",
+          "All Flats",
+          "Large Seasoned Fries",
+          "Rishi",
+          "Should I place it?"
+        ]
+      },
+      {
+        "tool": "set_confirmation_status",
+        "kwargs": {
+          "confirmed": true
+        }
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "Great, your order was placed."
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "line_count": 2,
+      "line_item_ids": [
+        "classic_10",
+        "large_fries"
+      ],
+      "line_flavor_ids": [
+        [
+          "mango_habanero",
+          "lemon_pepper"
+        ],
+        []
+      ],
+      "line_modifier_ids": [
+        [
+          "well_done",
+          "ranch",
+          "all_flats"
+        ],
+        [
+          "extra_crispy"
+        ]
+      ],
+      "total": "$23.24",
+      "status": "submitted",
+      "confirmed": true,
+      "validation_errors": []
+    }
+  },
+  {
     "name": "pickup_order_cannot_submit_without_required_name",
     "description": "Pickup orders must not move into final review or submit without a customer name.",
     "steps": [
