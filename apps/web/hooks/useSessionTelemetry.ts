@@ -9,6 +9,7 @@ export const VOIXAI_TELEMETRY_TOPIC = 'voixai.telemetry';
 export interface TelemetryOrderState {
   pickup_or_delivery: string | null;
   items: string[];
+  phase?: string | null;
   line_items?: Array<{
     line_id: string;
     item_id: string;
@@ -36,6 +37,23 @@ export interface TelemetryOrderState {
   recap_readback?: boolean;
   pos_validation_passed?: boolean;
   validation_errors?: string[];
+  last_clarification_question?: string | null;
+  archived_order_count?: number;
+  reliability_metrics?: {
+    correction_count: number;
+    cancellation_count: number;
+    validation_failure_count: number;
+    clarification_count: number;
+    unknown_item_count: number;
+    handoff_required_count: number;
+    duplicate_confirmation_prevented: number;
+    final_status: string;
+  };
+  recent_events?: Array<{
+    type: string;
+    detail: string;
+    data: Record<string, unknown>;
+  }>;
 }
 
 export interface TelemetryMockOrder {
@@ -113,6 +131,11 @@ export interface SessionTelemetrySnapshot {
   user_turn_metrics: TelemetryUserTurnMetrics | null;
   assistant_turn_metrics: TelemetryAssistantTurnMetrics | null;
   assistant_guardrail_violations?: string[];
+  transcript?: Array<{
+    role: 'user' | 'assistant';
+    text: string;
+    ts: number;
+  }>;
 }
 
 function isTelemetrySnapshot(value: unknown): value is SessionTelemetrySnapshot {

@@ -84,7 +84,7 @@
         ]
       ],
       "total": "$12.44",
-      "status": "submitted",
+      "status": "completed",
       "confirmed": true,
       "validation_errors": []
     }
@@ -183,7 +183,7 @@
         ]
       ],
       "total": "$12.44",
-      "status": "submitted",
+      "status": "completed",
       "confirmed": true,
       "validation_errors": []
     }
@@ -302,7 +302,7 @@
         ]
       ],
       "total": "$23.24",
-      "status": "submitted",
+      "status": "completed",
       "confirmed": true,
       "validation_errors": []
     }
@@ -357,7 +357,174 @@
           "ranch"
         ]
       ],
-      "status": "collecting",
+      "status": "collecting_order",
+      "confirmed": false,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "cancel_fries_only_keeps_rest_of_order_intact",
+    "description": "A user can remove fries without corrupting the rest of the order.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "10 bone in wings",
+          "flavors": "lemon pepper"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "large seasoned fries",
+          "modifiers": "extra crispy"
+        }
+      },
+      {
+        "tool": "remove_order_item",
+        "kwargs": {
+          "item_name": "fries"
+        },
+        "response_not_contains": [
+          "Large Seasoned Fries"
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "line_count": 1,
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "line_flavor_ids": [
+        [
+          "lemon_pepper"
+        ]
+      ],
+      "line_modifier_ids": [
+        []
+      ],
+      "status": "collecting_order",
+      "confirmed": false,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "cancel_entire_order_clears_active_items",
+    "description": "A user can cancel the whole order in one step.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 classic wings",
+          "flavors": "original hot"
+        }
+      },
+      {
+        "tool": "cancel_order",
+        "kwargs": {},
+        "response_contains": [
+          "canceled the order"
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "",
+      "line_count": 0,
+      "line_item_ids": [],
+      "line_flavor_ids": [],
+      "line_modifier_ids": [],
+      "status": "cancelled",
+      "confirmed": false,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "restart_order_archives_old_state_and_accepts_new_items",
+    "description": "A start-over flow clears the active cart and allows a fresh order.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "10 bone in wings",
+          "flavors": "lemon pepper"
+        }
+      },
+      {
+        "tool": "restart_order",
+        "kwargs": {},
+        "response_contains": [
+          "starting over"
+        ]
+      },
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "chicken sandwich",
+          "flavors": "plain"
+        }
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "line_count": 1,
+      "line_item_ids": [
+        "chicken_sandwich"
+      ],
+      "line_flavor_ids": [
+        [
+          "plain"
+        ]
+      ],
+      "line_modifier_ids": [
+        []
+      ],
+      "status": "collecting_order",
       "confirmed": false,
       "validation_errors": []
     }

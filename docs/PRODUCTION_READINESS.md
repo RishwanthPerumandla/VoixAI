@@ -358,6 +358,10 @@ Each milestone is independently shippable and keeps the demo working.
   re-validates and re-checks confirmation on every placement attempt — so an
   order cannot be "placed" unless it is genuinely valid and confirmed,
   regardless of model tool-adherence. Order phase is now published in telemetry.
+  The ordering package now also exposes a structured `OrderIntent` schema, a
+  reducer for corrections/cancellations/restarts, reducer reliability events,
+  replay support, and per-session reliability counters surfaced in the
+  developer panel.
 
 Tests: API 4/4, runtime `test_order_state.py` 36/36, domain
 `packages/ordering/tests` 7/7. (`tests/test_agent.py` is a pre-existing stale

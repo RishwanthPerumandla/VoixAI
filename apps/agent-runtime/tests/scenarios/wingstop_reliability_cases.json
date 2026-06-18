@@ -1,0 +1,345 @@
+[
+  {
+    "name": "happy_path_split_wings",
+    "user_turns": [
+      "I want a pickup order for Rishi.",
+      "Give me 10 classic wings, half lemon pepper and half mango habanero, all flats, well done."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper", "mango_habanero"],
+        "add_modifier_ids": ["all_flats", "well_done"]
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_10"],
+      "line_modifier_ids": [["all_flats", "well_done"]],
+      "validation_errors": [],
+      "event_types": ["item_added", "validation_passed"]
+    }
+  },
+  {
+    "name": "bone_in_to_boneless_removes_all_flats",
+    "user_turns": [
+      "Actually make that boneless."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"],
+        "add_modifier_ids": ["all_flats", "well_done"]
+      },
+      {
+        "name": "replace_item",
+        "target_item": "wings",
+        "replacement_item_id": "boneless_10"
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["boneless_10"],
+      "line_modifier_ids": [["well_done"]],
+      "validation_errors": [],
+      "correction_count": 1,
+      "event_types": ["item_replaced", "invalid_modifier_removed"]
+    }
+  },
+  {
+    "name": "boneless_all_flats_invalid",
+    "user_turns": [
+      "Give me 10 boneless wings all flats."
+    ],
+    "initial_state": {
+      "order_type": "pickup"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "boneless_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"],
+        "add_modifier_ids": ["all_flats"]
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["boneless_10"],
+      "line_modifier_ids": [[]],
+      "validation_errors": [],
+      "correction_count": 1,
+      "event_types": ["invalid_modifier_removed", "validation_passed"]
+    }
+  },
+  {
+    "name": "cancel_fries_only",
+    "user_turns": [
+      "Cancel the fries."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"]
+      },
+      {
+        "name": "add_item",
+        "replacement_item_id": "large_fries",
+        "quantity": 1,
+        "add_modifier_ids": ["extra_crispy"]
+      },
+      {
+        "name": "remove_item",
+        "target_item": "fries",
+        "target_item_id": "large_fries"
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_10"],
+      "line_modifier_ids": [[]],
+      "validation_errors": [],
+      "cancellation_count": 1,
+      "event_types": ["item_removed", "validation_passed"]
+    }
+  },
+  {
+    "name": "cancel_entire_order",
+    "user_turns": [
+      "Never mind, cancel everything."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"]
+      },
+      {
+        "name": "cancel_order"
+      }
+    ],
+    "expected": {
+      "status": "cancelled",
+      "line_item_ids": [],
+      "line_modifier_ids": [],
+      "validation_errors": [],
+      "cancellation_count": 1,
+      "event_types": ["order_cancelled"]
+    }
+  },
+  {
+    "name": "start_over_archives_old_order",
+    "user_turns": [
+      "Start over.",
+      "Actually just give me a sandwich."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"]
+      },
+      {
+        "name": "restart_order"
+      },
+      {
+        "name": "add_item",
+        "replacement_item_id": "chicken_sandwich",
+        "quantity": 1,
+        "flavor_ids": ["plain"]
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["chicken_sandwich"],
+      "line_modifier_ids": [[]],
+      "validation_errors": ["Please choose pickup or delivery."],
+      "archived_order_count": 1,
+      "event_types": ["order_restarted", "item_added"]
+    }
+  },
+  {
+    "name": "too_many_flavors_fails_validation",
+    "user_turns": [
+      "I want six classic wings with lemon pepper, atomic, and garlic parmesan."
+    ],
+    "initial_state": {
+      "order_type": "pickup"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_6",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper", "atomic", "garlic_parmesan"]
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_6"],
+      "line_modifier_ids": [[]],
+      "validation_errors": ["6 Classic Wings can include up to 1 flavor."],
+      "validation_failure_count": 1,
+      "event_types": ["validation_failed"]
+    }
+  },
+  {
+    "name": "unknown_item_requires_clarification",
+    "user_turns": [
+      "Can I get a sushi roll?"
+    ],
+    "initial_state": {
+      "order_type": "pickup"
+    },
+    "intents": [
+      {
+        "name": "unknown",
+        "clarification_question": "I want to make sure I got that right. What would you like to order?"
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": [],
+      "line_modifier_ids": [],
+      "validation_errors": [],
+      "clarification_count": 1,
+      "unknown_item_count": 1,
+      "clarification_fragment": "What would you like to order",
+      "event_types": ["clarification_required"]
+    }
+  },
+  {
+    "name": "ambiguous_make_it_two_requires_clarification",
+    "user_turns": [
+      "Make it two."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_6",
+        "quantity": 1,
+        "flavor_ids": ["lemon_pepper"]
+      },
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["mango_habanero"]
+      },
+      {
+        "name": "change_quantity",
+        "target_item": "wings",
+        "quantity": 2
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_6", "classic_10"],
+      "line_modifier_ids": [[], []],
+      "validation_errors": [],
+      "clarification_count": 1,
+      "clarification_fragment": "Which item did you mean",
+      "event_types": ["clarification_required"]
+    }
+  },
+  {
+    "name": "repeated_correction_mixed_language",
+    "user_turns": [
+      "Quiero diez wings classic.",
+      "Actually make that boneless.",
+      "No, bone in, half lemon pepper and half mango habanero."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "language": "spanish"
+    },
+    "intents": [
+      {
+        "name": "add_item",
+        "replacement_item_id": "classic_10",
+        "quantity": 1,
+        "flavor_ids": ["plain"],
+        "add_modifier_ids": ["well_done"]
+      },
+      {
+        "name": "replace_item",
+        "target_item": "wings",
+        "replacement_item_id": "boneless_10"
+      },
+      {
+        "name": "replace_item",
+        "target_item": "wings",
+        "replacement_item_id": "classic_10"
+      },
+      {
+        "name": "change_flavor",
+        "target_item": "wings",
+        "flavor_ids": ["lemon_pepper", "mango_habanero"]
+      }
+    ],
+    "expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_10"],
+      "line_modifier_ids": [["well_done"]],
+      "validation_errors": [],
+      "correction_count": 3,
+      "event_types": ["item_replaced", "validation_passed"]
+    }
+  },
+  {
+    "name": "complaint_requires_handoff",
+    "user_turns": [
+      "This is wrong, get me a manager."
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "intents": [
+      {
+        "name": "complaint"
+      }
+    ],
+    "expected": {
+      "status": "handoff_required",
+      "line_item_ids": [],
+      "line_modifier_ids": [],
+      "validation_errors": [],
+      "handoff_required_count": 1,
+      "event_types": ["handoff_required"]
+    }
+  }
+]

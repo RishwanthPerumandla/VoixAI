@@ -15,6 +15,25 @@ from .confirmation import (
     build_confirmation_summary,
     create_mock_order,
 )
+from .intents import (
+    INTENT_ADD_ITEM,
+    INTENT_ASK_MENU,
+    INTENT_ASK_TOTAL,
+    INTENT_CANCEL_ORDER,
+    INTENT_CHANGE_COOK_PREFERENCE,
+    INTENT_CHANGE_FLAVOR,
+    INTENT_CHANGE_PIECE_PREFERENCE,
+    INTENT_CHANGE_QUANTITY,
+    INTENT_COMPLAINT,
+    INTENT_CONFIRM_ORDER,
+    INTENT_HANDOFF_REQUEST,
+    INTENT_MODIFY_ITEM,
+    INTENT_REMOVE_ITEM,
+    INTENT_REPLACE_ITEM,
+    INTENT_RESTART_ORDER,
+    INTENT_UNKNOWN,
+    SUPPORTED_INTENTS,
+)
 from .menu import (
     FLAVOR_OPTIONS,
     MENU_ITEMS,
@@ -39,15 +58,26 @@ from .models import (
     MockOrder,
     ModifierGroup,
     ModifierOption,
+    OrderEvent,
+    OrderIntent,
     OrderLineItem,
     OrderState,
     PriceLineItem,
     PriceQuote,
+    ReliabilityMetrics,
 )
 from .pricing import (
     TAX_RATE,
     build_price_quote,
     calculate_order_total,
+)
+from .reducer import (
+    ReducerResult,
+    apply_order_intent,
+)
+from .replay import (
+    ReplayResult,
+    replay_order_intents,
 )
 from .serialization import (
     serialize_order_state,
@@ -75,6 +105,9 @@ __all__ = [
     "PriceQuote",
     "MockOrder",
     "OrderState",
+    "OrderIntent",
+    "OrderEvent",
+    "ReliabilityMetrics",
     # menu data + lookups
     "FLAVOR_OPTIONS",
     "MODIFIER_OPTIONS",
@@ -85,6 +118,28 @@ __all__ = [
     "TAX_RATE",
     "build_price_quote",
     "calculate_order_total",
+    # intents + reducer
+    "INTENT_ADD_ITEM",
+    "INTENT_REMOVE_ITEM",
+    "INTENT_REPLACE_ITEM",
+    "INTENT_MODIFY_ITEM",
+    "INTENT_CHANGE_QUANTITY",
+    "INTENT_CHANGE_FLAVOR",
+    "INTENT_CHANGE_COOK_PREFERENCE",
+    "INTENT_CHANGE_PIECE_PREFERENCE",
+    "INTENT_ASK_TOTAL",
+    "INTENT_ASK_MENU",
+    "INTENT_CONFIRM_ORDER",
+    "INTENT_CANCEL_ORDER",
+    "INTENT_RESTART_ORDER",
+    "INTENT_HANDOFF_REQUEST",
+    "INTENT_COMPLAINT",
+    "INTENT_UNKNOWN",
+    "SUPPORTED_INTENTS",
+    "ReducerResult",
+    "apply_order_intent",
+    "ReplayResult",
+    "replay_order_intents",
     # validation
     "validate_order",
     # serialization
