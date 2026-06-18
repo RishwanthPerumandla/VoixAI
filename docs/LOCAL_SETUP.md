@@ -28,6 +28,11 @@ Optional but recommended:
 
 - `AGENT_NAME`
 - `ALLOWED_ORIGINS`
+- `ALLOWED_ORIGIN_REGEX`
+
+Local CORS note:
+
+- if you leave both unset, the API accepts `http://localhost:*` and `http://127.0.0.1:*` during local development so browser preflight still works when Next.js moves off port `3000`
 
 Worker provider defaults:
 
@@ -165,12 +170,13 @@ To enable Gemini Live, set:
 VOICE_PROVIDER=gemini_live
 GOOGLE_API_KEY=...
 GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
-GOOGLE_REALTIME_VOICE=Puck
+GOOGLE_REALTIME_VOICE=Achird
 ```
 
 Gemini Live note:
 
 - `gemini-3.1-flash-live-preview` greets in its own voice via native `generate_reply(...)`, which requires the `charan632-dev/agents` Google plugin fork (it adds forced-`generate_reply` support for Gemini 3.1). If the stock PyPI plugin is installed instead, you get a duplicate greeting in two different voices. Ensure the fork is installed (see below).
+- `Achird` is the recommended default for Wingstop ordering. If you want a warmer hospitality feel, try `Sulafat`. If you want a calmer, firmer tone, try `Kore`.
 
 ## 6. Start the API manually
 

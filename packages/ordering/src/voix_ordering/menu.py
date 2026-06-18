@@ -153,7 +153,7 @@ MODIFIER_OPTIONS: dict[str, ModifierOption] = {
         "ranch",
         "Ranch",
         Decimal("1.49"),
-        aliases=("ranch", "add ranch"),
+        aliases=("ranch", "add ranch", "regular ranch"),
     ),
     "buffalo_ranch": ModifierOption(
         "buffalo_ranch",

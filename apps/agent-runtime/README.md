@@ -121,6 +121,12 @@ Mode-specific settings:
 - `REALTIME_ENABLE_AFFECTIVE_DIALOG`
 - `REALTIME_ENABLE_PROACTIVITY`
 
+Wingstop voice defaults:
+
+- the startup greeting is `Hello, Wingstop Dallas. How can I help you.`
+- Gemini Live defaults to `GOOGLE_REALTIME_VOICE=Achird`
+- recommended alternatives are `Sulafat` for a warmer hospitality tone and `Kore` for a calmer, firmer tone
+
 See:
 
 - [../../docs/ENVIRONMENT_VARIABLES.md](../../docs/ENVIRONMENT_VARIABLES.md)
@@ -147,11 +153,22 @@ python src/agent.py dev
 Current focused runtime tests live in:
 
 - [tests/test_order_state.py](./tests/test_order_state.py)
+- [tests/test_golden_conversations.py](./tests/test_golden_conversations.py)
+
+Golden conversation fixtures live in:
+
+- [evals/wingstop_regressions.json](./evals/wingstop_regressions.json)
 
 Typical command:
 
 ```powershell
 apps\agent-runtime\.venv\Scripts\python.exe -m pytest apps\agent-runtime\tests\test_order_state.py -q
+```
+
+Regression-eval command:
+
+```powershell
+apps\agent-runtime\.venv\Scripts\python.exe -m pytest apps\agent-runtime\tests\test_golden_conversations.py -q
 ```
 
 ## Current Notes

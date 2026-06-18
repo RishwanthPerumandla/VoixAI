@@ -1,5 +1,6 @@
 import agent as agent_module
 import pytest
+import scenarios.wingstop as wingstop_module
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -35,6 +36,7 @@ from agent import (
 )
 from channels import get_channel_definition
 from scenarios.wingstop import (
+    WingstopAssistant,
     MENU_ITEMS,
     MODIFIER_OPTIONS,
     MockOrder,
@@ -43,6 +45,7 @@ from scenarios.wingstop import (
     audit_assistant_response,
     build_confirmation_summary,
     build_initial_greeting,
+    build_wingstop_instructions,
     build_price_quote,
     calculate_order_total,
     create_mock_order,
@@ -54,14 +57,17 @@ from scenarios.wingstop import (
 )
 
 
-def test_initial_greeting_is_bilingual_and_requests_service_type() -> None:
+def test_initial_greeting_is_simple_wingstop_dallas_greeting() -> None:
     greeting = build_initial_greeting(get_channel_definition("web"))
 
-    assert "Welcome to Voix Wings Demo" in greeting
-    assert "Bienvenido" in greeting
-    assert "pickup or delivery" in greeting
-    assert "English or Spanish" not in greeting
-    assert "Would you like English or Spanish" not in greeting
+    assert greeting == "Hello, Wingstop Dallas. How can I help you."
+
+
+def test_instructions_require_order_name_before_collecting_items() -> None:
+    instructions = build_wingstop_instructions(get_channel_definition("web"))
+
+    assert "ask for the order name next" in instructions
+    assert "before collecting any menu items" in instructions
 
 
 def test_summarize_order_state_with_structured_items() -> None:
@@ -311,6 +317,55 @@ def test_detect_order_correction_finds_quantity_change() -> None:
     corrections = detect_order_correction(previous_order, current_order)
 
     assert corrections == ["items"]
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_blank_optional_fields_do_not_clear_existing_flavor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_validate_order_via_backend(order: OrderState) -> list[str]:
+        return validate_order(order)
+
+    async def fail_if_resolve_called(**_: object) -> dict[str, object]:
+        raise AssertionError("resolve-selection should not run for blank optional updates")
+
+    monkeypatch.setattr(wingstop_module, "_validate_order_via_backend", fake_validate_order_via_backend)
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fail_if_resolve_called)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="classic_8",
+                    quantity=1,
+                    selected_flavor_ids=["original_hot"],
+                    selected_modifier_ids=["ranch"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.update_last_item(
+        context,
+        flavors="",
+        add_modifiers="",
+        remove_modifiers="",
+        special_instructions="",
+    )
+
+    assert session_state.order.items[-1].selected_flavor_ids == ["original_hot"]
+    assert "Please choose a flavor for your wings." not in response
 
 
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:
@@ -635,13 +690,13 @@ def test_trigger_initial_greeting_uses_say_for_classic() -> None:
     _trigger_initial_greeting(
         FakeSession(),
         RuntimeConfig(voice_provider=VOICE_PROVIDER_CLASSIC, voice_engine=VOICE_ENGINE_PIPELINE),
-        "Welcome to Voix Wings Demo.",
+        "Hello, Wingstop Dallas. How can I help you.",
     )
 
     assert calls == [
         (
             "say",
-            ("Welcome to Voix Wings Demo.",),
+            ("Hello, Wingstop Dallas. How can I help you.",),
             {"allow_interruptions": True, "add_to_chat_ctx": True},
         )
     ]
@@ -664,7 +719,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_realtime() -> None:
             voice_engine=VOICE_ENGINE_GEMINI_LIVE,
             google_realtime_model="gemini-2.5-flash-native-audio-preview-12-2025",
         ),
-        "Welcome to Voix Wings Demo.",
+        "Hello, Wingstop Dallas. How can I help you.",
     )
 
     assert calls == [
@@ -672,7 +727,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_realtime() -> None:
             "generate_reply",
             (),
             {
-                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Welcome to Voix Wings Demo."
+                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hello, Wingstop Dallas. How can I help you."
             },
         )
     ]
@@ -695,7 +750,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_gemini_31_realtime() -
             voice_engine=VOICE_ENGINE_GEMINI_LIVE,
             google_realtime_model="gemini-3.1-flash-live-preview",
         ),
-        "Welcome to Voix Wings Demo.",
+        "Hello, Wingstop Dallas. How can I help you.",
     )
 
     # Gemini 3.1 now greets once in its own voice via generate_reply, so there is
@@ -705,7 +760,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_gemini_31_realtime() -
             "generate_reply",
             (),
             {
-                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Welcome to Voix Wings Demo."
+                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hello, Wingstop Dallas. How can I help you."
             },
         )
     ]

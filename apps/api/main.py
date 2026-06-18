@@ -63,6 +63,8 @@ ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 ).split(",")
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX")
+DEFAULT_LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 class TokenRequest(BaseModel):
@@ -411,9 +413,19 @@ _SERVER_STARTED_AT = time.time()
 
 
 app = FastAPI(title="VoixAI MVP API", version="0.2.0")
+allow_origins = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
+allow_origin_regex = ALLOWED_ORIGIN_REGEX
+
+# Local Next.js dev commonly shifts from :3000 to :3001+ when the default port
+# is busy. When no explicit allowlist is configured, accept loopback origins so
+# browser preflight requests keep working across local port changes.
+if not os.getenv("ALLOWED_ORIGINS") and not allow_origin_regex:
+    allow_origin_regex = DEFAULT_LOCAL_ORIGIN_REGEX
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()],
+    allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
