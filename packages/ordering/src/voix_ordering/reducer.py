@@ -116,11 +116,18 @@ def _find_target_line(order: OrderState, intent: OrderIntent) -> OrderLineItem |
     return order.items[-1] if order.items and not intent.target_item else None
 
 
-def _clarify(order: OrderState, question: str, *, event_type: str = "clarification_required") -> ReducerResult:
+def _clarify(
+    order: OrderState,
+    question: str,
+    *,
+    event_type: str = "clarification_required",
+    preserve_status: bool = False,
+) -> ReducerResult:
     machine = OrderStateMachine(order)
     order.last_clarification_question = question
     order.metrics.clarification_count += 1
-    machine.reset_to_collecting()
+    if not preserve_status:
+        machine.reset_to_collecting()
     events = [_event(event_type, question)]
     _append_events(order, events)
     return ReducerResult(
@@ -184,6 +191,7 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
         result = _clarify(
             order,
             "That order is already completed. Say start over if you want to make a new order.",
+            preserve_status=True,
         )
         result.events = events + result.events
         return result

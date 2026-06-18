@@ -597,8 +597,9 @@ def _apply_intent_result(
     result: ReducerResult,
 ) -> list[str]:
     session_state.order = result.order
-    session_state.mock_order = None
-    session_state.price_quote = None
+    if result.applied:
+        session_state.mock_order = None
+        session_state.price_quote = None
     return result.validation_errors
 
 
@@ -1065,6 +1066,8 @@ class WingstopAssistant(Agent):
             ),
         )
         validation_errors = _apply_intent_result(session_state, add_result)
+        if not add_result.applied and add_result.clarification_question:
+            return add_result.clarification_question
 
         for extracted_line in extracted_lines:
             extra_result = apply_order_intent(
@@ -1081,6 +1084,8 @@ class WingstopAssistant(Agent):
                 ),
             )
             validation_errors = _apply_intent_result(session_state, extra_result)
+            if not extra_result.applied and extra_result.clarification_question:
+                return extra_result.clarification_question
         log_order_state(order, reason="add_menu_item")
         corrected_fields = detect_order_correction(previous_order, order)
         if corrected_fields:
@@ -1147,6 +1152,8 @@ class WingstopAssistant(Agent):
                 ),
             )
             validation_errors = _apply_intent_result(session_state, replace_result)
+            if not replace_result.applied and replace_result.clarification_question:
+                return replace_result.clarification_question
 
         if flavors is not None:
             selected_flavor_ids: list[str] = []
@@ -1179,6 +1186,8 @@ class WingstopAssistant(Agent):
                 ),
             )
             validation_errors = _apply_intent_result(session_state, flavor_result)
+            if not flavor_result.applied and flavor_result.clarification_question:
+                return flavor_result.clarification_question
 
         if quantity is not None:
             quantity_result = apply_order_intent(
@@ -1190,6 +1199,8 @@ class WingstopAssistant(Agent):
                 ),
             )
             validation_errors = _apply_intent_result(session_state, quantity_result)
+            if not quantity_result.applied and quantity_result.clarification_question:
+                return quantity_result.clarification_question
 
         if add_modifiers is not None:
             raw_modifier_tokens = _split_csv(add_modifiers)
@@ -1227,6 +1238,8 @@ class WingstopAssistant(Agent):
                     ),
                 )
                 validation_errors = _apply_intent_result(session_state, modify_result)
+                if not modify_result.applied and modify_result.clarification_question:
+                    return modify_result.clarification_question
             for extracted_line in extracted_lines:
                 extra_result = apply_order_intent(
                     order,
@@ -1242,6 +1255,8 @@ class WingstopAssistant(Agent):
                     ),
                 )
                 validation_errors = _apply_intent_result(session_state, extra_result)
+                if not extra_result.applied and extra_result.clarification_question:
+                    return extra_result.clarification_question
 
         remove_modifier_ids = [
             str(modifier_id)
@@ -1262,6 +1277,8 @@ class WingstopAssistant(Agent):
                 ),
             )
             validation_errors = _apply_intent_result(session_state, note_result)
+            if not note_result.applied and note_result.clarification_question:
+                return note_result.clarification_question
 
         log_order_state(order, reason="update_last_item")
         corrected_fields = detect_order_correction(previous_order, order)
@@ -1289,6 +1306,8 @@ class WingstopAssistant(Agent):
             ),
         )
         validation_errors = _apply_intent_result(session_state, remove_result)
+        if not remove_result.applied and remove_result.clarification_question:
+            return remove_result.clarification_question
         log_order_state(order, reason="remove_order_item")
         corrected_fields = detect_order_correction(previous_order, order)
         if corrected_fields:
@@ -1304,6 +1323,8 @@ class WingstopAssistant(Agent):
             OrderIntent(name=INTENT_CANCEL_ORDER),
         )
         _apply_intent_result(session_state, result)
+        if not result.applied and result.clarification_question:
+            return result.clarification_question
         await session_state.publish_snapshot(reason="order_cancelled")
         return "Okay, I canceled the order."
 

@@ -1,0 +1,7929 @@
+[
+  {
+    "name": "happy_classic_10_split",
+    "description": "Classic wings with split flavors and modifiers.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings with lemon pepper and mango habanero, all flats, well done, and ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_boneless_8_ranch",
+    "description": "Boneless order prices and places cleanly.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "turns": [
+      {
+        "user": "Add 8 boneless wings with garlic parmesan and ranch.",
+        "expected": {
+          "contains_items": [
+            "boneless_8"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_classic_6_blue_cheese",
+    "description": "Single flavor classic wings with dip.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 6 bone in wings with original hot and blue cheese.",
+        "expected": {
+          "contains_items": [
+            "classic_6"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_tenders_3_hot_ranch",
+    "description": "Small tenders order succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo"
+    },
+    "turns": [
+      {
+        "user": "Add 3 tenders with original hot and ranch.",
+        "expected": {
+          "contains_items": [
+            "tenders_3"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_sandwich_combo",
+    "description": "Combo order with side and drink succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava"
+    },
+    "turns": [
+      {
+        "user": "Add chicken sandwich combo with fries, coke, and plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich_combo"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_large_fries",
+    "description": "Standalone fries order can be priced and placed.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam"
+    },
+    "turns": [
+      {
+        "user": "Add large fries extra crispy.",
+        "expected": {
+          "contains_items": [
+            "large_fries"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_family_pack",
+    "description": "Family pack with multiple flavors succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Add family pack with lemon pepper, original hot, and garlic parmesan, all flats.",
+        "expected": {
+          "contains_items": [
+            "family_pack_24pc"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_combo_boneless_10",
+    "description": "Boneless combo with valid drink and side.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless combo with fries, sprite, lemon pepper, and ranch.",
+        "expected": {
+          "contains_items": [
+            "combo_boneless_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_meal_for_2",
+    "description": "Meal for two group pack succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add meal for 2 with lemon pepper and original hot, all drums, and fries.",
+        "expected": {
+          "contains_items": [
+            "meal_for_2_15pc"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_classic_20_three_flavors",
+    "description": "Twenty classic wings allow three flavors.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Add 20 bone in wings with lemon pepper, original hot, and garlic parmesan, ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_boneless_50_four_flavors",
+    "description": "Fifty boneless wings allow four flavors.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "turns": [
+      {
+        "user": "Add 50 boneless wings with lemon pepper, original hot, garlic parmesan, and mango habanero, ranch.",
+        "expected": {
+          "contains_items": [
+            "boneless_50"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_party_pack_delivery",
+    "description": "Delivery order can still review and place.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "delivery",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add party pack with lemon pepper, original hot, garlic parmesan, and mango habanero, all flats.",
+        "expected": {
+          "contains_items": [
+            "party_pack_50pc"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_classic_15_two_dips",
+    "description": "Included dip count can support multiple dips.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo"
+    },
+    "turns": [
+      {
+        "user": "Add 15 bone in wings with lemon pepper and original hot, ranch, and blue cheese.",
+        "expected": {
+          "contains_items": [
+            "classic_15"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_chicken_sandwich",
+    "description": "Standalone sandwich succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava"
+    },
+    "turns": [
+      {
+        "user": "Add chicken sandwich with plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_32oz_drink",
+    "description": "Standalone drink succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam"
+    },
+    "turns": [
+      {
+        "user": "Add 32 oz drink.",
+        "expected": {
+          "contains_items": [
+            "fountain_drink_32oz"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_brownie",
+    "description": "Standalone dessert succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Add brownie.",
+        "expected": {
+          "contains_items": [
+            "brownie"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_crew_pack",
+    "description": "Crew pack with valid flavors succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Add crew pack with lemon pepper, original hot, and hickory smoked bbq, all drums.",
+        "expected": {
+          "contains_items": [
+            "crew_pack_30pc"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_combo_classic_8",
+    "description": "Classic combo with all flats succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Add 8 classic combo with lemon pepper and original hot, fries, coke, all flats, and ranch.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_8"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_voodoo_fries_and_drink",
+    "description": "Two-item order across separate turns.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Add voodoo fries.",
+        "expected": {
+          "contains_items": [
+            "voodoo_fries"
+          ]
+        }
+      },
+      {
+        "user": "Add 20 oz drink.",
+        "expected": {
+          "contains_items": [
+            "voodoo_fries",
+            "fountain_drink_20oz"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 2,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_multi_item_order",
+    "description": "Multiple items can be placed together.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings with lemon pepper, ranch, and well done.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "Add large fries extra crispy.",
+        "expected": {
+          "contains_items": [
+            "classic_10",
+            "large_fries"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 2,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_water_order",
+    "description": "Bottled water order succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Add water.",
+        "expected": {
+          "contains_items": [
+            "drink_water_item"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "happy_cheese_fries_order",
+    "description": "Cheese fries order succeeds.",
+    "tags": [
+      "happy_paths"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add cheese fries extra crispy.",
+        "expected": {
+          "contains_items": [
+            "cheese_fries"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ],
+          "response_contains": [
+            "Should I place it?"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true,
+          "response_contains": [
+            "order was placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true
+    }
+  },
+  {
+    "name": "correction_classic_to_boneless",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "all_flats",
+            "well_done"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_boneless_to_classic",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "well_done"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_change_flavor_to_garlic",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually change it to garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_add_second_flavor",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that lemon pepper and mango habanero.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_classic_10_to_20",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_boneless_10_to_20",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 20 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_20"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_add_ranch_later",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually add ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 0
+    }
+  },
+  {
+    "name": "correction_add_well_done_later",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that well done.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 0
+    }
+  },
+  {
+    "name": "correction_sandwich_to_combo",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "chicken_sandwich",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "plain"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that chicken sandwich combo.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich_combo"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "chicken_sandwich_combo"
+      ],
+      "correction_count": 1,
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "correction_combo_to_classic",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "chicken_sandwich_combo",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "plain"
+          ],
+          "selected_modifier_ids": [
+            "regular_seasoned_fries",
+            "coke"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_tenders_to_boneless",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "tenders_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_classic_6_to_10",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_classic_10_to_15",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 15 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_15"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_15"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_family_to_party",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "family_pack_24pc",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper",
+            "original_hot"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that party pack.",
+        "expected": {
+          "contains_items": [
+            "party_pack_50pc"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "party_pack_50pc"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_party_to_crew",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "party_pack_50pc",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper",
+            "original_hot",
+            "garlic_parmesan"
+          ],
+          "selected_modifier_ids": [
+            "all_drums"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that crew pack.",
+        "expected": {
+          "contains_items": [
+            "crew_pack_30pc"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "crew_pack_30pc"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_hot_to_lemon",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually change it to lemon pepper.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_lemon_to_garlic_and_ranch",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that garlic parmesan and ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_mixed_language_boneless",
+    "description": "Single correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Mejor hazlas 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_remove_fries",
+    "description": "Removal correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [
+            "extra_crispy"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the fries.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_remove_drink",
+    "description": "Removal correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "fountain_drink_20oz",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the drink.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_remove_dip",
+    "description": "Removal correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "side_ranch",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the ranch dip.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_remove_brownie",
+    "description": "Removal correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "brownie",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the brownie.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_remove_sandwich",
+    "description": "Removal correction path.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "chicken_sandwich",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "plain"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the sandwich.",
+        "expected": {
+          "items": [
+            "large_fries"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "large_fries"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_after_price",
+    "description": "Changing item after pricing clears checkout state.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_during_confirmation",
+    "description": "Changing the order after recap requires repricing and re-review.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "completed_order": true,
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_repeated_two_steps",
+    "description": "Multiple corrections accumulate metrics.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_20"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_20"
+      ],
+      "correction_count": 2
+    }
+  },
+  {
+    "name": "correction_repeated_three_steps",
+    "description": "Three corrections remain stable.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "well_done"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "Actually add ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "correction_count": 2
+    }
+  },
+  {
+    "name": "correction_remove_after_price",
+    "description": "Removing an item after a quote supports repricing.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [
+            "extra_crispy"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Remove the fries.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "correction_add_extra_dip_after_price",
+    "description": "Adding a second dip changes the quote.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Actually add blue cheese.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 0
+    }
+  },
+  {
+    "name": "correction_finish_after_changes",
+    "description": "Order can still finish after repeated changes.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually add ranch.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "completed_order": true,
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "correction_turns_to_new_item",
+    "description": "Correction can replace a single-item order with a dessert.",
+    "tags": [
+      "corrections"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that brownie.",
+        "expected": {
+          "contains_items": [
+            "brownie"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "brownie"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "cancel_fries_only",
+    "description": "Cancel one side item.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [
+            "extra_crispy"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the fries.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_drink_only",
+    "description": "Cancel a drink line item.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "fountain_drink_20oz",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the drink.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_dip_only",
+    "description": "Cancel a dip line item.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "side_ranch",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the ranch dip.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_entire_order",
+    "description": "Cancel the whole order.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Never mind, cancel everything.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_after_pricing",
+    "description": "Cancel after a quote exists.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_at_confirmation_prompt",
+    "description": "Cancel after recap prompt.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "restart_one_item",
+    "description": "Restart archives the current order.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "restart_two_items",
+    "description": "Restart clears multiple items.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "cancel_empty_session",
+    "description": "Cancel on an empty session is safe.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "restart_empty_session",
+    "description": "Restart on empty session is safe.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 0
+    }
+  },
+  {
+    "name": "cancel_then_new_order",
+    "description": "Customer can cancel and then make a new order.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      },
+      {
+        "user": "Add 6 boneless wings with garlic parmesan and ranch.",
+        "expected": {
+          "contains_items": [
+            "boneless_6"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_6"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "restart_then_new_order",
+    "description": "Customer can restart and begin again.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      },
+      {
+        "user": "This is pickup for Maya."
+      },
+      {
+        "user": "Add chicken sandwich with plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "chicken_sandwich"
+      ],
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "cancel_after_invalid_order",
+    "description": "Canceling an invalid order still clears it.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "validation_errors": [
+            "Please choose a flavor for your wings."
+          ]
+        }
+      },
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "restart_after_invalid_order",
+    "description": "Restarting after invalid state clears it.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Add chicken sandwich combo with plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich_combo"
+          ]
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "remove_only_item",
+    "description": "Removing the only item keeps session open.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Remove the wings.",
+        "expected": {
+          "items": [],
+          "telemetry_events": [
+            "item_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "cancel_group_pack",
+    "description": "Canceling a large order clears it.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "party_pack_50pc",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper",
+            "original_hot",
+            "garlic_parmesan",
+            "mango_habanero"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "restart_after_completed_order",
+    "description": "Completed order can be restarted into a fresh session.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "cancel_completed_order_blocked",
+    "description": "Completed order does not allow silent cancellation.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ]
+        }
+      },
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "response_contains": [
+            "already completed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "item_count": 1,
+      "completed_order": true,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "restart_then_place_new_order",
+    "description": "Restart path can still lead to a completed order.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      },
+      {
+        "user": "This is pickup for Nina."
+      },
+      {
+        "user": "Add 6 tenders with original hot and ranch.",
+        "expected": {
+          "contains_items": [
+            "tenders_6"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "tenders_6"
+      ],
+      "completed_order": true,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "cancel_then_handoff_request",
+    "description": "Customer can ask for a person after canceling.",
+    "tags": [
+      "cancellations"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      },
+      {
+        "user": "Talk to a real person.",
+        "expected": {
+          "status": "handoff_required",
+          "telemetry_events": [
+            "handoff_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "item_count": 0,
+      "handoff_required": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "invalid_boneless_all_flats",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless wings with lemon pepper and all flats.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_boneless_all_drums",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless wings with lemon pepper and all drums.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_tenders_all_flats",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Add 6 tenders with original hot and all flats.",
+        "expected": {
+          "contains_items": [
+            "tenders_6"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_6"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_tenders_all_drums",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "turns": [
+      {
+        "user": "Add 6 tenders with original hot and all drums.",
+        "expected": {
+          "contains_items": [
+            "tenders_6"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_6"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_sandwich_all_flats",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add chicken sandwich with plain and all flats.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "chicken_sandwich"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_sandwich_well_done",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo"
+    },
+    "turns": [
+      {
+        "user": "Add chicken sandwich with plain and well done.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "chicken_sandwich"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_drink_well_done",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava"
+    },
+    "turns": [
+      {
+        "user": "Add 20 oz drink well done.",
+        "expected": {
+          "contains_items": [
+            "fountain_drink_20oz"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "fountain_drink_20oz"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_drink_extra_crispy",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam"
+    },
+    "turns": [
+      {
+        "user": "Add 32 oz drink extra crispy.",
+        "expected": {
+          "contains_items": [
+            "fountain_drink_32oz"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "fountain_drink_32oz"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_brownie_extra_crispy",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Add brownie extra crispy.",
+        "expected": {
+          "contains_items": [
+            "brownie"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "brownie"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_large_fries_ranch",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Add large fries and ranch.",
+        "expected": {
+          "contains_items": [
+            "large_fries"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "large_fries"
+      ],
+      "correction_count": 0
+    }
+  },
+  {
+    "name": "invalid_regular_fries_all_flats",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Add regular fries and all flats.",
+        "expected": {
+          "contains_items": [
+            "regular_fries"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "regular_fries"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_family_pack_with_coke_modifier",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Add family pack with lemon pepper, original hot, and garlic parmesan and coke.",
+        "expected": {
+          "contains_items": [
+            "family_pack_24pc"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "family_pack_24pc"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_party_pack_with_dr_pepper_modifier",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Add party pack with lemon pepper, original hot, garlic parmesan, and mango habanero and dr pepper.",
+        "expected": {
+          "contains_items": [
+            "party_pack_50pc"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "party_pack_50pc"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_classic_missing_drink",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "turns": [
+      {
+        "user": "Add 6 piece classic combo with lemon pepper and fries.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_classic_missing_side",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 6 piece classic combo with lemon pepper and coke.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_boneless_missing_drink",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless combo with lemon pepper and fries.",
+        "expected": {
+          "contains_items": [
+            "combo_boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_boneless_10"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_boneless_missing_side",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless combo with lemon pepper and coke.",
+        "expected": {
+          "contains_items": [
+            "combo_boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_boneless_10"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_two_sides",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam"
+    },
+    "turns": [
+      {
+        "user": "Add 6 piece classic combo with lemon pepper, fries, veggie sticks, and coke.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_combo_two_drinks",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Add 6 piece classic combo with lemon pepper, fries, coke, and sprite.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "invalid_large_fries_blue_cheese",
+    "description": "Invalid modifier or missing required selection.",
+    "tags": [
+      "invalid_modifiers"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Add large fries and blue cheese.",
+        "expected": {
+          "contains_items": [
+            "large_fries"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "large_fries"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_classic6_two",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 6 bone in wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": [
+            "classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_classic6_three",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 6 bone in wings with lemon pepper, original hot, and garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_boneless6_two",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 6 boneless wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": [
+            "boneless_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_boneless10_three",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 10 boneless wings with lemon pepper, original hot, and garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_classic10_three",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings with lemon pepper, original hot, and garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_classic20_four",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 20 bone in wings with lemon pepper, original hot, garlic parmesan, and mango habanero.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_classic50_five",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 50 bone in wings with lemon pepper, original hot, garlic parmesan, mango habanero, and hickory smoked bbq.",
+        "expected": {
+          "contains_items": [
+            "classic_50"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_50"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_family_pack_four",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add family pack with lemon pepper, original hot, garlic parmesan, and mango habanero.",
+        "expected": {
+          "contains_items": [
+            "family_pack_24pc"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "family_pack_24pc"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_party_pack_valid_four",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add party pack with lemon pepper, original hot, garlic parmesan, and mango habanero.",
+        "expected": {
+          "contains_items": [
+            "party_pack_50pc"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "party_pack_50pc"
+      ],
+      "validation_failure_count": 0
+    }
+  },
+  {
+    "name": "flavor_limit_classic10_valid_two",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "validation_failure_count": 0
+    }
+  },
+  {
+    "name": "flavor_limit_classic20_valid_three",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 20 bone in wings with lemon pepper, original hot, and garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "validation_failure_count": 0
+    }
+  },
+  {
+    "name": "flavor_limit_boneless50_valid_four",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 50 boneless wings with lemon pepper, original hot, garlic parmesan, and mango habanero.",
+        "expected": {
+          "contains_items": [
+            "boneless_50"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_50"
+      ],
+      "validation_failure_count": 0
+    }
+  },
+  {
+    "name": "flavor_limit_meal_for_2_three",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add meal for 2 with lemon pepper, original hot, and garlic parmesan.",
+        "expected": {
+          "contains_items": [
+            "meal_for_2_15pc"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "meal_for_2_15pc"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_tenders3_two",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 3 tenders with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": [
+            "tenders_3"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_3"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "flavor_limit_tenders10_valid_two",
+    "description": "Flavor cap scenario.",
+    "tags": [
+      "flavor_limits"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Add 10 tenders with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": [
+            "tenders_10"
+          ],
+          "telemetry_events": [
+            "validation_passed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_10"
+      ],
+      "validation_failure_count": 0
+    }
+  },
+  {
+    "name": "unknown_item_1",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Can I get sushi?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_2",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi"
+    },
+    "turns": [
+      {
+        "user": "Can I get tacos?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_3",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia"
+    },
+    "turns": [
+      {
+        "user": "Can I get a milkshake?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_4",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo"
+    },
+    "turns": [
+      {
+        "user": "Can I get a burger?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_5",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava"
+    },
+    "turns": [
+      {
+        "user": "Can I get a pizza?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_6",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam"
+    },
+    "turns": [
+      {
+        "user": "Do you have a breakfast burrito?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_7",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Can I order onion rings?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_8",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Can I get ramen?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_9",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya"
+    },
+    "turns": [
+      {
+        "user": "Can I get a salad?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_item_10",
+    "description": "Unknown menu item requires clarification.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah"
+    },
+    "turns": [
+      {
+        "user": "Can I get mac and cheese?",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ],
+          "response_contains": [
+            "make sure I got that right"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 0,
+      "clarification_count": 1,
+      "unknown_item_count": 1
+    }
+  },
+  {
+    "name": "unknown_refund_request",
+    "description": "Complaint or human request escalates.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "I need a refund.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "handoff_required": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "unknown_previous_order_complaint",
+    "description": "Complaint or human request escalates.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "My previous order was wrong and I need a manager.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "handoff_required": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "unknown_talk_to_person",
+    "description": "Complaint or human request escalates.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Talk to a real person.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "handoff_required": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "unknown_manager_request",
+    "description": "Complaint or human request escalates.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "Get me a manager.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "handoff_required": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "unknown_wrong_order_handoff",
+    "description": "Complaint or human request escalates.",
+    "tags": [
+      "unknown_items"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "This is the wrong order, I want a human.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "handoff_required": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "ambiguous_make_it_spicy_empty",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "make it spicy",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_make_that_two_multi",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "make that two",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_chicken_thing_empty",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "the chicken thing",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_hot_one_empty",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "the hot one",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_regular_one_empty",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "the regular one",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_add_sauce_empty",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "add sauce",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_remove_that_multi",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "remove that",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_change_it_multi",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "fountain_drink_20oz",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "change it",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_same_as_before_multi",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "same as before",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_other_one_multi",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "give me the other one",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_make_it_spicy_one_item",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "plain"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "make it spicy",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 1,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_make_that_two_three_items",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-3",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "make that two",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 3,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_remove_that_three_items",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-3",
+          "item_id": "brownie",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "remove that",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 3,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_change_it_three_items",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-3",
+          "item_id": "fountain_drink_20oz",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "change it",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 3,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "ambiguous_same_as_before_three_items",
+    "description": "Ambiguous phrasing should clarify without mutating state.",
+    "tags": [
+      "ambiguous_phrasing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "original_hot"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-3",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "same as before",
+        "expected": {
+          "telemetry_events": [
+            "clarification_required"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 3,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "bilingual_pickup_name",
+    "description": "Spanish pickup phrasing sets metadata.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Es pickup para Sofia."
+      },
+      {
+        "user": "Quiero 10 bone in wings con lemon pepper.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "bilingual_boneless_order",
+    "description": "Mixed Spanish and English item phrasing works.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "language": "spanish"
+    },
+    "turns": [
+      {
+        "user": "Dame 8 boneless wings con garlic parmesan y ranch.",
+        "expected": {
+          "contains_items": [
+            "boneless_8"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_8"
+      ]
+    }
+  },
+  {
+    "name": "bilingual_mejor_boneless",
+    "description": "Spanish correction phrase updates item.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Mejor hazlas 10 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_10"
+          ],
+          "telemetry_events": [
+            "invalid_modifier_removed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_10"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "bilingual_cancel_all",
+    "description": "Spanish cancellation phrase works.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancela todo.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "cancelled": true,
+      "item_count": 0,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "bilingual_total_question",
+    "description": "Spanish total question prices deterministically.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cuanto es el total",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "bilingual_confirm_place",
+    "description": "Spanish confirmation after review places the order.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cuanto es el total",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Si, pon la orden",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "bilingual_tenders",
+    "description": "Spanish opener with tenders works.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "language": "spanish"
+    },
+    "turns": [
+      {
+        "user": "Quiero 6 tenders con original hot y ranch.",
+        "expected": {
+          "contains_items": [
+            "tenders_6"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_6"
+      ]
+    }
+  },
+  {
+    "name": "bilingual_change_quantity",
+    "description": "Spanish-style correction to larger boneless pack works.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "No, mejor 20 boneless wings.",
+        "expected": {
+          "contains_items": [
+            "boneless_20"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "bilingual_combo",
+    "description": "Mixed-language combo order works.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "language": "spanish"
+    },
+    "turns": [
+      {
+        "user": "Quiero chicken sandwich combo con fries y coke y plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich_combo"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "chicken_sandwich_combo"
+      ]
+    }
+  },
+  {
+    "name": "bilingual_restart",
+    "description": "Spanish restart phrase resets the order.",
+    "tags": [
+      "bilingual"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "language": "spanish",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Empezar de nuevo.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "confirmation_place_before_total",
+    "description": "Placement is blocked without pricing or recap.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_blocked"
+          ],
+          "order_id_not_created": true,
+          "response_contains": [
+            "cannot place this order yet"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "confirmation_yes_without_recap",
+    "description": "Yes alone is blocked before review.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Yes.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_blocked"
+          ],
+          "order_id_not_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "confirmation_duplicate_after_completion",
+    "description": "Duplicate place attempts do not create a second order.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_duplicate_prevented"
+          ],
+          "response_contains": [
+            "already placed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true,
+      "duplicate_confirmation_prevented": 1
+    }
+  },
+  {
+    "name": "confirmation_modify_after_completion",
+    "description": "Completed order cannot be silently mutated.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "response_contains": [
+            "already completed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "confirmation_cancel_after_review",
+    "description": "Cancellation still works during confirmation stage.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "item_count": 0,
+      "cancelled": true,
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "confirmation_valid_recap_places",
+    "description": "Valid recap and yes places the order.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "combo_boneless_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "regular_seasoned_fries",
+            "coke"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Confirm.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "combo_boneless_10"
+      ],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "confirmation_order_id_created_once",
+    "description": "Only one order id is created per completed order.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_duplicate_prevented"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true,
+      "duplicate_confirmation_prevented": 1
+    }
+  },
+  {
+    "name": "confirmation_repeated_failure_handoff",
+    "description": "Repeated blocked placement escalates to a human.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_blocked"
+          ],
+          "order_id_not_created": true
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ],
+          "response_contains": [
+            "team member"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "handoff_required": true
+    }
+  },
+  {
+    "name": "confirmation_price_but_no_recap",
+    "description": "Price alone is still insufficient for placement.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_blocked"
+          ],
+          "order_id_not_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "confirmation_recap_then_place",
+    "description": "Place wording after review behaves like confirmation.",
+    "tags": [
+      "confirmation_gate"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "pricing_valid_order",
+    "description": "Valid order produces a quote.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ]
+    }
+  },
+  {
+    "name": "pricing_after_quantity_change",
+    "description": "Changing size reprices the order.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "pricing_after_removing_item",
+    "description": "Removing an item reprices downward.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "large_fries",
+          "quantity": 1,
+          "selected_flavor_ids": [],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Remove the fries.",
+        "expected": {
+          "items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "pricing_after_extra_dip",
+    "description": "Adding chargeable extras changes subtotal.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [
+            "ranch"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Actually add blue cheese.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "correction_count": 0
+    }
+  },
+  {
+    "name": "pricing_blocked_missing_flavor",
+    "description": "No quote is produced when required flavors are missing.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_10"
+          ],
+          "validation_errors": [
+            "Please choose a flavor for your wings."
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "pricing_blocked"
+          ],
+          "order_id_not_created": true,
+          "response_contains": [
+            "cannot price this yet"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "pricing_blocked_missing_combo_drink",
+    "description": "No quote for incomplete combos.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo"
+    },
+    "turns": [
+      {
+        "user": "Add 6 piece classic combo with lemon pepper and fries.",
+        "expected": {
+          "contains_items": [
+            "combo_classic_6"
+          ],
+          "telemetry_events": [
+            "validation_failed"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "pricing_blocked"
+          ],
+          "response_contains": [
+            "cannot price this yet"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "combo_classic_6"
+      ],
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "pricing_blocked_empty_order",
+    "description": "Empty session cannot be priced.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "pricing_blocked"
+          ],
+          "response_contains": [
+            "cannot price this yet"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0
+    }
+  },
+  {
+    "name": "pricing_group_pack",
+    "description": "Large orders still quote deterministically.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "party_pack_50pc",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper",
+            "original_hot",
+            "garlic_parmesan",
+            "mango_habanero"
+          ],
+          "selected_modifier_ids": [
+            "all_flats"
+          ],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "party_pack_50pc"
+      ]
+    }
+  },
+  {
+    "name": "pricing_after_confirmation_change",
+    "description": "Repricing after recap is supported.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Noah",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "contains_items": [
+            "classic_20"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_20"
+      ],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "pricing_after_adding_second_item",
+    "description": "Adding a second line changes total.",
+    "tags": [
+      "pricing_repricing"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Add large fries extra crispy.",
+        "expected": {
+          "contains_items": [
+            "classic_10",
+            "large_fries"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted",
+            "subtotal_changed"
+          ],
+          "total_present": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "pricing_order",
+      "line_item_ids": [
+        "classic_10",
+        "large_fries"
+      ]
+    }
+  },
+  {
+    "name": "lifecycle_new_empty_session",
+    "description": "Fresh runner state starts empty.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {},
+    "turns": [],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0
+    }
+  },
+  {
+    "name": "lifecycle_restart_clears_items",
+    "description": "Restart removes stale lines.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Start over.",
+        "expected": {
+          "status": "idle",
+          "items": [],
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_cancel_clears_active_state",
+    "description": "Cancel clears active state.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Sofia",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "status": "cancelled",
+          "items": [],
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "cancelled",
+      "cancelled": true,
+      "item_count": 0
+    }
+  },
+  {
+    "name": "lifecycle_completed_order_not_editable",
+    "description": "Completed order resists stale edits.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Mateo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ]
+        }
+      },
+      {
+        "user": "Actually make that 20 classic wings.",
+        "expected": {
+          "response_contains": [
+            "already completed"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "classic_10"
+      ],
+      "completed_order": true,
+      "clarification_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_fresh_order_after_completed",
+    "description": "Restart after completed begins clean.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Ava",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ]
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      },
+      {
+        "user": "This is pickup for Ava."
+      },
+      {
+        "user": "Add 6 boneless wings with garlic parmesan and ranch.",
+        "expected": {
+          "contains_items": [
+            "boneless_6"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "boneless_6"
+      ],
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_empty_total_does_not_create_order",
+    "description": "Pricing empty session never creates order ids.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "pricing_blocked"
+          ],
+          "order_id_not_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0
+    }
+  },
+  {
+    "name": "lifecycle_completed_then_restart_then_complete",
+    "description": "Restarted order can complete cleanly.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Liam",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ]
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      },
+      {
+        "user": "This is pickup for Liam."
+      },
+      {
+        "user": "Add chicken sandwich with plain.",
+        "expected": {
+          "contains_items": [
+            "chicken_sandwich"
+          ]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": [
+        "chicken_sandwich"
+      ],
+      "completed_order": true,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_cancelled_then_new_order",
+    "description": "Cancelled session can start a new order.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Nina",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Cancel the order.",
+        "expected": {
+          "telemetry_events": [
+            "order_cancelled"
+          ]
+        }
+      },
+      {
+        "user": "Add 3 tenders with original hot and ranch.",
+        "expected": {
+          "contains_items": [
+            "tenders_3"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "tenders_3"
+      ],
+      "cancellation_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_handoff_then_restart",
+    "description": "Handoff state can be reset with restart.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Leo",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Talk to a real person.",
+        "expected": {
+          "telemetry_events": [
+            "handoff_required"
+          ]
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "idle",
+      "item_count": 0,
+      "archived_order_count": 1
+    }
+  },
+  {
+    "name": "lifecycle_no_stale_order_id_after_restart",
+    "description": "Restart clears completed order id from the next session.",
+    "tags": [
+      "session_lifecycle"
+    ],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Maya",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": [
+            "lemon_pepper"
+          ],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": [
+            "price_quoted"
+          ]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": [
+            "confirmation_review_ready"
+          ]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": [
+            "mock_order_created"
+          ],
+          "order_id_created": true
+        }
+      },
+      {
+        "user": "Start over.",
+        "expected": {
+          "telemetry_events": [
+            "order_restarted"
+          ]
+        }
+      },
+      {
+        "user": "This is pickup for Maya."
+      },
+      {
+        "user": "Add brownie.",
+        "expected": {
+          "contains_items": [
+            "brownie"
+          ]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": [
+        "brownie"
+      ],
+      "archived_order_count": 1
+    }
+  }
+]

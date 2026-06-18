@@ -6,6 +6,7 @@ This directory is intentionally kept small. These are the live docs we keep in s
 - [LOCAL_SETUP.md](./LOCAL_SETUP.md): how to run the repo locally
 - [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md): env contract by app
 - [MOCK_MENU.md](./MOCK_MENU.md): current Wingstop demo menu and validation model
+- [RELIABILITY_TESTING.md](./RELIABILITY_TESTING.md): deterministic scenario-suite usage and extension guide
 - [RELIABILITY_ARCHITECTURE.md](./RELIABILITY_ARCHITECTURE.md): reducer, state-machine, telemetry, and replay design
 - [SHOWCASE_DEMO_SCRIPT.md](./SHOWCASE_DEMO_SCRIPT.md): reliable demo flow and messy-call variants
 - [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md): current gaps and remediation roadmap
