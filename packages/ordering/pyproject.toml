@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voix-ordering"
+version = "0.1.0"
+description = "VoixAI ordering domain: menu, pricing, validation, order state, and the order state machine. Pure Python, no LiveKit dependency, shared by apps/api and apps/agent-runtime."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

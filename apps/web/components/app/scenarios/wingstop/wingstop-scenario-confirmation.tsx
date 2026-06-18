@@ -20,7 +20,7 @@ export function WingstopScenarioConfirmation({
       service={telemetrySnapshot.order.pickup_or_delivery}
       items={buildWingstopConfirmationItems(telemetrySnapshot)}
       pickupTime={telemetrySnapshot.order.pickup_time}
-      total={telemetrySnapshot.mock_order?.total ?? null}
+      total={telemetrySnapshot.mock_order?.total ?? telemetrySnapshot.price_quote?.total ?? null}
       orderNumber={telemetrySnapshot.mock_order?.order_number ?? null}
       onStartNewOrder={onStartNewFlow}
       onBackToDemo={onBackToDemo}

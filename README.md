@@ -80,6 +80,7 @@ Primary responsibilities:
 
 - `GET /health`
 - `POST /api/livekit/token`
+- backend menu lookup, order validation, and pricing endpoints for the Wingstop scenario
 - persist room-scoped runtime config
 - mint browser participant tokens
 - dispatch the Python agent into the room
@@ -119,6 +120,11 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 
 - `gemini-3.1-flash-live-preview`
 
+Current runtime note:
+
+- Gemini 3.1 greets in its own voice via native `generate_reply(...)`. This requires the `charan632-dev/agents` Google plugin fork, which adds forced-`generate_reply` support for Gemini 3.1. The previous TTS `say(...)` fallback was removed because it produced a second voice and a duplicate greeting alongside the model's own.
+- The agent runtime dependency is pinned to the `charan632-dev/agents` Google plugin fork — install it into the runtime venv (see docs/LOCAL_SETUP.md) and verify with `pip show`/`direct_url.json`, since a stray stock PyPI install reintroduces the duplicate-greeting bug.
+
 ## Key Current Behaviors
 
 - The frontend default voice mode can follow env instead of always booting in classic mode.
@@ -126,6 +132,8 @@ Uses the LiveKit Google realtime plugin. Current default model is:
 - Realtime away prompts are handled safely in the runtime so Gemini/OpenAI sessions do not crash on idle prompts.
 - Developer-facing metrics and internals are hidden behind a disclosure in the UI instead of shown by default.
 - The current product framing is platform-first: VoixAI is the system, and Wingstop inbound ordering is the current live scenario.
+- The current Wingstop scenario now uses a structured demo menu, structured order state, confirmation-gated mock order creation, and bilingual English/Spanish ordering behavior.
+- Menu resolution, order validation, and pricing for the Wingstop scenario now come from backend-backed tools instead of relying only on prompt-embedded menu text.
 
 ## Quick Start
 
@@ -137,17 +145,22 @@ See:
 Short version:
 
 1. Copy env files.
-2. Run `.\scripts\start-all.ps1` from the repo root.
-3. Open `http://localhost:3000`.
+2. Start `apps/api`.
+3. Start `apps/agent-runtime`.
+4. Start `apps/web`.
+5. Open `http://localhost:3000`.
 
 ## Important Docs
 
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — accurate current-state system design
+- [docs/PRODUCTION_READINESS.md](./docs/PRODUCTION_READINESS.md) — gap analysis, target architecture, and remediation roadmap
+- [docs/direction.md](./docs/direction.md) — long-term platform vision
 - [docs/PROJECT_AUDIT_REPORT.md](./docs/PROJECT_AUDIT_REPORT.md)
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 - [docs/LOCAL_SETUP.md](./docs/LOCAL_SETUP.md)
 - [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
 - [docs/OPENAI_REALTIME.md](./docs/OPENAI_REALTIME.md)
 - [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md)
+- [docs/MOCK_MENU.md](./docs/MOCK_MENU.md)
 
 ## Current Limitations
 

@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -28,15 +29,15 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from call_recorder import finalize_call, open_call
 from channels import CHANNEL_REGISTRY, DEFAULT_CHANNEL_ID, get_channel_definition
 from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_definition
 from scenarios.wingstop import (
     MockOrder,
     OrderState,
-    build_confirmation_summary,
-    calculate_order_total,
-    create_mock_order,
-    summarize_order_state,
+    PriceQuote,
+    audit_assistant_response,
+    build_initial_greeting,
 )
 
 logger = logging.getLogger("agent")
@@ -70,7 +71,7 @@ OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
 OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
 OPENAI_REALTIME_EAGERNESS = os.getenv("OPENAI_REALTIME_EAGERNESS", "medium")
 GOOGLE_REALTIME_MODEL = os.getenv("GOOGLE_REALTIME_MODEL", "gemini-3.1-flash-live-preview")
-GOOGLE_REALTIME_VOICE = os.getenv("GOOGLE_REALTIME_VOICE", "Puck")
+GOOGLE_REALTIME_VOICE = os.getenv("GOOGLE_REALTIME_VOICE", "Achird")
 REALTIME_TEMPERATURE = float(os.getenv("REALTIME_TEMPERATURE", "0.6"))
 REALTIME_ENABLE_AFFECTIVE_DIALOG = (
     os.getenv("REALTIME_ENABLE_AFFECTIVE_DIALOG", "false").strip().lower() == "true"
@@ -134,13 +135,21 @@ class SessionState:
     scenario_id: str = DEFAULT_SCENARIO_ID
     channel_id: str = DEFAULT_CHANNEL_ID
     order: OrderState = field(default_factory=OrderState)
+    price_quote: PriceQuote | None = None
     mock_order: MockOrder | None = None
     user_turn_metrics: dict[str, float | None] | None = None
     assistant_turn_metrics: dict[str, float | None] | None = None
     turn_count: int = 0
     waiting_for_customer: bool = False
     runtime_profile: dict[str, object] | None = None
+    assistant_guardrail_violations: list[str] = field(default_factory=list)
     room: rtc.Room | None = field(default=None, repr=False, compare=False)
+    # Call telemetry (dashboard): a rolling transcript + lifetime guardrail count
+    # so the call can be finalized on shutdown.
+    call_id: str | None = None
+    call_started_at: float | None = None
+    transcript: list[dict[str, object]] = field(default_factory=list)
+    guardrail_violation_count: int = 0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -260,6 +269,29 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
     )
 
 
+def _runtime_config_from_metadata(metadata: str | None) -> RuntimeConfig | None:
+    """Parse runtime config from the agent dispatch/job metadata.
+
+    This is the primary handoff path: the config travels with the agent job, so
+    it works across hosts without a shared filesystem. Returns ``None`` when no
+    usable metadata is present so the caller can fall back to the file.
+    """
+    if not metadata or not metadata.strip():
+        return None
+
+    try:
+        payload = json.loads(metadata)
+    except Exception:
+        logger.warning("Failed to parse job metadata as runtime config JSON")
+        return None
+
+    if not isinstance(payload, Mapping):
+        logger.warning("Job metadata runtime config was not an object")
+        return None
+
+    return _runtime_config_from_payload(payload)
+
+
 def _load_runtime_config_for_room(room_name: str) -> RuntimeConfig:
     config_path = _session_config_path(room_name)
     if not config_path.exists():
@@ -276,6 +308,18 @@ def _load_runtime_config_for_room(room_name: str) -> RuntimeConfig:
         return RuntimeConfig()
 
     return _runtime_config_from_payload(payload)
+
+
+def _resolve_runtime_config_for_job(ctx: JobContext) -> RuntimeConfig:
+    """Prefer dispatch metadata, fall back to the room-scoped config file."""
+    job_metadata = getattr(getattr(ctx, "job", None), "metadata", None)
+    metadata_config = _runtime_config_from_metadata(job_metadata)
+    if metadata_config is not None:
+        logger.info("Loaded runtime config from job metadata")
+        return _resolve_runtime_config(metadata_config)
+
+    logger.info("No job metadata runtime config; falling back to room config file")
+    return _resolve_runtime_config(_load_runtime_config_for_room(ctx.room.name))
 
 
 def _runtime_profile_payload(runtime_config: RuntimeConfig) -> dict[str, object]:
@@ -409,6 +453,20 @@ def _is_text_only_realtime_engine(engine: str) -> bool:
         VOICE_ENGINE_OPENAI_REALTIME_TEXT,
         VOICE_ENGINE_GEMINI_LIVE_TEXT,
     }
+
+
+def _supports_generate_reply(runtime_config: RuntimeConfig) -> bool:
+    # The forked Google realtime plugin (charan632-dev/agents) supports a forced
+    # generate_reply() for Gemini 3.1, so every realtime model can greet in its
+    # own voice. Previously Gemini 3.1 used a TTS say() fallback, which produced
+    # a second voice and a duplicate greeting alongside the model's own.
+    return True
+
+
+def _needs_tts_fallback_for_forced_speech(runtime_config: RuntimeConfig) -> bool:
+    # No realtime provider needs a separate TTS voice for forced startup speech
+    # anymore; the model speaks the greeting itself via generate_reply().
+    return False
 
 
 def _has_module(module_name: str) -> bool:
@@ -759,7 +817,7 @@ def _build_realtime_session(
         "userdata": SessionState(),
     }
 
-    if text_only:
+    if text_only or _needs_tts_fallback_for_forced_speech(runtime_config):
         kwargs["tts"] = inference.TTS(
             model=runtime_config.tts_model,
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
@@ -847,7 +905,9 @@ def _log_runtime_profile(runtime_config: RuntimeConfig) -> None:
 
 
 def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: RuntimeConfig) -> None:
-    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
         session.say(
             "Are you still there?",
             allow_interruptions=True,
@@ -858,6 +918,29 @@ def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: Ru
     session.generate_reply(
         instructions=(
             "The user went silent. Ask only one short question: are you still there?"
+        ),
+    )
+
+
+def _trigger_initial_greeting(
+    session: AgentSession[SessionState],
+    runtime_config: RuntimeConfig,
+    greeting_text: str,
+) -> None:
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
+        session.say(
+            greeting_text,
+            allow_interruptions=True,
+            add_to_chat_ctx=True,
+        )
+        return
+
+    session.generate_reply(
+        instructions=(
+            "Greet the customer first. Use this exact greeting content naturally and only once: "
+            f"{greeting_text}"
         ),
     )
 
@@ -894,7 +977,7 @@ async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
-    runtime_config = _resolve_runtime_config(_load_runtime_config_for_room(ctx.room.name))
+    runtime_config = _resolve_runtime_config_for_job(ctx)
     _validate_runtime_config(runtime_config)
     scenario = get_scenario_definition(runtime_config.scenario_id)
     channel = get_channel_definition(runtime_config.channel_id)
@@ -943,6 +1026,14 @@ async def my_agent(ctx: JobContext):
         if not isinstance(item, ChatMessage):
             return
 
+        # Capture the turn for the call transcript (dashboard replay). Best-effort:
+        # we only record user/assistant text turns.
+        turn_text = (getattr(item, "text_content", "") or "").strip()
+        if turn_text and item.role in {"user", "assistant"}:
+            session.userdata.transcript.append(
+                {"role": item.role, "text": turn_text, "ts": time.time()}
+            )
+
         metrics = item.metrics if isinstance(item.metrics, Mapping) else None
 
         if item.role == "user":
@@ -977,6 +1068,21 @@ async def my_agent(ctx: JobContext):
                 }
             else:
                 session.userdata.assistant_turn_metrics = None
+            assistant_text = getattr(item, "text_content", "") or ""
+            session.userdata.assistant_guardrail_violations = audit_assistant_response(
+                assistant_text,
+                session.userdata.order,
+                session.userdata.price_quote,
+                session.userdata.mock_order,
+            )
+            if session.userdata.assistant_guardrail_violations:
+                session.userdata.guardrail_violation_count += len(
+                    session.userdata.assistant_guardrail_violations
+                )
+                logger.warning(
+                    "Assistant response guardrail violations: %s",
+                    " | ".join(session.userdata.assistant_guardrail_violations),
+                )
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
             )
@@ -984,6 +1090,48 @@ async def my_agent(ctx: JobContext):
     session.on("user_state_changed", _on_user_state_changed)
     session.on("agent_state_changed", _on_agent_state_changed)
     session.on("conversation_item_added", _on_conversation_item)
+
+    # --- Call telemetry (dashboard) ---------------------------------------
+    # Open a call record now and finalize it on shutdown. All of this is
+    # best-effort: a telemetry failure must never affect the live call.
+    call_id = f"call-{uuid4().hex[:12]}"
+    call_started_at = time.time()
+    session.userdata.call_id = call_id
+    session.userdata.call_started_at = call_started_at
+
+    asyncio.create_task(
+        asyncio.to_thread(
+            open_call,
+            call_id=call_id,
+            room_name=ctx.room.name,
+            scenario=scenario.id,
+            channel=channel.id,
+            voice_provider=runtime_config.voice_provider,
+            llm_model=runtime_config.llm_model,
+            language=session.userdata.order.language,
+            started_at=call_started_at,
+        )
+    )
+
+    async def _finalize_call_on_shutdown() -> None:
+        userdata = session.userdata
+        mock_order = userdata.mock_order
+        try:
+            await asyncio.to_thread(
+                finalize_call,
+                call_id=call_id,
+                started_at=call_started_at,
+                transcript=list(userdata.transcript),
+                turn_count=userdata.turn_count,
+                order_number=getattr(mock_order, "order_number", None) if mock_order else None,
+                order_total=getattr(mock_order, "total", None) if mock_order else None,
+                guardrail_violations=userdata.guardrail_violation_count,
+                language=userdata.order.language,
+            )
+        except Exception:
+            logger.exception("Failed to finalize call telemetry for %s", call_id)
+
+    ctx.add_shutdown_callback(_finalize_call_on_shutdown)
 
     # Connect the worker to the assigned room before starting the voice session.
     await ctx.connect()
@@ -993,6 +1141,11 @@ async def my_agent(ctx: JobContext):
         agent=scenario.agent_factory(assistant_llm, channel),
         room=ctx.room,
         room_options=_build_room_options(),
+    )
+    _trigger_initial_greeting(
+        session,
+        runtime_config,
+        build_initial_greeting(channel),
     )
     await _publish_session_snapshot(session.userdata, reason="session_started")
 

@@ -1,0 +1,246 @@
+[
+  {
+    "name": "pickup_wings_flow_survives_blank_follow_up_update",
+    "description": "An 8 piece classic wings order keeps its flavor after a later blank update call and can still be priced, reviewed, confirmed, and submitted.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 classic wings",
+          "flavors": "original hot",
+          "modifiers": "ranch"
+        }
+      },
+      {
+        "tool": "update_last_item",
+        "kwargs": {
+          "flavors": "",
+          "add_modifiers": "",
+          "remove_modifiers": "",
+          "special_instructions": ""
+        },
+        "response_not_contains": [
+          "Please choose a flavor for your wings."
+        ]
+      },
+      {
+        "tool": "price_order",
+        "kwargs": {},
+        "response_contains": [
+          "Subtotal is",
+          "total is $12.44"
+        ]
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "Original Hot",
+          "Ranch",
+          "Should I place it?"
+        ]
+      },
+      {
+        "tool": "set_confirmation_status",
+        "kwargs": {
+          "confirmed": true
+        }
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "Great, your order was placed."
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "line_count": 1,
+      "line_item_ids": [
+        "classic_8"
+      ],
+      "line_flavor_ids": [
+        [
+          "original_hot"
+        ]
+      ],
+      "line_modifier_ids": [
+        [
+          "ranch"
+        ]
+      ],
+      "total": "$12.44",
+      "status": "submitted",
+      "confirmed": true,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "combo_to_wings_correction_preserves_order_integrity",
+    "description": "A customer starts with an 8 piece classic combo, then switches to wings-only with ranch. The corrected order must price and submit cleanly.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Rishi"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 piece classic combo",
+          "flavors": "hot"
+        },
+        "response_contains": [
+          "I still need:",
+          "drink selection",
+          "side selection"
+        ]
+      },
+      {
+        "tool": "remove_order_item",
+        "kwargs": {
+          "item_name": "8 Piece Classic Wing Combo"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 Classic Wings",
+          "flavors": "hot",
+          "modifiers": "regular ranch"
+        },
+        "response_contains": [
+          "8 Classic Wings"
+        ]
+      },
+      {
+        "tool": "price_order",
+        "kwargs": {},
+        "response_contains": [
+          "total is $12.44"
+        ]
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "8 Classic Wings",
+          "Original Hot",
+          "Ranch",
+          "Rishi"
+        ]
+      },
+      {
+        "tool": "set_confirmation_status",
+        "kwargs": {
+          "confirmed": true
+        }
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "Great, your order was placed."
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Rishi",
+      "line_count": 1,
+      "line_item_ids": [
+        "classic_8"
+      ],
+      "line_flavor_ids": [
+        [
+          "original_hot"
+        ]
+      ],
+      "line_modifier_ids": [
+        [
+          "ranch"
+        ]
+      ],
+      "total": "$12.44",
+      "status": "submitted",
+      "confirmed": true,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "pickup_order_cannot_submit_without_required_name",
+    "description": "Pickup orders must not move into final review or submit without a customer name.",
+    "steps": [
+      {
+        "tool": "set_order_type",
+        "kwargs": {
+          "order_type": "pickup"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 classic wings",
+          "flavors": "original hot",
+          "modifiers": "ranch"
+        }
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "I still need the name for the pickup order"
+        ]
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "pickup name is missing"
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "",
+      "line_count": 1,
+      "line_item_ids": [
+        "classic_8"
+      ],
+      "line_flavor_ids": [
+        [
+          "original_hot"
+        ]
+      ],
+      "line_modifier_ids": [
+        [
+          "ranch"
+        ]
+      ],
+      "status": "collecting",
+      "confirmed": false,
+      "validation_errors": []
+    }
+  }
+]

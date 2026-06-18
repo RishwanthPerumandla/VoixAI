@@ -1,11 +1,11 @@
 'use client';
 
 import { Track } from 'livekit-client';
-import { useChat } from '@livekit/components-react';
 import { MicIcon, MicOffIcon, PhoneOffIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useChat } from '@livekit/components-react';
 import { AgentTrackToggle } from '@/components/agents-ui/agent-track-toggle';
 import { TextFallbackInput } from '@/components/app/text-fallback-input';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/shadcn/utils';
 
 interface VoiceControlsProps {
@@ -38,10 +38,10 @@ export function VoiceControls({
             void onToggleMicrophone(enabled);
           }}
           className={cn(
-            'h-11 min-w-[9rem] rounded-full border border-white/10 px-4 text-sm font-medium',
+            'h-11 min-w-[9rem] rounded-full border px-4 text-sm font-medium transition',
             microphoneEnabled
-              ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20'
-              : 'bg-white/6 text-slate-100 hover:bg-white/10'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              : 'border-[var(--voix-border-strong)] bg-[var(--voix-bg-subtle)] text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-inset)]'
           )}
           aria-label={microphoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
         >
@@ -53,7 +53,7 @@ export function VoiceControls({
           type="button"
           variant="outline"
           onClick={onEndOrder}
-          className="h-11 rounded-full border-white/10 bg-transparent px-5 text-sm text-slate-100 hover:bg-white/8"
+          className="h-11 rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] px-5 text-sm text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)]"
         >
           <PhoneOffIcon />
           End order

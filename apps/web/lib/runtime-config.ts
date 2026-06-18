@@ -71,7 +71,7 @@ export const GOOGLE_REALTIME_MODEL_OPTIONS = ['gemini-3.1-flash-live-preview'] a
 
 export const OPENAI_REALTIME_VOICE_OPTIONS = ['marin'] as const;
 
-export const GOOGLE_REALTIME_VOICE_OPTIONS = ['Puck'] as const;
+export const GOOGLE_REALTIME_VOICE_OPTIONS = ['Achird', 'Sulafat', 'Kore'] as const;
 
 const buildConfig = (config: RuntimeConfig): RuntimeConfig => config;
 
@@ -89,7 +89,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-2.5-flash',
-      googleRealtimeVoice: 'Puck',
+      googleRealtimeVoice: 'Achird',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,
@@ -111,7 +111,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-2.5-flash',
-      googleRealtimeVoice: 'Puck',
+      googleRealtimeVoice: 'Achird',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,
@@ -133,7 +133,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-3.1-flash-live-preview',
-      googleRealtimeVoice: 'Puck',
+      googleRealtimeVoice: 'Achird',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,

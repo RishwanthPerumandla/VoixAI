@@ -159,3 +159,55 @@ Known limitations:
 - The browser still connects only through LiveKit in this phase; no browser-direct OpenAI WebRTC path or ephemeral OpenAI session endpoint was added.
 - Classic latency logs remain the source of truth for STT, LLM, and TTS stage timings. Realtime mode currently logs the active provider but not equivalent per-stage metrics.
 - The in-session order tools remain available in both modes, but realtime behavior still depends on tool-calling quality during live conversation.
+
+## Phase 8
+
+Status: Complete
+
+Completed work:
+
+- Replaced the old string-based Wingstop order memory with a structured order state and structured line items.
+- Added a realistic `Voix Wings Demo` wing-restaurant menu with combos, classic wings, boneless wings, tenders, sandwiches, group packs, fries, sides, dips, drinks, desserts, flavors, and modifier groups.
+- Added stronger menu validation for invalid items, flavor limits, combo requirements, and classic-only piece preferences like `All Flats`.
+- Added a priced quote layer with subtotal, tax, total, line-item breakdowns, and ETA.
+- Added a stricter bilingual restaurant instruction layer for English and Spanish ordering.
+- Added a confirmation gate so mock order creation only succeeds when the order has valid items, required selections, a shown total, a readback recap, an order type, and explicit user confirmation.
+- Added assistant-turn guardrail auditing for price mismatches and order-placement hallucination checks.
+- Refreshed focused runtime tests around menu validation, pricing, structured snapshots, guardrail auditing, and provider behavior.
+
+Validation notes:
+
+- Focused runtime coverage passes in `apps/agent-runtime/tests/test_order_state.py`.
+- Structured order snapshots now include line items, quote details, and guardrail violations.
+- The web UI continues to consume telemetry while showing quote totals before final mock order creation.
+
+Known limitations:
+
+- The current menu and pricing are still demo data, not an official Wingstop or POS-backed source of truth.
+- Assistant response auditing runs immediately after assistant generation and telemetry publication; it is not yet a full pre-speech rewrite or hard-block layer inside LiveKit.
+- Order state is still session-scoped and in memory only.
+
+## Phase 9
+
+Status: Complete
+
+Completed work:
+
+- Moved Wingstop menu resolution, order validation, and pricing behind backend-backed API endpoints instead of relying only on prompt-embedded menu data.
+- Updated the agent runtime tools to call the backend menu endpoints for item resolution, validation, and pricing.
+- Added more voice-friendly combo aliases and explicit missing-requirement feedback so incomplete combos immediately surface missing drink or side selections.
+- Added auto-return behavior in the confirmation UI after a completed mock order.
+- Pinned the LiveKit Google realtime plugin to the `charan632-dev/agents` fork for the current Gemini Live fix path.
+- Added a Gemini 3.1-specific fallback so the runtime attaches TTS for forced startup speech and avoids unsupported `generate_reply(...)` calls on the initial greeting and idle away prompt.
+
+Validation notes:
+
+- Focused runtime coverage passes in `apps/agent-runtime/tests/test_order_state.py`, including Gemini 3.1 greeting-path coverage and backend-backed order-state behavior.
+- The API-side menu resolve and pricing behavior was exercised directly in the API environment for combo requirement and total checks.
+- The agent runtime editable install was refreshed so the local worker venv now pulls the forked Google plugin from GitHub.
+
+Known limitations:
+
+- Wingstop menu and pricing are still demo data even though they now flow through backend endpoints.
+- Full end-to-end live-room verification for Gemini 3.1 still depends on restarting the worker and testing a fresh room/session with valid LiveKit and Google credentials.
+- Order submission remains mock order creation, not a real POS order placement flow.

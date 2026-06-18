@@ -28,6 +28,11 @@ Optional but recommended:
 
 - `AGENT_NAME`
 - `ALLOWED_ORIGINS`
+- `ALLOWED_ORIGIN_REGEX`
+
+Local CORS note:
+
+- if you leave both unset, the API accepts `http://localhost:*` and `http://127.0.0.1:*` during local development so browser preflight still works when Next.js moves off port `3000`
 
 Worker provider defaults:
 
@@ -45,6 +50,13 @@ Frontend mode defaults:
 
 ## 2. Install local dependencies
 
+> The ordering domain (menu, pricing, validation, order state, order state
+> machine) lives in the shared `packages/ordering` package and is the single
+> source of truth used by both `apps/api` and `apps/agent-runtime`. Each Python
+> venv installs it editable with `python -m pip install -e ../../packages/ordering`
+> (shown in the steps below). For the agent runtime, `uv sync` also picks it up
+> via `[tool.uv.sources]` in `apps/agent-runtime/pyproject.toml`.
+
 Web:
 
 ```powershell
@@ -59,8 +71,23 @@ cd apps/agent-runtime
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python src/agent.py download-files
 ```
+
+Note:
+
+- `apps/agent-runtime` pulls `livekit-plugins-google` from the `charan632-dev/agents`
+  fork (it adds forced-`generate_reply` support for Gemini 3.1 so the model greets
+  in its own voice). The `pip install -e .` above should install it from the
+  pinned git URL, but if a stock PyPI build slipped in (which causes a duplicate
+  Gemini greeting in two voices), force the fork and verify:
+
+  ```powershell
+  .\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps "livekit-plugins-google @ git+https://github.com/charan632-dev/agents.git#subdirectory=livekit-plugins/livekit-plugins-google"
+  # confirm the fork is installed (must show the git url):
+  Get-Content .\.venv\Lib\site-packages\livekit_plugins_google-*.dist-info\direct_url.json
+  ```
 
 API:
 
@@ -69,6 +96,7 @@ cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 ```
 
 ## 3. Start everything with one command
@@ -84,6 +112,18 @@ This opens three PowerShell windows for:
 - `apps/api`
 - `apps/agent-runtime`
 - `apps/web`
+
+All three **hot-reload on code changes** — no manual restart needed:
+
+- `apps/web` via Next.js fast refresh
+- `apps/api` via `uvicorn --reload`, watching both `apps/api` and the shared
+  `packages/ordering/src`
+- `apps/agent-runtime` via `watchfiles`, restarting the worker on changes in
+  both `src` and `packages/ordering/src`
+
+Because the shared `packages/ordering` domain is watched by both Python
+services, editing the menu/pricing/validation/state-machine code restarts the
+API and the worker automatically.
 
 If you only want to confirm the launch commands without starting them:
 
@@ -110,6 +150,7 @@ cd apps/agent-runtime
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python src/agent.py download-files
 python src/agent.py dev
 ```
@@ -129,8 +170,13 @@ To enable Gemini Live, set:
 VOICE_PROVIDER=gemini_live
 GOOGLE_API_KEY=...
 GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
-GOOGLE_REALTIME_VOICE=Puck
+GOOGLE_REALTIME_VOICE=Achird
 ```
+
+Gemini Live note:
+
+- `gemini-3.1-flash-live-preview` greets in its own voice via native `generate_reply(...)`, which requires the `charan632-dev/agents` Google plugin fork (it adds forced-`generate_reply` support for Gemini 3.1). If the stock PyPI plugin is installed instead, you get a duplicate greeting in two different voices. Ensure the fork is installed (see below).
+- `Achird` is the recommended default for Wingstop ordering. If you want a warmer hospitality feel, try `Sulafat`. If you want a calmer, firmer tone, try `Kore`.
 
 ## 6. Start the API manually
 
@@ -139,6 +185,7 @@ cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+python -m pip install -e ../../packages/ordering
 python -m uvicorn main:app --reload --port 8000
 ```
 

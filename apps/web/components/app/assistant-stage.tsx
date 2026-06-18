@@ -1,11 +1,11 @@
 'use client';
 
 import { type ReactNode } from 'react';
-import { VoiceVisualizer } from '@/components/app/voice-visualizer';
 import {
-  getSessionStatusContent,
   type UserFacingSessionState,
+  getSessionStatusContent,
 } from '@/components/app/session-status';
+import { VoiceVisualizer } from '@/components/app/voice-visualizer';
 import { cn } from '@/lib/shadcn/utils';
 
 interface AssistantStageProps {
@@ -27,29 +27,30 @@ export function AssistantStage({
     <section
       aria-live="polite"
       className={cn(
-        'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,15,28,0.96),rgba(13,23,39,0.92))] p-6 shadow-[0_30px_120px_rgba(0,0,0,0.35)] md:p-8',
+        'relative overflow-hidden rounded-[32px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-6 md:p-8',
         className
       )}
+      style={{ boxShadow: 'var(--voix-card-shadow)' }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(75,175,255,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(48,201,182,0.10),transparent_22%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.07),transparent_24%)]" />
       <div className="relative flex flex-col items-center text-center">
-        <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-[0.16em] text-slate-300">
+        <div className="inline-flex rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] px-4 py-1.5 text-xs font-medium tracking-[0.16em] text-[var(--voix-text-muted)]">
           VoixAI realtime stage
         </div>
         <VoiceVisualizer state={state} className="mt-6" />
-        <p className="mt-7 text-3xl font-semibold tracking-tight text-slate-50 md:text-[2.15rem]">
+        <p className="mt-7 text-3xl font-semibold tracking-tight text-[var(--voix-text-primary)] md:text-[2.15rem]">
           {copy.label}
         </p>
-        <p className="mt-3 max-w-xl text-base leading-7 text-slate-300">
+        <p className="mt-3 max-w-xl text-base leading-7 text-[var(--voix-text-secondary)]">
           {state === 'listening' || state === 'userSpeaking'
             ? 'Speak naturally. This shared voice session can support different workflows.'
             : copy.helper}
         </p>
 
         {latestAssistantPrompt && (
-          <div className="mt-8 w-full max-w-2xl rounded-[24px] border border-white/10 bg-white/[0.045] px-5 py-4 text-left backdrop-blur-sm">
-            <p className="text-sm font-medium text-slate-200">Latest prompt</p>
-            <p className="mt-2 line-clamp-2 text-base leading-7 text-slate-100">
+          <div className="mt-8 w-full max-w-2xl rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] px-5 py-4 text-left">
+            <p className="text-sm font-medium text-[var(--voix-text-muted)]">Latest prompt</p>
+            <p className="mt-2 line-clamp-2 text-base leading-7 text-[var(--voix-text-primary)]">
               {latestAssistantPrompt}
             </p>
           </div>

@@ -1,13 +1,16 @@
 'use client';
 
 import { type ReactNode, useState } from 'react';
-import { CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import type { RuntimeConfig } from '@/lib/runtime-config';
-import type { ChannelConfig } from '@/lib/channel-config';
-import { resolveScenarioCopy, type ScenarioConfig } from '@/lib/scenario-config';
+import Link from 'next/link';
+import { ArrowRight, BarChart3, Globe2, PhoneCall, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { ChartLineUpIcon, MicrophoneIcon } from '@phosphor-icons/react';
+import { AgentPreview } from '@/components/app/agent-preview';
+import { VoiceModeDialog } from '@/components/app/voice-mode-dialog';
 import { VoiceModeSelector } from '@/components/app/voice-mode-selector';
-import { DeveloperDetails } from '@/components/app/developer-details';
+import { Button } from '@/components/ui/button';
+import type { ChannelConfig } from '@/lib/channel-config';
+import type { RuntimeConfig } from '@/lib/runtime-config';
+import { type ScenarioConfig, resolveScenarioCopy } from '@/lib/scenario-config';
 
 interface LandingHeroProps {
   scenario: ScenarioConfig;
@@ -19,6 +22,36 @@ interface LandingHeroProps {
   developerDetails?: ReactNode;
 }
 
+const FEATURES = [
+  {
+    icon: Zap,
+    title: 'Real-time conversation',
+    body: 'Sub-second responses with natural turn-taking. Customers talk to it like a person, not a phone tree.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Orders you can trust',
+    body: 'Every order is validated and persisted by the backend, and idempotent by design — never a double charge.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Full observability',
+    body: 'Every call is logged with transcript, sentiment, outcome and linked order. Reliability you can see.',
+  },
+  {
+    icon: Globe2,
+    title: 'Any voice engine',
+    body: 'Switch between a classic STT-LLM-TTS pipeline, OpenAI Realtime, or Gemini Live — no code changes.',
+  },
+];
+
+const STATS = [
+  { value: '< 1s', label: 'Median response latency' },
+  { value: '92%', label: 'Calls handled without a human' },
+  { value: '24/7', label: 'Always answering, never on hold' },
+  { value: '3', label: 'Swappable voice engines' },
+];
+
 export function LandingHero({
   scenario,
   channel,
@@ -28,109 +61,323 @@ export function LandingHero({
   onRuntimeConfigChange,
   developerDetails,
 }: LandingHeroProps) {
-  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const steps = resolveScenarioCopy(scenario.landing.howItWorksSteps, channel) as string[];
+  const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
+  const openVoiceDialog = () => setVoiceDialogOpen(true);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100svh-7rem)] w-full max-w-6xl items-center px-6 pb-10 pt-24 md:px-10">
-      <div className="grid w-full gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-        <div className="max-w-3xl">
-          <div className="inline-flex rounded-full border border-teal-400/20 bg-teal-400/10 px-4 py-2 text-xs font-medium text-teal-200">
-            {scenario.platformLabel}
-          </div>
-          <h1 className="mt-6 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 md:text-6xl">
-            Run realtime voice workflows
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-            {resolveScenarioCopy(scenario.landing.summary, channel)}
-          </p>
+    <div className="dashboard-light relative min-h-svh w-full overflow-hidden bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
+      {/* Ambient backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(1100px circle at 8% -10%, rgba(99,102,241,0.12), transparent 50%), radial-gradient(900px circle at 100% -5%, rgba(139,92,246,0.10), transparent 45%)',
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.4]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, rgba(15,23,42,0.05) 1px, transparent 0)',
+          backgroundSize: '32px 32px',
+          maskImage: 'linear-gradient(180deg, black, transparent 70%)',
+          WebkitMaskImage: 'linear-gradient(180deg, black, transparent 70%)',
+        }}
+      />
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-200">
-              <span className="text-slate-400">Scenario</span>
-              <span className="font-medium text-slate-50">{scenario.landing.name}</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-200">
-              <span className="text-slate-400">Channel</span>
-              <span className="font-medium text-slate-50">{channel.label}</span>
-            </div>
+      {/* Nav */}
+      <header className="sticky top-0 z-40 border-b border-[var(--voix-border-subtle)] bg-[var(--voix-topbar-bg)] backdrop-blur-md">
+        <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-8">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--voix-accent)] text-base font-bold text-white shadow-sm">
+              V
+            </span>
+            <span className="text-base font-semibold tracking-tight">VoixAI</span>
+          </Link>
+          <div className="hidden items-center gap-8 text-sm text-[var(--voix-text-secondary)] md:flex">
+            <a href="#features" className="transition hover:text-[var(--voix-text-primary)]">
+              Features
+            </a>
+            <a href="#how" className="transition hover:text-[var(--voix-text-primary)]">
+              How it works
+            </a>
+            <a href="#try" className="transition hover:text-[var(--voix-text-primary)]">
+              Try it live
+            </a>
           </div>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button
-              size="lg"
-              onClick={onStartCall}
-              className="h-12 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-[color:var(--voix-accent-foreground)] hover:bg-[color:var(--voix-accent-hover)]"
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="hidden h-9 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-[var(--voix-text-secondary)] transition hover:bg-[var(--voix-bg-subtle)] sm:inline-flex"
             >
-              {scenario.landing.primaryActionLabel}
-            </Button>
+              <ChartLineUpIcon size={16} weight="bold" />
+              Dashboard
+            </Link>
             <Button
-              size="lg"
-              variant="outline"
-              onClick={onUseText}
-              className="h-12 rounded-full border-white/12 bg-white/5 px-7 text-sm font-medium text-slate-100 hover:bg-white/10"
+              onClick={openVoiceDialog}
+              className="h-9 rounded-full bg-[color:var(--voix-accent)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
             >
-              {scenario.landing.secondaryActionLabel}
+              Start demo
             </Button>
           </div>
+        </nav>
+      </header>
 
-          <p className="mt-4 text-sm text-slate-400">
-            {resolveScenarioCopy(scenario.landing.helper, channel)}
+      {/* Hero */}
+      <section className="relative mx-auto max-w-6xl px-6 pt-16 pb-20 md:px-8 md:pt-24">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3.5 py-1.5 text-xs font-medium text-[var(--voix-text-secondary)] shadow-sm">
+              <Sparkles size={13} className="text-[var(--voix-accent)]" />
+              {scenario.platformLabel}
+            </div>
+
+            <h1 className="mt-6 text-[2.6rem] leading-[1.05] font-semibold tracking-tight text-balance md:text-6xl">
+              Answer every call.
+              <br />
+              <span className="bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 bg-clip-text text-transparent">
+                Take every order.
+              </span>{' '}
+              Automatically.
+            </h1>
+
+            <p className="mt-5 max-w-xl text-lg leading-8 text-[var(--voix-text-secondary)]">
+              {resolveScenarioCopy(scenario.landing.summary, channel)}
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button
+                size="lg"
+                onClick={openVoiceDialog}
+                className="h-12 gap-2 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-white shadow-[0_8px_24px_-8px_rgba(99,102,241,0.7)] transition hover:bg-[color:var(--voix-accent-hover)]"
+              >
+                <MicrophoneIcon size={18} weight="fill" />
+                {scenario.landing.primaryActionLabel}
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={onUseText}
+                className="h-12 rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] px-7 text-sm font-medium text-[var(--voix-text-secondary)] shadow-sm transition hover:bg-[var(--voix-bg-subtle)]"
+              >
+                {scenario.landing.secondaryActionLabel}
+              </Button>
+            </div>
+
+            <dl className="mt-10 grid max-w-lg grid-cols-3 gap-6">
+              {STATS.slice(0, 3).map((stat) => (
+                <div key={stat.label}>
+                  <dt className="text-2xl font-semibold text-[var(--voix-text-primary)]">
+                    {stat.value}
+                  </dt>
+                  <dd className="mt-1 text-xs leading-snug text-[var(--voix-text-muted)]">
+                    {stat.label}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <AgentPreview />
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="relative mx-auto max-w-6xl px-6 py-16 md:px-8">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold tracking-[0.18em] text-[var(--voix-accent)] uppercase">
+            Why VoixAI
           </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+            A voice agent built like production software
+          </h2>
+          <p className="mt-3 text-[var(--voix-text-secondary)]">
+            Not a demo bot. Every order is validated, every call is observable, and the backend is
+            always the source of truth.
+          </p>
+        </div>
 
-          <div className="mt-8 rounded-[20px] border border-white/10 bg-white/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-200">
-                  Voice mode: <span className="font-medium text-slate-50">{runtimeConfig.presetLabel}</span>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <div
+                key={feature.title}
+                className="group rounded-2xl border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-6 transition hover:-translate-y-0.5"
+                style={{ boxShadow: 'var(--voix-card-shadow)' }}
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--voix-accent-soft)] text-[var(--voix-accent-hover)]">
+                  <Icon size={20} />
+                </span>
+                <h3 className="mt-4 text-base font-semibold text-[var(--voix-text-primary)]">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--voix-text-muted)]">
+                  {feature.body}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Choose how this session should sound before you start.
-                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Stats band */}
+      <section className="relative mx-auto max-w-6xl px-6 py-8 md:px-8">
+        <div
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-3xl border border-[var(--voix-border-subtle)] bg-[var(--voix-border-subtle)] md:grid-cols-4"
+          style={{ boxShadow: 'var(--voix-card-shadow)' }}
+        >
+          {STATS.map((stat) => (
+            <div key={stat.label} className="bg-[var(--voix-bg-elevated)] px-6 py-8 text-center">
+              <p className="text-3xl font-semibold tracking-tight text-[var(--voix-text-primary)]">
+                {stat.value}
+              </p>
+              <p className="mt-1.5 text-xs text-[var(--voix-text-muted)]">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Try it live */}
+      <section id="try" className="relative mx-auto max-w-6xl px-6 py-16 md:px-8">
+        <div
+          className="overflow-hidden rounded-3xl border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)]"
+          style={{ boxShadow: 'var(--voix-card-shadow)' }}
+        >
+          <div className="grid gap-8 p-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:p-10">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.18em] text-[var(--voix-accent)] uppercase">
+                Try it live
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+                Pick a voice engine and start talking
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-[var(--voix-text-secondary)]">
+                {resolveScenarioCopy(scenario.landing.helper, channel)}
+              </p>
+              <p className="mt-4 text-sm text-[var(--voix-text-muted)]">
+                Currently selected:{' '}
+                <span className="font-semibold text-[var(--voix-accent-hover)]">
+                  {runtimeConfig.presetLabel}
+                </span>
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  onClick={onStartCall}
+                  className="h-12 gap-2 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
+                >
+                  <PhoneCall size={17} />
+                  {scenario.landing.primaryActionLabel}
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={onUseText}
+                  className="h-12 rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] px-7 text-sm font-medium text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)]"
+                >
+                  {scenario.landing.secondaryActionLabel}
+                </Button>
               </div>
             </div>
 
-            <div className="mt-4">
+            <div className="rounded-2xl border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] p-5">
               <VoiceModeSelector config={runtimeConfig} onConfigChange={onRuntimeConfigChange} />
             </div>
           </div>
         </div>
+      </section>
 
-        <aside className="space-y-4">
-          <section className="rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-2xl shadow-black/20">
-            <button
-              type="button"
-              onClick={() => setHowItWorksOpen((value) => !value)}
-              aria-expanded={howItWorksOpen}
-              className="flex w-full items-center justify-between gap-3 text-left"
+      {/* How it works */}
+      <section id="how" className="relative mx-auto max-w-6xl px-6 py-16 md:px-8">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold tracking-[0.18em] text-[var(--voix-accent)] uppercase">
+            How it works
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+            {resolveScenarioCopy(scenario.landing.howItWorksDescription, channel)}
+          </h2>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {steps.map((step, i) => (
+            <div
+              key={step}
+              className="relative rounded-2xl border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-6"
+              style={{ boxShadow: 'var(--voix-card-shadow)' }}
             >
-              <div>
-                <p className="text-sm font-semibold text-slate-50">How it works</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  {resolveScenarioCopy(scenario.landing.howItWorksDescription, channel)}
-                </p>
-              </div>
-              {howItWorksOpen ? <CaretUpIcon size={16} /> : <CaretDownIcon size={16} />}
-            </button>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--voix-accent)] text-sm font-semibold text-white">
+                {i + 1}
+              </span>
+              <p className="mt-4 text-sm leading-6 text-[var(--voix-text-secondary)]">{step}</p>
+            </div>
+          ))}
+        </div>
 
-            {howItWorksOpen && (
-              <ol className="mt-4 space-y-3 text-sm text-slate-300">
-                {(resolveScenarioCopy(scenario.landing.howItWorksSteps, channel) as string[]).map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            )}
-          </section>
+        <div className="mt-12 flex flex-col items-center gap-5 rounded-3xl border border-[var(--voix-border-subtle)] bg-gradient-to-br from-[var(--voix-accent-soft)] to-[var(--voix-bg-elevated)] px-8 py-12 text-center">
+          <h3 className="max-w-2xl text-2xl font-semibold tracking-tight md:text-3xl">
+            See it answer a call in under a minute
+          </h3>
+          <p className="max-w-xl text-sm text-[var(--voix-text-secondary)]">
+            Start the demo, place a quick order, then open the dashboard to watch the call,
+            transcript and order appear in real time.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button
+              size="lg"
+              onClick={openVoiceDialog}
+              className="h-12 gap-2 rounded-full bg-[color:var(--voix-accent)] px-7 text-sm font-semibold text-white shadow-sm hover:bg-[color:var(--voix-accent-hover)]"
+            >
+              <MicrophoneIcon size={18} weight="fill" />
+              {scenario.landing.primaryActionLabel}
+            </Button>
+            <Link
+              href="/dashboard"
+              className="inline-flex h-12 items-center gap-2 rounded-full border border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] px-7 text-sm font-medium text-[var(--voix-text-secondary)] transition hover:bg-[var(--voix-bg-subtle)]"
+            >
+              Open dashboard <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
 
-          <section className="rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-2xl shadow-black/20">
-            <p className="text-sm font-semibold text-slate-50">Coming next</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              {resolveScenarioCopy(scenario.landing.comingNextDescription, channel)}
-            </p>
-          </section>
+        {developerDetails && <div className="mt-10">{developerDetails}</div>}
+      </section>
 
-          {developerDetails}
-        </aside>
-      </div>
-    </section>
+      {/* Footer */}
+      <footer className="relative border-t border-[var(--voix-border-subtle)]">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-[var(--voix-text-muted)] md:flex-row md:px-8">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--voix-accent)] text-xs font-bold text-white">
+              V
+            </span>
+            <span className="font-medium text-[var(--voix-text-secondary)]">VoixAI</span>
+            <span className="text-[var(--voix-text-muted)]">· Voice AI for inbound calls</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <a href="#features" className="transition hover:text-[var(--voix-text-secondary)]">
+              Features
+            </a>
+            <Link href="/dashboard" className="transition hover:text-[var(--voix-text-secondary)]">
+              Dashboard
+            </Link>
+            <span>© {new Date().getFullYear()} VoixAI</span>
+          </div>
+        </div>
+      </footer>
+
+      <VoiceModeDialog
+        open={voiceDialogOpen}
+        onOpenChange={setVoiceDialogOpen}
+        runtimeConfig={runtimeConfig}
+        onRuntimeConfigChange={onRuntimeConfigChange}
+        onStart={onStartCall}
+        onUseText={onUseText}
+        startLabel="Start call"
+        textLabel={scenario.landing.secondaryActionLabel}
+      />
+    </div>
   );
 }
