@@ -775,6 +775,60 @@ async def test_review_order_for_confirmation_falls_back_to_local_quote_when_back
     assert published_reasons == ["confirmation_review_ready"]
 
 
+@pytest.mark.asyncio
+async def test_create_mock_order_recovers_missing_state_from_transcript_before_submit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    submitted = {"order_number": "MOCK-55555", "total": "$63.86", "kitchen_ticket": "TICKET"}
+
+    async def fake_submit(room_name: str, order: OrderState) -> dict[str, object]:
+        assert room_name == "demo-room"
+        assert order.order_type == "pickup"
+        assert order.customer_name == "Cherry"
+        assert [line.item_id for line in order.items] == ["boneless_50"]
+        assert order.items[0].selected_flavor_ids == ["lemon_pepper", "original_hot"]
+        return submitted
+
+    monkeypatch.setattr(wingstop_module, "_submit_order_via_backend", fake_submit)
+
+    session_state = SessionState(
+        order=OrderState(
+            confirmed=True,
+            total_shown=True,
+            recap_readback=True,
+            pos_validation_passed=True,
+            status="awaiting_confirmation",
+        ),
+        room=SimpleNamespace(name="demo-room"),
+    )
+    session_state.transcript = [
+        {
+            "role": "assistant",
+            "text": (
+                "Got it. So, that's 50 boneless wings, half Lemon Pepper, half Original Hot, "
+                "for pickup for Cherry. Your total is $63.86. Should I place that order for you?"
+            ),
+            "ts": 1.0,
+        }
+    ]
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.create_mock_order(context)
+
+    assert "MOCK-55555" in response
+    assert session_state.mock_order is not None
+    assert session_state.mock_order.order_number == "MOCK-55555"
+    assert published_reasons == ["mock_order_created"]
+
+
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:
     order = OrderState(
         items=[OrderLineItem(line_id="line-1", item_id="classic_6", quantity=1, selected_flavor_ids=["plain"])],

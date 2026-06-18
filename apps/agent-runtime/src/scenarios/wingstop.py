@@ -675,6 +675,188 @@ def assistant_claimed_placement(text: str) -> bool:
     return bool(_PLACEMENT_CLAIM_RE.search(text or ""))
 
 
+_NUMBER_TOKEN_TO_DIGITS = {
+    "6": "6",
+    "six": "6",
+    "8": "8",
+    "eight": "8",
+    "10": "10",
+    "ten": "10",
+    "15": "15",
+    "fifteen": "15",
+    "20": "20",
+    "twenty": "20",
+    "30": "30",
+    "thirty": "30",
+    "50": "50",
+    "fifty": "50",
+}
+
+
+def _extract_recovery_order_type(text: str) -> str | None:
+    normalized = _normalize_lookup_key(text)
+    if "pickup" in normalized:
+        return "pickup"
+    if "delivery" in normalized:
+        return "delivery"
+    return None
+
+
+def _extract_recovery_name(text: str) -> str | None:
+    patterns = (
+        r"\bname(?: for the order)? is (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+        r"\bit(?:'s| is) for (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+        r"\bfor (?P<mode>pickup|delivery) for (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+        name = match.groupdict().get("name")
+        if name:
+            return name.strip().title()
+    return None
+
+
+def _extract_recovery_item_id(text: str) -> str | None:
+    match = re.search(
+        r"\b(?P<count>6|six|8|eight|10|ten|15|fifteen|20|twenty|30|thirty|50|fifty)"
+        r"\s+(?:(?P<style>classic|bone in|bone-in|boneless)\s+)?wings?\b",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    count = _NUMBER_TOKEN_TO_DIGITS.get(match.group("count").lower())
+    style = (match.group("style") or "").strip().lower()
+    if count is None:
+        return None
+    if style in {"classic", "bone in", "bone-in"}:
+        candidate = f"{count} bone in wings"
+    elif style == "boneless":
+        candidate = f"{count} boneless wings"
+    else:
+        candidate = f"{count} wings"
+    return _resolve_item_id(candidate)
+
+
+def _extract_recovery_flavor_ids(text: str, *, max_flavors: int) -> list[str]:
+    if max_flavors <= 0:
+        return []
+
+    found: list[str] = []
+    lowered = text.lower()
+    for flavor in FLAVOR_OPTIONS.values():
+        aliases = (flavor.display_name, *flavor.aliases)
+        if any(re.search(rf"\b{re.escape(alias.lower())}\b", lowered) for alias in aliases):
+            if flavor.id not in found:
+                found.append(flavor.id)
+        if len(found) >= max_flavors:
+            break
+    return found
+
+
+_AFFIRMATIVE_CONFIRMATION_RE = re.compile(
+    r"\b(yes|yeah|yep|correct|exactly|confirm|please place|place that|place it|do it)\b",
+    re.IGNORECASE,
+)
+
+
+def _recover_order_from_transcript(session_state: Any) -> bool:
+    transcript = getattr(session_state, "transcript", None)
+    if not transcript:
+        return False
+
+    transcript_entries = [
+        entry for entry in transcript if str(entry.get("text", "")).strip()
+    ]
+    assistant_texts = [
+        str(entry.get("text", "")).strip()
+        for entry in transcript_entries
+        if str(entry.get("role", "")).lower() == "assistant" and str(entry.get("text", "")).strip()
+    ]
+    user_texts = [
+        str(entry.get("text", "")).strip()
+        for entry in transcript_entries
+        if str(entry.get("role", "")).lower() == "user" and str(entry.get("text", "")).strip()
+    ]
+    if not assistant_texts and not user_texts:
+        return False
+
+    order = session_state.order
+    recovered = False
+    texts_for_item = list(reversed(assistant_texts)) + list(reversed(user_texts))
+
+    if not order.items:
+        item_id = next((candidate for text in texts_for_item if (candidate := _extract_recovery_item_id(text))), None)
+        if item_id is not None:
+            menu_item = MENU_ITEMS[item_id]
+            flavor_text = " ".join(texts_for_item[:4])
+            order.items = [
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id=item_id,
+                    quantity=1,
+                    selected_flavor_ids=_extract_recovery_flavor_ids(
+                        flavor_text,
+                        max_flavors=menu_item.max_flavors,
+                    ),
+                )
+            ]
+            order.quantity = 1
+            recovered = True
+
+    if not order.order_type:
+        for text in texts_for_item:
+            if (order_type := _extract_recovery_order_type(text)) is not None:
+                order.order_type = order_type
+                recovered = True
+                break
+
+    if not order.customer_name.strip():
+        for text in texts_for_item:
+            if (customer_name := _extract_recovery_name(text)) is not None:
+                order.customer_name = customer_name
+                recovered = True
+                break
+
+    recap_index = -1
+    for index, entry in enumerate(transcript_entries):
+        if str(entry.get("role", "")).lower() != "assistant":
+            continue
+        assistant_text = str(entry.get("text", "")).strip()
+        if "should i place" in assistant_text.lower():
+            recap_index = index
+            order.recap_readback = True
+            if "$" in assistant_text.lower():
+                order.total_shown = True
+            recovered = True
+
+    if recap_index >= 0 and not order.confirmed:
+        for entry in transcript_entries[recap_index + 1 :]:
+            if str(entry.get("role", "")).lower() != "user":
+                continue
+            user_text = str(entry.get("text", "")).strip()
+            if _AFFIRMATIVE_CONFIRMATION_RE.search(user_text):
+                order.confirmed = True
+                recovered = True
+                break
+
+    if recovered:
+        logger.warning(
+            "Recovered order state from transcript before placement",
+            extra={
+                "order_type": order.order_type,
+                "customer_name": order.customer_name,
+                "line_item_ids": [line.item_id for line in order.items],
+            },
+        )
+        _update_order_validation_state(order, validate_order(order))
+
+    return recovered
+
+
 async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None:
     """Safety net for realtime models that announce an order without calling
     ``create_mock_order``.
@@ -692,6 +874,8 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
 
     order = session_state.order
     decision = OrderStateMachine(order).authorize_submit()
+    if decision.validation_errors and _recover_order_from_transcript(session_state):
+        decision = OrderStateMachine(order).authorize_submit()
     if decision.validation_errors or decision.confirmation_reasons:
         logger.warning(
             "Assistant claimed placement but the order is not submittable; not auto-placing. "
@@ -1255,6 +1439,8 @@ class WingstopAssistant(Agent):
         # checklist every time. This is what makes placement reliable
         # independent of what the model said or which flags happen to be set.
         decision = machine.authorize_submit()
+        if decision.validation_errors and _recover_order_from_transcript(session_state):
+            decision = machine.authorize_submit()
         if decision.validation_errors:
             await session_state.publish_snapshot(reason="mock_order_blocked")
             return "I cannot place this order yet. " + " ".join(decision.validation_errors)

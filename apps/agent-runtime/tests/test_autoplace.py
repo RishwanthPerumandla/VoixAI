@@ -113,3 +113,43 @@ async def test_no_placement_claim_does_nothing(monkeypatch) -> None:
 
     assert state.mock_order is None
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_autoplace_recovers_missing_order_state_from_transcript(monkeypatch) -> None:
+    submitted = {"order_number": "MOCK-88888", "total": "$63.86", "kitchen_ticket": "TICKET"}
+
+    async def fake_submit(room_name: str, order: OrderState) -> dict:
+        assert room_name == "room-1"
+        assert order.order_type == "pickup"
+        assert order.customer_name == "Cherry"
+        assert [line.item_id for line in order.items] == ["boneless_50"]
+        assert order.items[0].selected_flavor_ids == ["lemon_pepper", "original_hot"]
+        return submitted
+
+    monkeypatch.setattr(ws, "_submit_order_via_backend", fake_submit)
+
+    state = _fake_state(OrderState())
+    state.transcript = [
+        {
+            "role": "assistant",
+            "text": (
+                "Got it. So, that's 50 boneless wings, half Lemon Pepper, half Original Hot, "
+                "for pickup for Cherry. Your total is $63.86. Should I place that order for you?"
+            ),
+            "ts": 1.0,
+        },
+        {
+            "role": "user",
+            "text": "Yes, please place that.",
+            "ts": 2.0,
+        },
+    ]
+
+    await ws.maybe_autoplace_order(
+        state,
+        "Got it, placing it. Your order was placed. Ready for pickup in about 15 minutes.",
+    )
+
+    assert state.mock_order is not None
+    assert state.mock_order.order_number == "MOCK-88888"
