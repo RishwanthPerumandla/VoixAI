@@ -178,10 +178,10 @@ harness (direction.md §18), and a Playwright happy-path. See §5.8.
 
 - Menu/pricing/tax (8.25%) are demo constants, not POS-backed.
 - `create_mock_order` is a placeholder with no idempotency key.
-- `docs/` has overlapping planning files (MVP.MD, MVP_IMPLEMENTATION_PLAN.md,
-  PHASE_STATUS.md, PLATFORM_DIRECTION_PLAN.md, direction.md). Consolidate to:
-  ARCHITECTURE (current), PRODUCTION_READINESS (this), direction (vision),
-  LOCAL_SETUP, ENVIRONMENT_VARIABLES; mark the rest historical.
+- `docs/` previously had overlapping planning/history files. The active docs set
+  should stay limited to: ARCHITECTURE (current), PRODUCTION_READINESS (this),
+  direction (vision), LOCAL_SETUP, ENVIRONMENT_VARIABLES, and the active
+  scenario reference (`MOCK_MENU.md`).
 
 ---
 
@@ -325,9 +325,9 @@ agent.py    (thin entrypoint wiring the above)
 ### 5.9 Data & docs (fixes 3.9)
 
 - Move menu seed to a `menu.yaml`/DB seed loaded by `MenuRepository`.
-- Mark MVP.MD / MVP_IMPLEMENTATION_PLAN.md / PHASE_STATUS.md /
-  PLATFORM_DIRECTION_PLAN.md as historical; keep this doc + ARCHITECTURE +
-  direction as the live trio.
+- Keep the docs set tight: this doc + ARCHITECTURE + direction are the strategy
+  core, while LOCAL_SETUP, ENVIRONMENT_VARIABLES, and MOCK_MENU cover operation
+  and the active scenario.
 
 ---
 

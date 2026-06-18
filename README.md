@@ -28,13 +28,13 @@ VoixAI/
     api/              FastAPI token + session-config service
     agent-runtime/    Python LiveKit voice agent runtime
   docs/
-    PROJECT_AUDIT_REPORT.md
+    README.md
+    ARCHITECTURE.md
     LOCAL_SETUP.md
     ENVIRONMENT_VARIABLES.md
-    OPENAI_REALTIME.md
-    PHASE_STATUS.md
-    DEMO_SCRIPT.md
-    INTERRUPTION_TESTING.md
+    MOCK_MENU.md
+    PRODUCTION_READINESS.md
+    direction.md
   README.md
 ```
 
@@ -152,14 +152,12 @@ Short version:
 
 ## Important Docs
 
+- [docs/README.md](./docs/README.md) — docs index and what each surviving doc is for
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — accurate current-state system design
 - [docs/PRODUCTION_READINESS.md](./docs/PRODUCTION_READINESS.md) — gap analysis, target architecture, and remediation roadmap
 - [docs/direction.md](./docs/direction.md) — long-term platform vision
-- [docs/PROJECT_AUDIT_REPORT.md](./docs/PROJECT_AUDIT_REPORT.md)
 - [docs/LOCAL_SETUP.md](./docs/LOCAL_SETUP.md)
 - [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
-- [docs/OPENAI_REALTIME.md](./docs/OPENAI_REALTIME.md)
-- [docs/PHASE_STATUS.md](./docs/PHASE_STATUS.md)
 - [docs/MOCK_MENU.md](./docs/MOCK_MENU.md)
 
 ## Current Limitations
@@ -169,8 +167,8 @@ Short version:
 - There is no persistent database, payment flow, POS integration, or telephony layer yet.
 - End-to-end automated coverage is still light across service boundaries.
 
-## Audit
+## Docs Policy
 
-For a full project-state audit, known risks, and documentation cleanup recommendations, read:
-
-- [docs/PROJECT_AUDIT_REPORT.md](./docs/PROJECT_AUDIT_REPORT.md)
+`docs/` is now intentionally small. The live docs are limited to setup, environment,
+current architecture, production roadmap, long-term direction, and the active
+scenario reference.
