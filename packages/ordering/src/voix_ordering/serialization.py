@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from .menu import (
     MENU_ITEMS,
     OPTION_TO_GROUP_IDS,
@@ -55,8 +57,15 @@ def _serialize_line_item(line: OrderLineItem) -> dict[str, object]:
     }
 
 
-def serialize_order_state(order: OrderState) -> dict[str, object]:
-    return {
+def serialize_order_state(order: OrderState, *, include_history: bool = True) -> dict[str, object]:
+    """Serialize the order for telemetry/inspection.
+
+    ``include_history=False`` omits ``recent_events``. This is essential when the
+    result is itself stored *inside* an event (a before/after snapshot) or an
+    archived order — otherwise each event embeds the whole event log, which
+    embeds prior snapshots, and the payload grows exponentially per mutation.
+    """
+    payload: dict[str, object] = {
         "items": [MENU_ITEMS[line.item_id].display_name for line in order.items],
         "line_items": [_serialize_line_item(line) for line in order.items],
         "modifiers": order.modifiers,
@@ -75,10 +84,16 @@ def serialize_order_state(order: OrderState) -> dict[str, object]:
         "recap_readback": order.recap_readback,
         "pos_validation_passed": order.pos_validation_passed,
         "validation_errors": list(order.last_validation_errors),
+        "last_clarification_question": order.last_clarification_question,
+        "reliability_metrics": asdict(order.metrics),
+        "archived_order_count": len(order.archived_orders),
         "flavor": _get_primary_flavor(order),
         "classic_or_boneless": _get_primary_style(order),
         "drink": _get_primary_drink(order),
     }
+    if include_history:
+        payload["recent_events"] = [asdict(event) for event in order.recent_events[-10:]]
+    return payload
 
 
 def summarize_order_state(order: OrderState) -> str:

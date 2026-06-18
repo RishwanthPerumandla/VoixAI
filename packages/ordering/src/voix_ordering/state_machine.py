@@ -1,22 +1,4 @@
-"""Deterministic order state machine (M2).
-
-This module is the single authority for *what phase an order is in* and *whether
-it may be submitted*. Before this existed, submission was gated by a handful of
-boolean flags on ``OrderState`` that were flipped as side effects of the LLM
-calling tools in the order the prompt told it to. That made reliability depend
-on model tool-adherence.
-
-Now the rules live here, in code:
-
-- ``derive_phase`` is the single definition of the order lifecycle.
-- ``OrderStateMachine`` owns every transition the runtime tools used to perform
-  inline (``reset_to_collecting``, ``apply_validation``, ``mark_priced``,
-  ``mark_reviewed``, ``set_confirmed``).
-- ``authorize_submit`` is the hard gate: it re-runs full validation **and** the
-  confirmation checklist every time, so an order can never be "placed" unless it
-  is genuinely valid and confirmed — regardless of what the model said or which
-  flags happen to be set.
-"""
+"""Deterministic lifecycle controller for VoixAI orders."""
 
 from __future__ import annotations
 
@@ -27,37 +9,42 @@ from .models import OrderState
 
 
 class OrderPhase(str, Enum):
+    IDLE = "idle"
     GREETING = "greeting"
-    COLLECTING = "collecting"
-    PRICED = "priced"
+    COLLECTING_ORDER = "collecting_order"
+    VALIDATING_ORDER = "validating_order"
+    PRICING_ORDER = "pricing_order"
     AWAITING_CONFIRMATION = "awaiting_confirmation"
-    CONFIRMED = "confirmed_pending_submit"
-    SUBMITTED = "submitted"
+    SUBMITTING_ORDER = "submitting_order"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    HANDOFF_REQUIRED = "handoff_required"
+    FAILED = "failed"
+
+
+_LEGACY_STATUS_MAP = {
+    "collecting": OrderPhase.COLLECTING_ORDER,
+    "priced": OrderPhase.PRICING_ORDER,
+    "ready_for_confirmation": OrderPhase.AWAITING_CONFIRMATION,
+    "confirmed_pending_submit": OrderPhase.AWAITING_CONFIRMATION,
+    "submitted": OrderPhase.COMPLETED,
+}
 
 
 def derive_phase(order: OrderState) -> OrderPhase:
-    """Single source of truth for the order's lifecycle phase.
-
-    Derived from the order's persisted flags so it stays correct even if the
-    order is rehydrated from storage (no separate phase field to drift).
-    """
-    if order.status == "submitted":
-        return OrderPhase.SUBMITTED
-    if order.confirmed and order.recap_readback and order.total_shown and order.pos_validation_passed:
-        return OrderPhase.CONFIRMED
-    if order.status == "ready_for_confirmation" or (order.recap_readback and order.total_shown):
+    if order.status in {phase.value for phase in OrderPhase}:
+        return OrderPhase(order.status)
+    if order.status in _LEGACY_STATUS_MAP:
+        return _LEGACY_STATUS_MAP[order.status]
+    if order.confirmed and order.total_shown and order.recap_readback:
         return OrderPhase.AWAITING_CONFIRMATION
-    if order.total_shown:
-        return OrderPhase.PRICED
     if order.items:
-        return OrderPhase.COLLECTING
-    return OrderPhase.GREETING
+        return OrderPhase.COLLECTING_ORDER
+    return OrderPhase.IDLE
 
 
 @dataclass
 class SubmitDecision:
-    """Result of asking the machine whether an order may be submitted."""
-
     validation_errors: list[str] = field(default_factory=list)
     confirmation_reasons: list[str] = field(default_factory=list)
 
@@ -67,8 +54,6 @@ class SubmitDecision:
 
 
 class OrderStateMachine:
-    """Owns transitions for a single ``OrderState`` instance."""
-
     def __init__(self, order: OrderState) -> None:
         self.order = order
 
@@ -76,69 +61,86 @@ class OrderStateMachine:
     def phase(self) -> OrderPhase:
         return derive_phase(self.order)
 
-    def reset_to_collecting(self) -> None:
-        """Any order mutation invalidates pricing/confirmation; go back to collecting.
+    def _set_status(self, phase: OrderPhase) -> None:
+        self.order.status = phase.value
+        self.order.metrics.final_status = phase.value
 
-        This is the order-level half of the old ``_mark_order_dirty``; the
-        session-level cleanup (clearing the cached price quote / mock order)
-        stays with the caller that owns the session.
-        """
+    def start_greeting(self) -> None:
+        self._set_status(OrderPhase.GREETING)
+
+    def reset_to_collecting(self) -> None:
         order = self.order
         order.confirmed = False
         order.total_shown = False
         order.recap_readback = False
         order.pos_validation_passed = False
-        order.status = "collecting"
+        self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+
+    def start_validation(self) -> None:
+        self._set_status(OrderPhase.VALIDATING_ORDER)
 
     def apply_validation(self, errors: list[str]) -> None:
-        """Record validation results and recompute the persisted status string."""
         order = self.order
-        order.last_validation_errors = errors
+        order.last_validation_errors = list(errors)
         order.pos_validation_passed = not errors
         if errors:
-            order.status = "collecting"
-        elif order.confirmed:
-            order.status = "confirmed_pending_submit"
-        elif order.recap_readback and order.total_shown:
-            order.status = "ready_for_confirmation"
+            self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+        elif order.confirmed and order.recap_readback and order.total_shown:
+            self._set_status(OrderPhase.AWAITING_CONFIRMATION)
+        elif order.recap_readback:
+            self._set_status(OrderPhase.AWAITING_CONFIRMATION)
+        elif order.total_shown:
+            self._set_status(OrderPhase.PRICING_ORDER)
         else:
-            order.status = "collecting"
+            self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+
+    def start_pricing(self) -> None:
+        self._set_status(OrderPhase.PRICING_ORDER)
 
     def mark_priced(self) -> None:
-        """Transition COLLECTING -> PRICED (a total has been shown to the customer)."""
         order = self.order
         order.total_shown = True
         order.last_validation_errors = []
         order.pos_validation_passed = True
-        order.status = "collecting"
+        self._set_status(OrderPhase.PRICING_ORDER)
 
     def mark_reviewed(self) -> None:
-        """Transition PRICED -> AWAITING_CONFIRMATION (recap read back to the customer)."""
         order = self.order
         order.total_shown = True
         order.recap_readback = True
         order.pos_validation_passed = True
         order.last_validation_errors = []
-        order.status = "ready_for_confirmation"
+        self._set_status(OrderPhase.AWAITING_CONFIRMATION)
 
     def set_confirmed(self, confirmed: bool) -> None:
-        """Apply the customer's explicit yes/no to the reviewed order."""
-        order = self.order
-        order.confirmed = confirmed
-        if confirmed and order.recap_readback and order.total_shown and order.pos_validation_passed:
-            order.status = "confirmed_pending_submit"
-        elif not confirmed:
-            order.status = "collecting"
+        self.order.confirmed = confirmed
+        if confirmed:
+            self._set_status(OrderPhase.AWAITING_CONFIRMATION)
+        else:
+            self._set_status(
+                OrderPhase.COLLECTING_ORDER if self.order.items or self.order.order_type else OrderPhase.IDLE
+            )
+
+    def mark_submitting(self) -> None:
+        self._set_status(OrderPhase.SUBMITTING_ORDER)
 
     def mark_submitted(self) -> None:
-        self.order.status = "submitted"
+        self._set_status(OrderPhase.COMPLETED)
+
+    def mark_cancelled(self) -> None:
+        self._set_status(OrderPhase.CANCELLED)
+
+    def mark_handoff_required(self) -> None:
+        self._set_status(OrderPhase.HANDOFF_REQUIRED)
+
+    def mark_failed(self) -> None:
+        self._set_status(OrderPhase.FAILED)
 
     def authorize_submit(self) -> SubmitDecision:
-        """The hard gate. Re-validate from scratch and re-check the confirmation
-        checklist every time. Submission is authorized only if both are clean."""
         from .confirmation import _missing_confirmation_reasons
         from .validation import validate_order
 
+        self.start_validation()
         validation_errors = validate_order(self.order)
         self.apply_validation(validation_errors)
         confirmation_reasons = (

@@ -1,7 +1,10 @@
 import agent as agent_module
+import logging
+import urllib.error
 import pytest
 import scenarios.wingstop as wingstop_module
 from decimal import Decimal
+from livekit.agents.llm import ChatMessage
 from types import SimpleNamespace
 
 from agent import (
@@ -21,6 +24,15 @@ from agent import (
     SessionState,
     SUPPORTED_VOICE_ENGINES,
     TARGET_E2E_LATENCY_MS,
+    _publish_session_snapshot,
+    _is_closed_connection_error,
+    _is_publisher_connection_failure_error,
+    _is_publisher_connection_timeout_error,
+    _probe_realtime_publisher_connection,
+    _fallback_runtime_config_to_classic,
+    _format_duration_metric,
+    _handle_conversation_item,
+    _should_fallback_to_classic_after_probe,
     _normalize_voice_provider,
     _preload_optional_realtime_plugins,
     _runtime_config_from_metadata,
@@ -29,6 +41,7 @@ from agent import (
     _runtime_profile_payload,
     _supports_generate_reply,
     _snapshot_payload,
+    _speech_duration_metric,
     _trigger_initial_greeting,
     _trigger_away_prompt,
     _validate_runtime_config,
@@ -53,6 +66,10 @@ from scenarios.wingstop import (
     serialize_order_state,
     summarize_order_state,
     validate_order,
+    _resolve_flavor_id,
+    _resolve_item_id,
+    _resolve_modifier_id,
+    _validation_errors_for_line,
     _missing_confirmation_reasons,
 )
 
@@ -68,6 +85,13 @@ def test_instructions_require_order_name_before_collecting_items() -> None:
 
     assert "ask for the order name next" in instructions
     assert "before collecting any menu items" in instructions
+
+
+def test_instructions_allow_split_flavors_on_supported_wing_sizes() -> None:
+    instructions = build_wingstop_instructions(get_channel_definition("web"))
+
+    assert "Flavor splits are allowed" in instructions
+    assert "half Lemon Pepper and half Mango Habanero" in instructions
 
 
 def test_summarize_order_state_with_structured_items() -> None:
@@ -98,6 +122,43 @@ def test_summarize_order_state_with_structured_items() -> None:
 
 def test_summarize_order_state_empty() -> None:
     assert summarize_order_state(OrderState()) == "No order details yet."
+
+
+def test_format_duration_metric_formats_numbers_and_missing_values() -> None:
+    assert _format_duration_metric(0.333) == "0.33s"
+    assert _format_duration_metric(None) == "n/a"
+
+
+def test_speech_duration_metric_uses_started_and_stopped_times() -> None:
+    assert _speech_duration_metric(
+        {
+            "started_speaking_at": 1781810330.72,
+            "stopped_speaking_at": 1781810334.45,
+        }
+    ) == pytest.approx(3.73)
+    assert _speech_duration_metric({"started_speaking_at": 4.0, "stopped_speaking_at": 3.0}) is None
+
+
+def test_handle_conversation_item_logs_clean_assistant_latency_metrics(caplog: pytest.LogCaptureFixture) -> None:
+    message = ChatMessage.model_construct(
+        role="assistant",
+        content=[],
+        metrics={
+            "started_speaking_at": 1781810330.72,
+            "stopped_speaking_at": 1781810334.45,
+        },
+    )
+
+    with caplog.at_level(logging.INFO, logger="agent"):
+        _handle_conversation_item(SimpleNamespace(item=message))
+
+    assert "llm_ttft=n/a" in caplog.text
+    assert "tts_ttfb=n/a" in caplog.text
+    assert "e2e_latency=n/a" in caplog.text
+    assert "speech_duration=3.73s" in caplog.text
+    assert "n/as" not in caplog.text
+    assert "started_speaking_at" not in caplog.text
+    assert "stopped_speaking_at" not in caplog.text
 
 
 def test_validate_order_rejects_all_flats_on_boneless() -> None:
@@ -135,6 +196,11 @@ def test_validate_order_rejects_too_many_flavors() -> None:
     errors = validate_order(order)
 
     assert "6 Classic Wings can include up to 1 flavor." in errors
+
+
+def test_resolve_flavor_id_accepts_half_split_phrasing() -> None:
+    assert _resolve_flavor_id("half lemon pepper") == "lemon_pepper"
+    assert _resolve_flavor_id("half mango habanero") == "mango_habanero"
 
 
 def test_validate_combo_requires_drink_and_side() -> None:
@@ -368,6 +434,447 @@ async def test_update_last_item_blank_optional_fields_do_not_clear_existing_flav
     assert "Please choose a flavor for your wings." not in response
 
 
+@pytest.mark.asyncio
+async def test_add_menu_item_falls_back_to_local_resolution_when_backend_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_resolve_selection_via_backend(**_: object) -> dict[str, object]:
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fail_resolve_selection_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.add_menu_item(
+        context,
+        item_name="10 bone in wings",
+        quantity=1,
+        flavors="lemon pepper",
+    )
+
+    assert session_state.order.items[0].item_id == "classic_10"
+    assert session_state.order.items[0].selected_flavor_ids == ["lemon_pepper"]
+    assert "10 Classic Wings" in response
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_reclassifies_standalone_side_from_modifier_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_selection_via_backend(
+        *,
+        item_name: str,
+        quantity: int = 1,
+        flavors: list[str] | None = None,
+        modifiers: list[str] | None = None,
+        special_instructions: str | None = None,
+        validate_line: bool = True,
+    ) -> dict[str, object]:
+        item_id = _resolve_item_id(item_name)
+        assert item_id is not None
+
+        flavor_ids: list[str] = []
+        modifier_ids: list[str] = []
+        line_errors: list[str] = []
+
+        for flavor_name in flavors or []:
+            flavor_id = _resolve_flavor_id(flavor_name)
+            if flavor_id is None:
+                line_errors.append(f"{flavor_name} is not available in this demo menu.")
+                continue
+            if flavor_id not in flavor_ids:
+                flavor_ids.append(flavor_id)
+
+        for modifier_name in modifiers or []:
+            modifier_id = _resolve_modifier_id(modifier_name)
+            if modifier_id is None:
+                line_errors.append(f"{modifier_name} is not a valid option for this demo menu.")
+                continue
+            if modifier_id not in modifier_ids:
+                modifier_ids.append(modifier_id)
+
+        if validate_line and not line_errors:
+            preview_line = OrderLineItem(
+                line_id="line-preview",
+                item_id=item_id,
+                quantity=quantity,
+                selected_flavor_ids=flavor_ids,
+                selected_modifier_ids=modifier_ids,
+                notes=(special_instructions or "").strip(),
+            )
+            line_errors = _validation_errors_for_line(preview_line)
+
+        return {
+            "item_id": item_id,
+            "item_name": MENU_ITEMS[item_id].display_name,
+            "flavor_ids": flavor_ids,
+            "modifier_ids": modifier_ids,
+            "line_errors": line_errors,
+            "suggestions": [],
+        }
+
+    async def fake_validate_order_via_backend(order: OrderState) -> list[str]:
+        return validate_order(order)
+
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        errors = validate_order(order)
+        return errors, (None if errors else build_price_quote(order))
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fake_resolve_selection_via_backend)
+    monkeypatch.setattr(wingstop_module, "_validate_order_via_backend", fake_validate_order_via_backend)
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="classic_10",
+                    quantity=1,
+                    selected_flavor_ids=["lemon_pepper", "mango_habanero"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    update_response = await assistant.update_last_item(
+        context,
+        add_modifiers="all flats, well done, ranch, large seasoned fries, extra crispy",
+    )
+
+    assert "Large Seasoned Fries" in update_response
+    assert len(session_state.order.items) == 2
+    assert session_state.order.items[0].item_id == "classic_10"
+    assert session_state.order.items[0].selected_modifier_ids == ["all_flats", "well_done", "ranch"]
+    assert session_state.order.items[1].item_id == "large_fries"
+    assert session_state.order.items[1].selected_modifier_ids == ["extra_crispy"]
+
+    price_response = await assistant.price_order(context)
+
+    assert "$23.24" in price_response
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_can_switch_boneless_back_to_classic_and_placeable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_resolve_selection_via_backend(
+        *,
+        item_name: str,
+        quantity: int = 1,
+        flavors: list[str] | None = None,
+        modifiers: list[str] | None = None,
+        special_instructions: str | None = None,
+        validate_line: bool = True,
+    ) -> dict[str, object]:
+        item_id = _resolve_item_id(item_name)
+        assert item_id is not None
+
+        flavor_ids: list[str] = []
+        modifier_ids: list[str] = []
+        line_errors: list[str] = []
+
+        for flavor_name in flavors or []:
+            flavor_id = _resolve_flavor_id(flavor_name)
+            if flavor_id is None:
+                line_errors.append(f"{flavor_name} is not available in this demo menu.")
+                continue
+            if flavor_id not in flavor_ids:
+                flavor_ids.append(flavor_id)
+
+        for modifier_name in modifiers or []:
+            modifier_id = _resolve_modifier_id(modifier_name)
+            if modifier_id is None:
+                line_errors.append(f"{modifier_name} is not a valid option for this demo menu.")
+                continue
+            if modifier_id not in modifier_ids:
+                modifier_ids.append(modifier_id)
+
+        if validate_line and not line_errors:
+            preview_line = OrderLineItem(
+                line_id="line-preview",
+                item_id=item_id,
+                quantity=quantity,
+                selected_flavor_ids=flavor_ids,
+                selected_modifier_ids=modifier_ids,
+                notes=(special_instructions or "").strip(),
+            )
+            line_errors = _validation_errors_for_line(preview_line)
+
+        return {
+            "item_id": item_id,
+            "item_name": MENU_ITEMS[item_id].display_name,
+            "flavor_ids": flavor_ids,
+            "modifier_ids": modifier_ids,
+            "line_errors": line_errors,
+            "suggestions": [],
+        }
+
+    async def fake_validate_order_via_backend(order: OrderState) -> list[str]:
+        return validate_order(order)
+
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        errors = validate_order(order)
+        return errors, (None if errors else build_price_quote(order))
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fake_resolve_selection_via_backend)
+    monkeypatch.setattr(wingstop_module, "_validate_order_via_backend", fake_validate_order_via_backend)
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="boneless_10",
+                    quantity=1,
+                    selected_flavor_ids=["mango_habanero", "lemon_pepper"],
+                    selected_modifier_ids=["well_done", "all_flats", "ranch"],
+                ),
+                OrderLineItem(
+                    line_id="line-2",
+                    item_id="large_fries",
+                    quantity=1,
+                    selected_modifier_ids=["extra_crispy"],
+                ),
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.update_last_item(
+        context,
+        target_item_name="wings",
+        item_name="10 bone in wings",
+        add_modifiers="all flats",
+    )
+
+    updated_line = session_state.order.items[0]
+
+    assert updated_line.item_id == "classic_10"
+    assert "all_flats" in updated_line.selected_modifier_ids
+    assert "All flats is only available for classic bone-in wings." not in response
+
+    price_response = await assistant.price_order(context)
+
+    assert "$23.24" in price_response
+
+
+@pytest.mark.asyncio
+async def test_update_last_item_falls_back_to_local_resolution_when_backend_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_resolve_selection_via_backend(**_: object) -> dict[str, object]:
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_resolve_selection_via_backend", fail_resolve_selection_via_backend)
+
+    session_state = SessionState(
+        order=OrderState(
+            items=[
+                OrderLineItem(
+                    line_id="line-1",
+                    item_id="classic_10",
+                    quantity=1,
+                    selected_flavor_ids=["plain"],
+                )
+            ],
+            order_type="pickup",
+            customer_name="Rishi",
+        )
+    )
+
+    async def publish_snapshot(*, reason: str) -> None:
+        _ = reason
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.update_last_item(
+        context,
+        flavors="lemon pepper, mango habanero",
+        add_modifiers="all flats",
+    )
+
+    assert session_state.order.items[0].selected_flavor_ids == ["lemon_pepper", "mango_habanero"]
+    assert "all_flats" in session_state.order.items[0].selected_modifier_ids
+    assert "Lemon Pepper" in response
+
+
+@pytest.mark.asyncio
+async def test_review_order_for_confirmation_falls_back_to_local_quote_when_backend_pricing_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_price_order_via_backend(order: OrderState) -> tuple[list[str], object]:
+        _ = order
+        raise urllib.error.URLError("timed out")
+
+    monkeypatch.setattr(wingstop_module, "_price_order_via_backend", fake_price_order_via_backend)
+
+    order = OrderState(
+        items=[
+            OrderLineItem(
+                line_id="line-1",
+                item_id="classic_10",
+                quantity=1,
+                selected_flavor_ids=["plain"],
+            )
+        ],
+        order_type="pickup",
+        customer_name="Rishi",
+    )
+    session_state = SessionState(order=order)
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.review_order_for_confirmation(context)
+
+    assert response == build_confirmation_summary(order, build_price_quote(order))
+    assert session_state.price_quote == build_price_quote(order)
+    assert published_reasons == ["confirmation_review_ready"]
+
+
+@pytest.mark.asyncio
+async def test_create_mock_order_recovers_missing_state_from_transcript_before_submit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    submitted = {"order_number": "MOCK-55555", "total": "$63.86", "kitchen_ticket": "TICKET"}
+
+    async def fake_submit(room_name: str, order: OrderState) -> dict[str, object]:
+        assert room_name == "demo-room"
+        assert order.order_type == "pickup"
+        assert order.customer_name == "Cherry"
+        assert [line.item_id for line in order.items] == ["boneless_50"]
+        assert order.items[0].selected_flavor_ids == ["lemon_pepper", "original_hot"]
+        return submitted
+
+    monkeypatch.setattr(wingstop_module, "_submit_order_via_backend", fake_submit)
+
+    session_state = SessionState(
+        order=OrderState(
+            confirmed=True,
+            total_shown=True,
+            recap_readback=True,
+            pos_validation_passed=True,
+            status="awaiting_confirmation",
+        ),
+        room=SimpleNamespace(name="demo-room"),
+    )
+    session_state.transcript = [
+        {
+            "role": "assistant",
+            "text": (
+                "Got it. So, that's 50 boneless wings, half Lemon Pepper, half Original Hot, "
+                "for pickup for Cherry. Your total is $63.86. Should I place that order for you?"
+            ),
+            "ts": 1.0,
+        }
+    ]
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.create_mock_order(context)
+
+    assert "MOCK-55555" in response
+    assert session_state.mock_order is not None
+    assert session_state.mock_order.order_number == "MOCK-55555"
+    assert published_reasons == ["mock_order_created"]
+
+
+@pytest.mark.asyncio
+async def test_force_handoff_marks_order_and_publishes_snapshot() -> None:
+    session_state = SessionState(order=OrderState())
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+    session_state.placement_failure_count = 3
+
+    response = await wingstop_module.force_handoff(
+        session_state,
+        reason="Customer explicitly asked for a human.",
+    )
+
+    assert "team member" in response
+    assert session_state.order.status == "handoff_required"
+    assert session_state.order.metrics.handoff_required_count == 1
+    assert session_state.placement_failure_count == 0
+    assert published_reasons == ["handoff_required"]
+
+
+@pytest.mark.asyncio
+async def test_create_mock_order_escalates_to_handoff_after_repeated_failures() -> None:
+    session_state = SessionState(
+        order=OrderState(),
+        placement_failure_count=1,
+    )
+    published_reasons: list[str] = []
+
+    async def publish_snapshot(*, reason: str) -> None:
+        published_reasons.append(reason)
+
+    session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
+
+    assistant = WingstopAssistant(llm=object(), channel=get_channel_definition("web"))
+    context = SimpleNamespace(userdata=session_state)
+
+    response = await assistant.create_mock_order(context)
+
+    assert "team member" in response
+    assert session_state.order.status == "handoff_required"
+    assert published_reasons == ["handoff_required"]
+
+
 def test_audit_assistant_response_blocks_hallucinated_price_and_success() -> None:
     order = OrderState(
         items=[OrderLineItem(line_id="line-1", item_id="classic_6", quantity=1, selected_flavor_ids=["plain"])],
@@ -443,6 +950,106 @@ def test_snapshot_payload_includes_price_quote_and_guardrails() -> None:
     assert payload["order"]["line_items"][0]["name"] == "10 Classic Wings"
     assert payload["price_quote"]["total"] == quote.total
     assert payload["assistant_guardrail_violations"] == ["example violation"]
+    assert payload["transcript"] == []
+
+
+@pytest.mark.asyncio
+async def test_publish_session_snapshot_retries_on_transient_publisher_failure() -> None:
+    """A transient publisher blip must NOT take telemetry dark for the rest of
+    the call — the live UI (transcript, order, confirmation) depends on it, so it
+    keeps retrying and only backs off after repeated consecutive failures."""
+    calls = 0
+
+    class FakeParticipant:
+        async def publish_data(self, *_: object, **__: object) -> None:
+            nonlocal calls
+            calls += 1
+            raise RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+
+    session_state = SessionState(
+        room=SimpleNamespace(name="demo-room", local_participant=FakeParticipant()),
+    )
+
+    # Two failures (below the back-off threshold) both still attempt to publish —
+    # telemetry is not permanently disabled after a single blip.
+    await _publish_session_snapshot(session_state, reason="session_started")
+    await _publish_session_snapshot(session_state, reason="order_state_updated")
+
+    assert calls == 2
+    assert session_state.telemetry_publish_failures == 2
+    assert session_state.telemetry_cooldown_until == 0.0
+
+
+def test_is_publisher_connection_timeout_error_detects_livekit_timeout_shape() -> None:
+    assert _is_publisher_connection_timeout_error(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert not _is_publisher_connection_timeout_error(RuntimeError("something else"))
+
+
+def test_is_closed_connection_error_detects_closed_shape() -> None:
+    assert _is_closed_connection_error(RuntimeError("engine: connection error: closed"))
+    assert not _is_closed_connection_error(RuntimeError("engine: connection error: timeout"))
+
+
+def test_is_publisher_connection_failure_error_detects_timeout_and_closed() -> None:
+    assert _is_publisher_connection_failure_error(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert _is_publisher_connection_failure_error(RuntimeError("engine: connection error: closed"))
+
+
+@pytest.mark.asyncio
+async def test_probe_realtime_publisher_connection_streams_probe_bytes() -> None:
+    calls: list[tuple[str, bytes]] = []
+
+    class FakeWriter:
+        async def write(self, data: bytes) -> None:
+            calls.append(("write", data))
+
+        async def aclose(self) -> None:
+            calls.append(("close", b""))
+
+    class FakeParticipant:
+        async def stream_bytes(self, *, name: str, topic: str) -> FakeWriter:
+            assert name.startswith("probe_")
+            assert topic == "voixai.publisher_probe"
+            calls.append(("open", b""))
+            return FakeWriter()
+
+    room = SimpleNamespace(local_participant=FakeParticipant())
+
+    await _probe_realtime_publisher_connection(room)
+
+    assert calls == [("open", b""), ("write", b"ok"), ("close", b"")]
+
+
+def test_should_fallback_to_classic_after_probe_for_publisher_timeout() -> None:
+    assert _should_fallback_to_classic_after_probe(
+        RuntimeError("engine: connection error: could not establish publisher connection: timeout")
+    )
+    assert not _should_fallback_to_classic_after_probe(RuntimeError("different failure"))
+
+
+def test_fallback_runtime_config_to_classic_sets_runtime_profile_fields() -> None:
+    runtime_config = RuntimeConfig(
+        voice_provider=VOICE_PROVIDER_GEMINI_LIVE,
+        voice_engine=VOICE_ENGINE_GEMINI_LIVE,
+        preset_id="gemini-live-voice",
+        preset_label="Gemini Live",
+        comparison_label="Native Gemini speech to speech",
+    )
+
+    fallback = _fallback_runtime_config_to_classic(
+        runtime_config,
+        reason="Realtime publisher connection failed during startup probe. Falling back to the classic pipeline.",
+    )
+
+    assert fallback.voice_provider == VOICE_PROVIDER_CLASSIC
+    assert fallback.voice_engine == VOICE_ENGINE_PIPELINE
+    assert fallback.preset_id == "classic-pipeline"
+    assert fallback.preset_label == "Classic Voice (fallback)"
+    assert fallback.fallback_reason is not None
 
 
 def test_runtime_profile_payload_includes_scenario_id() -> None:

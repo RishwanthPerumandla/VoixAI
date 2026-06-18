@@ -5,7 +5,57 @@
 - Node.js 18 or newer
 - `pnpm`
 - Python 3.10 or newer
+- Docker Desktop (or Docker Engine + Compose v2) for the containerized path
 - LiveKit Cloud or a self-hosted LiveKit server
+
+## Docker Quick Start
+
+If you want the fastest reproducible local run on a new machine, use Docker:
+
+1. Copy the root env file:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+2. Add at least one provider key to `.env`:
+
+   - `OPENAI_API_KEY` for `openai_realtime`
+   - `GOOGLE_API_KEY` for `gemini_live`
+
+3. Start the full stack from the repo root:
+
+   ```powershell
+   docker compose up --build
+   ```
+
+4. Open `http://localhost:3000`.
+
+What the Docker stack includes:
+
+- a local LiveKit server on `ws://localhost:7880`
+- the FastAPI service on `http://localhost:8000`
+- the Python agent runtime connected to the internal Docker LiveKit hostname
+- the Next.js frontend on `http://localhost:3000`
+
+Important Docker notes:
+
+- `docker compose` overrides the LiveKit connection details internally, so you do not need a separate hosted LiveKit project just to boot the local stack
+- the browser still needs a real model provider key to have an actual voice conversation
+- the API persists SQLite data in the `voixai-data` Docker volume
+- room-scoped fallback files are shared through the `voixai-shared` Docker volume
+
+To stop the stack:
+
+```powershell
+docker compose down
+```
+
+To stop it and remove persisted local Docker data:
+
+```powershell
+docker compose down -v
+```
 
 ## 1. Configure environment files
 
@@ -23,6 +73,11 @@ Required LiveKit variables:
 - `LIVEKIT_URL`
 - `LIVEKIT_API_KEY`
 - `LIVEKIT_API_SECRET`
+
+Docker note:
+
+- for `docker compose`, these are overridden automatically to the bundled local LiveKit service
+- for manual non-Docker runs, set them to your LiveKit Cloud or self-hosted server values
 
 Optional but recommended:
 

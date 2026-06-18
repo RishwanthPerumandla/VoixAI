@@ -174,7 +174,7 @@ async def test_wingstop_golden_conversations(
     assert [line.selected_modifier_ids for line in order.items] == expected["line_modifier_ids"]
     assert order.status == expected["status"]
     assert order.confirmed is expected["confirmed"]
-    assert validate_order(order) == expected["validation_errors"]
+    assert order.last_validation_errors == expected["validation_errors"]
 
     if "total" in expected:
         assert session_state.price_quote is not None

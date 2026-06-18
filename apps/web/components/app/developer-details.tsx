@@ -38,6 +38,8 @@ export function DeveloperDetails({
 
   const metrics = telemetrySnapshot?.assistant_turn_metrics;
   const turns = telemetrySnapshot?.turn_count ?? 0;
+  const orderMetrics = telemetrySnapshot?.order.reliability_metrics;
+  const lastEvent = telemetrySnapshot?.order.recent_events?.at(-1);
 
   return (
     <section
@@ -78,6 +80,10 @@ export function DeveloperDetails({
             }
           />
           <DetailRow label="Raw state" value={rawState ?? 'unknown'} />
+          <DetailRow
+            label="Order status"
+            value={telemetrySnapshot?.order.status ?? telemetrySnapshot?.order.phase ?? 'unknown'}
+          />
           <DetailRow label="Turn count" value={String(turns)} />
           <DetailRow
             label="Latency"
@@ -86,6 +92,42 @@ export function DeveloperDetails({
                 ? `${Math.round(metrics.e2e_latency * 1000)} ms`
                 : 'Unavailable'
             }
+          />
+          <DetailRow
+            label="Corrections"
+            value={String(orderMetrics?.correction_count ?? 0)}
+          />
+          <DetailRow
+            label="Cancellations"
+            value={String(orderMetrics?.cancellation_count ?? 0)}
+          />
+          <DetailRow
+            label="Validation failures"
+            value={String(orderMetrics?.validation_failure_count ?? 0)}
+          />
+          <DetailRow
+            label="Clarifications"
+            value={String(orderMetrics?.clarification_count ?? 0)}
+          />
+          <DetailRow
+            label="Unknown items"
+            value={String(orderMetrics?.unknown_item_count ?? 0)}
+          />
+          <DetailRow
+            label="Duplicate submits"
+            value={String(orderMetrics?.duplicate_confirmation_prevented ?? 0)}
+          />
+          <DetailRow
+            label="Final status"
+            value={orderMetrics?.final_status ?? 'unknown'}
+          />
+          <DetailRow
+            label="Clarification"
+            value={telemetrySnapshot?.order.last_clarification_question ?? 'None'}
+          />
+          <DetailRow
+            label="Last reducer event"
+            value={lastEvent ? `${lastEvent.type}: ${lastEvent.detail}` : 'None'}
           />
         </dl>
       )}

@@ -25,6 +25,7 @@ from livekit.agents import (
     cli,
     inference,
     room_io,
+    utils,
 )
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
@@ -35,9 +36,14 @@ from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_defin
 from scenarios.wingstop import (
     MockOrder,
     OrderState,
+    OrderStateMachine,
     PriceQuote,
     audit_assistant_response,
     build_initial_greeting,
+    customer_expressed_frustration,
+    customer_requested_handoff,
+    force_handoff,
+    maybe_autoplace_order,
 )
 
 logger = logging.getLogger("agent")
@@ -80,6 +86,15 @@ REALTIME_ENABLE_PROACTIVITY = (
     os.getenv("REALTIME_ENABLE_PROACTIVITY", "false").strip().lower() == "true"
 )
 TELEMETRY_TOPIC = "voixai.telemetry"
+# Tools `await` snapshot publishing, so cap it hard — telemetry must never stall
+# a live turn even if the LiveKit data publisher is unhealthy.
+TELEMETRY_PUBLISH_TIMEOUT_SECONDS = 2.0
+# After this many consecutive publish failures, back off for the cooldown then
+# retry. Telemetry must NEVER go permanently dark for the rest of a call after a
+# transient blip — the whole live UI (transcript, order, confirmation) rides on
+# it, so it has to self-heal when the transport recovers.
+TELEMETRY_PUBLISH_FAILURE_THRESHOLD = 3
+TELEMETRY_PUBLISH_COOLDOWN_SECONDS = 8.0
 TARGET_E2E_LATENCY_MS = 800
 ACCEPTABLE_E2E_LATENCY_MS = 1500
 
@@ -150,6 +165,9 @@ class SessionState:
     call_started_at: float | None = None
     transcript: list[dict[str, object]] = field(default_factory=list)
     guardrail_violation_count: int = 0
+    telemetry_publish_failures: int = 0
+    telemetry_cooldown_until: float = 0.0
+    placement_failure_count: int = 0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -362,23 +380,66 @@ def _snapshot_payload(session_state: SessionState, *, reason: str) -> dict[str, 
         "runtime_profile": session_state.runtime_profile,
         "user_turn_metrics": session_state.user_turn_metrics,
         "assistant_turn_metrics": session_state.assistant_turn_metrics,
+        "transcript": list(session_state.transcript[-60:]),
     }
     payload.update(scenario.snapshot_builder(session_state))
     return payload
 
 
 async def _publish_session_snapshot(session_state: SessionState, *, reason: str) -> None:
-    if session_state.room is None:
+    room = session_state.room
+    if room is None:
+        return
+
+    now = time.time()
+    # While in a short cooldown after repeated failures, skip publishing — but we
+    # always come back and retry. Telemetry is the lifeline for the whole live UI
+    # (transcript, order panel, order-placed confirmation), so it must self-heal
+    # if the data transport recovers, never go dark for the rest of the call.
+    if now < session_state.telemetry_cooldown_until:
         return
 
     try:
-        await session_state.room.local_participant.publish_data(
-            json.dumps(_snapshot_payload(session_state, reason=reason)),
-            reliable=True,
-            topic=TELEMETRY_TOPIC,
+        # Hard-bound the publish: tools `await` this, so a slow/broken publisher
+        # must never stall the conversation by more than the timeout.
+        await asyncio.wait_for(
+            room.local_participant.publish_data(
+                json.dumps(_snapshot_payload(session_state, reason=reason)),
+                reliable=True,
+                topic=TELEMETRY_TOPIC,
+            ),
+            timeout=TELEMETRY_PUBLISH_TIMEOUT_SECONDS,
         )
-    except Exception:
-        logger.exception("Failed to publish session telemetry snapshot")
+        session_state.telemetry_publish_failures = 0
+    except Exception as exc:
+        session_state.telemetry_publish_failures += 1
+        if session_state.telemetry_publish_failures >= TELEMETRY_PUBLISH_FAILURE_THRESHOLD:
+            session_state.telemetry_cooldown_until = now + TELEMETRY_PUBLISH_COOLDOWN_SECONDS
+            session_state.telemetry_publish_failures = 0
+            logger.warning(
+                "Telemetry publish failing; backing off %.0fs before retrying",
+                TELEMETRY_PUBLISH_COOLDOWN_SECONDS,
+                extra={"room": getattr(room, "name", None), "reason": str(exc)},
+            )
+        else:
+            logger.debug("Telemetry publish failed (reason=%s): %s; will retry", reason, exc)
+
+
+def _is_publisher_connection_timeout_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "could not establish publisher connection" in message
+        or "publisher connection" in message and "timeout" in message
+    )
+
+
+def _is_closed_connection_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "connection error: closed" in message or message.endswith("closed")
+
+
+def _is_publisher_connection_failure_error(exc: Exception) -> bool:
+    return _is_publisher_connection_timeout_error(exc) or _is_closed_connection_error(exc)
 
 
 def _handle_user_state_change(event: UserStateChangedEvent) -> None:
@@ -408,27 +469,26 @@ def _handle_conversation_item(event: ConversationItemAddedEvent) -> None:
         logger.debug("User transcript added to conversation")
         if metrics:
             logger.info(
-                "User turn latency metrics: transcription_delay=%ss end_of_turn_delay=%ss on_user_turn_completed_delay=%ss",
-                _format_metric(metrics.get("transcription_delay")),
-                _format_metric(metrics.get("end_of_turn_delay")),
-                _format_metric(metrics.get("on_user_turn_completed_delay")),
+                "User turn latency metrics: transcription_delay=%s end_of_turn_delay=%s on_user_turn_completed_delay=%s",
+                _format_duration_metric(metrics.get("transcription_delay")),
+                _format_duration_metric(metrics.get("end_of_turn_delay")),
+                _format_duration_metric(metrics.get("on_user_turn_completed_delay")),
             )
     elif item.role == "assistant":
         logger.debug("Assistant message added to conversation")
         if metrics:
             logger.info(
-                "Assistant turn latency metrics: llm_ttft=%ss tts_ttfb=%ss e2e_latency=%ss started_speaking_at=%ss stopped_speaking_at=%ss",
-                _format_metric(metrics.get("llm_node_ttft")),
-                _format_metric(metrics.get("tts_node_ttfb")),
-                _format_metric(metrics.get("e2e_latency")),
-                _format_metric(metrics.get("started_speaking_at")),
-                _format_metric(metrics.get("stopped_speaking_at")),
+                "Assistant turn latency metrics: llm_ttft=%s tts_ttfb=%s e2e_latency=%s speech_duration=%s",
+                _format_duration_metric(metrics.get("llm_node_ttft")),
+                _format_duration_metric(metrics.get("tts_node_ttfb")),
+                _format_duration_metric(metrics.get("e2e_latency")),
+                _format_duration_metric(_speech_duration_metric(metrics)),
             )
 
 
-def _format_metric(value: object) -> str:
+def _format_duration_metric(value: object) -> str:
     if isinstance(value, (int, float)):
-        return f"{value:.2f}"
+        return f"{value:.2f}s"
 
     return "n/a"
 
@@ -437,6 +497,16 @@ def _metric_value(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+def _speech_duration_metric(metrics: Mapping[str, object]) -> float | None:
+    started_speaking_at = _metric_value(metrics.get("started_speaking_at"))
+    stopped_speaking_at = _metric_value(metrics.get("stopped_speaking_at"))
+    if started_speaking_at is None or stopped_speaking_at is None:
+        return None
+    if stopped_speaking_at < started_speaking_at:
+        return None
+    return stopped_speaking_at - started_speaking_at
 
 
 def _is_realtime_engine(engine: str) -> bool:
@@ -874,7 +944,39 @@ def _build_room_options() -> room_io.RoomOptions:
                 model=ai_coustics.EnhancerModel.QUAIL_VF_S
             ),
         ),
+        # The web UI already renders transcript/state from our own telemetry.
+        # Disabling RoomIO text output avoids extra LiveKit text-stream
+        # publishers that become noisy when the publisher transport is degraded.
+        text_output=False,
     )
+
+
+async def _probe_realtime_publisher_connection(room: rtc.Room) -> None:
+    writer = await room.local_participant.stream_bytes(
+        name=utils.shortuuid("probe_"),
+        topic="voixai.publisher_probe",
+    )
+    await writer.write(b"ok")
+    await writer.aclose()
+
+
+def _should_fallback_to_classic_after_probe(exc: Exception) -> bool:
+    return _is_publisher_connection_failure_error(exc)
+
+
+def _fallback_runtime_config_to_classic(
+    runtime_config: RuntimeConfig,
+    *,
+    reason: str,
+) -> RuntimeConfig:
+    resolved = RuntimeConfig(**asdict(runtime_config))
+    resolved.voice_provider = VOICE_PROVIDER_CLASSIC
+    resolved.voice_engine = VOICE_ENGINE_PIPELINE
+    resolved.fallback_reason = reason
+    resolved.preset_id = "classic-pipeline"
+    resolved.preset_label = "Classic Voice (fallback)"
+    resolved.comparison_label = "Deepgram, text reasoning, and Cartesia speech"
+    return resolved
 
 
 def _log_runtime_profile(runtime_config: RuntimeConfig) -> None:
@@ -918,6 +1020,27 @@ def _trigger_away_prompt(session: AgentSession[SessionState], runtime_config: Ru
     session.generate_reply(
         instructions=(
             "The user went silent. Ask only one short question: are you still there?"
+        ),
+    )
+
+
+def _respond_with_handoff(session: AgentSession[SessionState], runtime_config: RuntimeConfig) -> None:
+    handoff_message = "I'm sorry about that. I'll connect you with a team member now."
+    if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC or not _supports_generate_reply(
+        runtime_config
+    ):
+        session.say(
+            handoff_message,
+            allow_interruptions=True,
+            add_to_chat_ctx=True,
+        )
+        return
+
+    session.generate_reply(
+        instructions=(
+            "The customer asked for a human or is clearly frustrated. "
+            "Apologize briefly and say you will connect them with a team member now. "
+            "Do not ask more order questions."
         ),
     )
 
@@ -981,6 +1104,31 @@ async def my_agent(ctx: JobContext):
     _validate_runtime_config(runtime_config)
     scenario = get_scenario_definition(runtime_config.scenario_id)
     channel = get_channel_definition(runtime_config.channel_id)
+    # Connect the worker to the assigned room before starting the voice session.
+    await ctx.connect()
+
+    if runtime_config.voice_provider in {
+        VOICE_PROVIDER_OPENAI_REALTIME,
+        VOICE_PROVIDER_GEMINI_LIVE,
+    }:
+        try:
+            await _probe_realtime_publisher_connection(ctx.room)
+        except Exception as exc:
+            if _should_fallback_to_classic_after_probe(exc):
+                runtime_config = _fallback_runtime_config_to_classic(
+                    runtime_config,
+                    reason=(
+                        "Realtime publisher connection failed during startup probe. "
+                        "Falling back to the classic pipeline."
+                    ),
+                )
+                logger.warning(
+                    "Realtime startup probe failed; falling back to classic pipeline",
+                    extra={"room": ctx.room.name, "error": str(exc)},
+                )
+            else:
+                raise
+
     assistant_llm = _build_llm_for_provider(runtime_config)
     if runtime_config.voice_provider in {
         VOICE_PROVIDER_OPENAI_REALTIME,
@@ -1050,6 +1198,19 @@ async def my_agent(ctx: JobContext):
                 }
             else:
                 session.userdata.user_turn_metrics = None
+            if customer_requested_handoff(turn_text) or customer_expressed_frustration(turn_text):
+                complaint = customer_expressed_frustration(turn_text)
+                reason = (
+                    "Customer explicitly asked for a human."
+                    if customer_requested_handoff(turn_text)
+                    else "Customer sounded frustrated during the order."
+                )
+
+                async def _force_handoff_response() -> None:
+                    await force_handoff(session.userdata, reason=reason, complaint=complaint)
+                    _respond_with_handoff(session, runtime_config)
+
+                asyncio.create_task(_force_handoff_response())
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
@@ -1083,6 +1244,10 @@ async def my_agent(ctx: JobContext):
                     "Assistant response guardrail violations: %s",
                     " | ".join(session.userdata.assistant_guardrail_violations),
                 )
+            # Safety net: if the model announced the order is placed but never
+            # called create_mock_order, place it now (through the hard gate) so a
+            # real, persisted order always backs the claim.
+            asyncio.create_task(maybe_autoplace_order(session.userdata, assistant_text))
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
             )
@@ -1133,15 +1298,13 @@ async def my_agent(ctx: JobContext):
 
     ctx.add_shutdown_callback(_finalize_call_on_shutdown)
 
-    # Connect the worker to the assigned room before starting the voice session.
-    await ctx.connect()
-
     # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
         agent=scenario.agent_factory(assistant_llm, channel),
         room=ctx.room,
         room_options=_build_room_options(),
     )
+    OrderStateMachine(session.userdata.order).start_greeting()
     _trigger_initial_greeting(
         session,
         runtime_config,

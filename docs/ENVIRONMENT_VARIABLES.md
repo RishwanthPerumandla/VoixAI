@@ -26,6 +26,13 @@ The root env file is shared local-development configuration for the API and work
 - `REALTIME_ENABLE_PROACTIVITY`: Google realtime feature flag
 - `WEB_PORT`: local web port, default `3000`
 - `API_PORT`: local API port, default `8000`
+- `VOIXAI_API_URL`: agent telemetry endpoint, default `http://127.0.0.1:8000`
+
+Docker note:
+
+- `compose.yaml` overrides the LiveKit connection values per service so the local Docker stack can use the bundled `livekit` container
+- in Docker, the API returns `ws://localhost:7880` to the browser, while the worker connects internally to `ws://livekit:7880`
+- in manual non-Docker runs, the root `LIVEKIT_*` values are used directly
 
 ## `apps/web/.env.example`
 
@@ -54,6 +61,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `GOOGLE_API_KEY`: required for Gemini Live
 - `AGENT_NAME`: worker registration name, default `my-agent`
 - `VOIXAI_API_BASE_URL`: backend base URL for menu lookup, validation, and pricing, default `http://127.0.0.1:8000`
+- `VOIXAI_API_URL`: backend base URL for call telemetry/dashboard writes, default `http://127.0.0.1:8000`
 - `VOICE_PROVIDER`: worker runtime mode, `classic`, `openai_realtime`, or `gemini_live`
 - `LLM_MODEL`: pipeline LLM model, default `openai/gpt-5.3-chat-latest`
 - `STT_MODEL`: pipeline speech-to-text model, default `deepgram/flux-general`
@@ -108,6 +116,7 @@ and not just the worker startup provider log.
 - `API_PORT`: API bind port
 - `ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
 - `ALLOWED_ORIGIN_REGEX`: optional regex allowlist for browser origins
+- `VOIXAI_DB_PATH`: optional SQLite path for persisted orders/calls/sessions; defaults to `.voixai/voixai.db`
 
 Local development note:
 

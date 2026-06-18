@@ -1,0 +1,513 @@
+[
+  {
+    "name": "transcript_looping_checkout_places_once",
+    "description": "Checkout loop regression: a real 50-wing pickup order for Cherry should place once instead of stalling.",
+    "tags": ["transcript_regressions", "checkout_loops", "confirmation_gate", "pricing_repricing"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "This is pickup for Cherry."
+      },
+      {
+        "user": "Add 50 boneless wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": ["boneless_50"]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"],
+          "response_contains": ["Should I place it?"]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true,
+          "response_contains": ["order was placed"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["boneless_50"],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "transcript_duplicate_yes_does_not_reopen_checkout",
+    "description": "Checkout loop regression: a second yes after successful placement should return the existing order id.",
+    "tags": ["transcript_regressions", "checkout_loops", "confirmation_gate", "session_lifecycle"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "This is pickup for Cherry."
+      },
+      {
+        "user": "Add 50 boneless wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": ["boneless_50"]
+        }
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true
+        }
+      },
+      {
+        "user": "Yes.",
+        "expected": {
+          "telemetry_events": ["mock_order_duplicate_prevented"],
+          "response_contains": ["already placed"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["boneless_50"],
+      "completed_order": true,
+      "duplicate_confirmation_prevented": 1
+    }
+  },
+  {
+    "name": "transcript_repeated_place_failures_escalate",
+    "description": "Checkout loop regression: repeated blocked placement attempts should escalate instead of looping forever.",
+    "tags": ["transcript_regressions", "checkout_loops", "confirmation_gate", "handoff_frustration"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Add 10 classic wings.",
+        "expected": {
+          "contains_items": ["classic_10"],
+          "validation_errors": [
+            "Please choose pickup or delivery.",
+            "Please choose a flavor for your wings."
+          ]
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": ["mock_order_blocked"],
+          "order_id_not_created": true
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": ["handoff_required"],
+          "response_contains": ["team member"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "line_item_ids": ["classic_10"],
+      "handoff_required": true,
+      "validation_failure_count": 1
+    }
+  },
+  {
+    "name": "transcript_checkout_recovers_after_blocked_place",
+    "description": "Checkout loop regression: a blocked place attempt can recover once the order is fully reviewed and confirmed.",
+    "tags": ["transcript_regressions", "checkout_loops", "confirmation_gate", "metadata_recovery"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Add 50 boneless wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": ["boneless_50"]
+        }
+      },
+      {
+        "user": "Place the order.",
+        "expected": {
+          "telemetry_events": ["mock_order_blocked"],
+          "order_id_not_created": true
+        }
+      },
+      {
+        "user": "This is pickup for Cherry."
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["boneless_50"],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "transcript_fragmented_metadata_before_checkout",
+    "description": "Metadata recovery regression: fragmented pickup and name collection should still reach clean checkout.",
+    "tags": ["transcript_regressions", "metadata_recovery", "corrections", "confirmation_gate"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Add 50 boneless wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": ["boneless_50"]
+        }
+      },
+      {
+        "user": "It's for pickup."
+      },
+      {
+        "user": "The name for the order is Cherry."
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"]
+        }
+      },
+      {
+        "user": "Yes, please place that.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["boneless_50"],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "transcript_pickup_then_name_repair",
+    "description": "Metadata recovery regression: pickup and customer name gathered on separate repair turns should be enough for confirmation.",
+    "tags": ["transcript_regressions", "metadata_recovery", "confirmation_gate"],
+    "initial_state": {},
+    "turns": [
+      {
+        "user": "Add 10 boneless wings with lemon pepper and ranch.",
+        "expected": {
+          "contains_items": ["boneless_10"]
+        }
+      },
+      {
+        "user": "It's for pickup."
+      },
+      {
+        "user": "No, the name for the order is Cherry."
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["boneless_10"],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "transcript_name_after_failed_place_recovery",
+    "description": "Metadata recovery regression: after a blocked checkout, adding the missing pickup name should allow completion.",
+    "tags": ["transcript_regressions", "metadata_recovery", "checkout_loops", "confirmation_gate"],
+    "initial_state": {
+      "order_type": "pickup"
+    },
+    "turns": [
+      {
+        "user": "Add 10 classic wings with lemon pepper.",
+        "expected": {
+          "contains_items": ["classic_10"]
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "response_contains": ["need the name"]
+        }
+      },
+      {
+        "user": "The name is Cherry."
+      },
+      {
+        "user": "What's my total?",
+        "expected": {
+          "telemetry_events": ["price_quoted"],
+          "total_present": true
+        }
+      },
+      {
+        "user": "Review the order.",
+        "expected": {
+          "telemetry_events": ["confirmation_review_ready"]
+        }
+      },
+      {
+        "user": "Yes, place it.",
+        "expected": {
+          "telemetry_events": ["mock_order_created"],
+          "order_id_created": true
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "completed",
+      "line_item_ids": ["classic_10"],
+      "completed_order": true
+    }
+  },
+  {
+    "name": "transcript_customer_requests_human_when_frustrated",
+    "description": "Handoff/frustration regression: an explicit real-person request should hand off immediately.",
+    "tags": ["transcript_regressions", "handoff_frustration", "confirmation_gate"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "boneless_50",
+          "quantity": 1,
+          "selected_flavor_ids": ["lemon_pepper", "original_hot"],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "This isn't working, get me a real person.",
+        "expected": {
+          "telemetry_events": ["handoff_required"],
+          "response_contains": ["team member"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "line_item_ids": ["boneless_50"],
+      "handoff_required": true
+    }
+  },
+  {
+    "name": "transcript_wrong_order_complaint_handoffs",
+    "description": "Handoff/frustration regression: complaint and wrong-order language should escalate instead of continuing the bot flow.",
+    "tags": ["transcript_regressions", "handoff_frustration", "unknown_items"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "This is the wrong order, I need a manager.",
+        "expected": {
+          "telemetry_events": ["handoff_required"],
+          "response_contains": ["team member"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "item_count": 0,
+      "handoff_required": true
+    }
+  },
+  {
+    "name": "transcript_refund_request_handoffs",
+    "description": "Handoff/frustration regression: refund requests should move directly to a human.",
+    "tags": ["transcript_regressions", "handoff_frustration", "unknown_items"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry"
+    },
+    "turns": [
+      {
+        "user": "I need a refund.",
+        "expected": {
+          "telemetry_events": ["handoff_required"],
+          "response_contains": ["team member"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "handoff_required",
+      "item_count": 0,
+      "handoff_required": true
+    }
+  },
+  {
+    "name": "transcript_bone_in_to_boneless_to_bone_in",
+    "description": "Item-correction confusion regression: repeated wing-type changes should preserve a sane final order.",
+    "tags": ["transcript_regressions", "item_correction_confusion", "corrections"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": ["plain"],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": ["boneless_10"]
+        }
+      },
+      {
+        "user": "No, make that 10 classic wings with lemon pepper and original hot.",
+        "expected": {
+          "contains_items": ["classic_10"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["classic_10"],
+      "correction_count": 3
+    }
+  },
+  {
+    "name": "transcript_invalid_modifier_removed_after_replacement",
+    "description": "Item-correction confusion regression: replacing bone-in with boneless should drop all-flats instead of poisoning checkout.",
+    "tags": ["transcript_regressions", "item_correction_confusion", "corrections", "invalid_modifiers"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": ["lemon_pepper"],
+          "selected_modifier_ids": ["all_flats", "well_done"],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Actually make that 10 boneless wings.",
+        "expected": {
+          "contains_items": ["boneless_10"],
+          "telemetry_events": ["invalid_modifier_removed"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "line_item_ids": ["boneless_10"],
+      "correction_count": 1
+    }
+  },
+  {
+    "name": "transcript_ambiguous_make_that_two_needs_clarification",
+    "description": "Item-correction confusion regression: after multiple lines, 'make that two' should clarify rather than mutate the wrong item.",
+    "tags": ["transcript_regressions", "item_correction_confusion", "ambiguous_phrasing"],
+    "initial_state": {
+      "order_type": "pickup",
+      "customer_name": "Cherry",
+      "items": [
+        {
+          "line_id": "line-1",
+          "item_id": "classic_6",
+          "quantity": 1,
+          "selected_flavor_ids": ["lemon_pepper"],
+          "selected_modifier_ids": [],
+          "notes": ""
+        },
+        {
+          "line_id": "line-2",
+          "item_id": "classic_10",
+          "quantity": 1,
+          "selected_flavor_ids": ["original_hot"],
+          "selected_modifier_ids": [],
+          "notes": ""
+        }
+      ]
+    },
+    "turns": [
+      {
+        "user": "Make that two.",
+        "expected": {
+          "telemetry_events": ["clarification_required"]
+        }
+      }
+    ],
+    "final_expected": {
+      "status": "collecting_order",
+      "item_count": 2,
+      "clarification_count": 1
+    }
+  }
+]

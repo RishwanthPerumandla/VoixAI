@@ -99,6 +99,45 @@ class MockOrder:
 
 
 @dataclass
+class ReliabilityMetrics:
+    correction_count: int = 0
+    cancellation_count: int = 0
+    validation_failure_count: int = 0
+    clarification_count: int = 0
+    unknown_item_count: int = 0
+    handoff_required_count: int = 0
+    duplicate_confirmation_prevented: int = 0
+    final_status: str = "idle"
+
+
+@dataclass(frozen=True)
+class OrderIntent:
+    name: str
+    target_item: str | None = None
+    target_item_id: str | None = None
+    target_line_id: str | None = None
+    target_modifier: str | None = None
+    target_modifier_id: str | None = None
+    replacement_value: str | None = None
+    replacement_item_id: str | None = None
+    quantity: int | None = None
+    flavor_ids: tuple[str, ...] = ()
+    add_modifier_ids: tuple[str, ...] = ()
+    remove_modifier_ids: tuple[str, ...] = ()
+    notes: str | None = None
+    confidence: float = 1.0
+    requires_clarification: bool = False
+    clarification_question: str | None = None
+
+
+@dataclass
+class OrderEvent:
+    type: str
+    detail: str
+    data: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass
 class OrderState:
     items: list[OrderLineItem] = field(default_factory=list)
     modifiers: list[str] = field(default_factory=list)
@@ -107,7 +146,7 @@ class OrderState:
     customer_name: str = ""
     phone: str = ""
     notes: str = ""
-    status: str = "collecting"
+    status: str = "idle"
     confirmed: bool = False
     pickup_time: str | None = None
     language: str = "english"
@@ -115,3 +154,7 @@ class OrderState:
     recap_readback: bool = False
     pos_validation_passed: bool = False
     last_validation_errors: list[str] = field(default_factory=list)
+    last_clarification_question: str | None = None
+    recent_events: list[OrderEvent] = field(default_factory=list)
+    archived_orders: list[dict[str, object]] = field(default_factory=list)
+    metrics: ReliabilityMetrics = field(default_factory=ReliabilityMetrics)

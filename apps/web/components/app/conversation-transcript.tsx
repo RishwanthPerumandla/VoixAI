@@ -1,14 +1,19 @@
 'use client';
 
 import { type ReactNode, useEffect, useRef } from 'react';
-import { type ReceivedMessage } from '@livekit/components-react';
 import { type UserFacingSessionState } from '@/components/app/session-status';
 import { TranscriptMessage } from '@/components/app/transcript-message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/shadcn/utils';
 
+export interface ConversationEntry {
+  id: string;
+  role: 'assistant' | 'user';
+  message: string;
+}
+
 interface ConversationTranscriptProps {
-  messages: ReceivedMessage[];
+  messages: ConversationEntry[];
   state: UserFacingSessionState;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -83,7 +88,7 @@ export function ConversationTranscript({
           {messages.map((entry) => (
             <TranscriptMessage
               key={entry.id}
-              role={entry.from?.isLocal ? 'user' : 'assistant'}
+              role={entry.role}
               message={entry.message}
             />
           ))}

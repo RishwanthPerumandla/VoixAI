@@ -115,3 +115,27 @@ async def test_get_order_404_when_missing(storage: SqliteStorage) -> None:
     with pytest.raises(HTTPException) as exc:
         await api_main.get_order("MOCK-00000")
     assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_orders_filters_by_room(storage: SqliteStorage) -> None:
+    await api_main.submit_order(
+        api_main.OrderSubmitRequest(room_name="room-x", order=_confirmed_order_payload())
+    )
+    placed_y = await api_main.submit_order(
+        api_main.OrderSubmitRequest(room_name="room-y", order=_confirmed_order_payload())
+    )
+
+    # Scoped to a room -> only that room's order (drives the confirmation fallback).
+    scoped = await api_main.list_orders(limit=50, offset=0, room_name="room-y")
+    assert scoped.total == 1
+    assert scoped.orders[0].room_name == "room-y"
+    assert scoped.orders[0].order_number == placed_y.order_number
+
+    # Unknown room -> empty.
+    empty = await api_main.list_orders(limit=50, offset=0, room_name="room-none")
+    assert empty.total == 0
+
+    # No filter -> all orders.
+    every = await api_main.list_orders(limit=50, offset=0, room_name=None)
+    assert every.total == 2
