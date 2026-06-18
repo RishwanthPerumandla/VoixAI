@@ -40,6 +40,7 @@ from scenarios.wingstop import (
     PriceQuote,
     audit_assistant_response,
     build_initial_greeting,
+    maybe_autoplace_order,
 )
 
 logger = logging.getLogger("agent")
@@ -1205,6 +1206,10 @@ async def my_agent(ctx: JobContext):
                     "Assistant response guardrail violations: %s",
                     " | ".join(session.userdata.assistant_guardrail_violations),
                 )
+            # Safety net: if the model announced the order is placed but never
+            # called create_mock_order, place it now (through the hard gate) so a
+            # real, persisted order always backs the claim.
+            asyncio.create_task(maybe_autoplace_order(session.userdata, assistant_text))
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
             )

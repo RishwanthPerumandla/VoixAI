@@ -136,7 +136,7 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
 
     - Never offer items, flavors, or sizes that are not on the menu below, and never invent taxes, discounts, prep times, policies, or order IDs.
     - You may quote a single item's listed price, but state the order subtotal, tax, and total only from the price_order or review_order_for_confirmation tool, because sizes, modifiers, and tax change the math.
-    - Only say an order was placed after create_mock_order succeeds.
+    - To place an order you MUST call the create_mock_order tool — saying "placing your order" or "your order is placed" in words does NOT place it. After the customer confirms, call create_mock_order, then read back the order number it returns. Never tell the caller the order is placed unless that tool has returned an order number.
     - Combos and wings come in specific sizes. If the customer names a combo or wings without a size (for example "classic combo" or "boneless wings"), ask which size before adding it instead of guessing.
     - A combo is one item that includes a flavor, a side, and a drink. Add the combo with add_menu_item and pass the side and drink as its modifiers, or add the combo first and then attach the side and drink to it with update_last_item. Never add a combo's side or drink as separate items, and never add a drink like Coke as its own item — sides and drinks are selections that belong to the combo.
     - You can add an item before every detail is known; the order will simply show what is still needed, and you can fill it in as the customer tells you. Do not refuse to add an item just because a detail is missing.
@@ -654,6 +654,75 @@ def audit_assistant_response(
         violations.append("Assistant asked for final confirmation while the order still had validation errors.")
 
     return violations
+
+
+# Phrases that mean the assistant told the caller the order is going through. We
+# match broadly because realtime models paraphrase freely ("placing it now",
+# "ready for pickup in 15 minutes", "you're all set").
+_PLACEMENT_CLAIM_RE = re.compile(
+    r"order (?:was|is|has been|'s been) placed"
+    r"|plac(?:e|ing|ed) (?:your |the |that |it )?order"
+    r"|(?:i['â’]?ve|i have) placed"
+    r"|placed your order"
+    r"|order (?:is|'s) confirmed"
+    r"|ready (?:for pickup |for you )?in about"
+    r"|you(?:'re| are) all set",
+    re.IGNORECASE,
+)
+
+
+def assistant_claimed_placement(text: str) -> bool:
+    return bool(_PLACEMENT_CLAIM_RE.search(text or ""))
+
+
+async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None:
+    """Safety net for realtime models that announce an order without calling
+    ``create_mock_order``.
+
+    If the assistant told the caller the order is placed but no order was
+    actually submitted, place it here — but only through the same hard submit
+    gate, so we never persist an unconfirmed or invalid order. This guarantees
+    that whenever the agent says "placed", a real, persisted order exists (which
+    also drives the dashboard and the order-placed confirmation).
+    """
+    if session_state.mock_order is not None:
+        return
+    if not assistant_claimed_placement(assistant_text):
+        return
+
+    order = session_state.order
+    decision = OrderStateMachine(order).authorize_submit()
+    if decision.validation_errors or decision.confirmation_reasons:
+        logger.warning(
+            "Assistant claimed placement but the order is not submittable; not auto-placing. "
+            "validation_errors=%s confirmation_reasons=%s",
+            decision.validation_errors,
+            decision.confirmation_reasons,
+        )
+        return
+
+    room = getattr(session_state, "room", None)
+    room_name = getattr(room, "name", "") or "demo-room"
+    if session_state.price_quote is None:
+        session_state.price_quote = build_price_quote(order)
+
+    OrderStateMachine(order).mark_submitting()
+    try:
+        submitted = await _submit_order_via_backend(room_name, order)
+        session_state.mock_order = MockOrder(
+            order_number=str(submitted["order_number"]),
+            total=str(submitted["total"]),
+            summary=summarize_order_state(order),
+            kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
+        )
+        OrderStateMachine(order).mark_submitted()
+        logger.info(
+            "Auto-placed order %s the assistant announced but did not tool-call",
+            session_state.mock_order.order_number,
+        )
+        await session_state.publish_snapshot(reason="mock_order_autoplaced")
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
+        logger.exception("Auto-placement backend submit failed")
 
 
 def build_wingstop_snapshot(session_state: Any) -> dict[str, object]:
