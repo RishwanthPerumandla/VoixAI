@@ -150,6 +150,7 @@ class SessionState:
     scenario_id: str = DEFAULT_SCENARIO_ID
     channel_id: str = DEFAULT_CHANNEL_ID
     order: OrderState = field(default_factory=OrderState)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     price_quote: PriceQuote | None = None
     mock_order: MockOrder | None = None
     user_turn_metrics: dict[str, float | None] | None = None

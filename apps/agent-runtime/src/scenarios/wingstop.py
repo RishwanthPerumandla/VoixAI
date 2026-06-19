@@ -98,6 +98,8 @@ from voix_ordering.validation import _validation_errors_for_line  # noqa: F401
 
 logger = logging.getLogger("agent")
 
+_MUTEX = asyncio.Lock()
+
 API_BASE_URL = os.getenv("VOIXAI_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -251,27 +253,21 @@ def _order_payload(order: OrderState) -> dict[str, object]:
         ],
         "modifiers": list(order.modifiers),
         "quantity": order.quantity,
-        "order_type": order.order_type,
-        "customer_name": order.customer_name,
-        "phone": order.phone,
-        "notes": order.notes,
-        "status": order.status,
-        "confirmed": order.confirmed,
-        "pickup_time": order.pickup_time,
-        "language": order.language,
-        "total_shown": order.total_shown,
-        "recap_readback": order.recap_readback,
-        "pos_validation_passed": order.pos_validation_passed,
-        "last_validation_errors": list(order.last_validation_errors),
+        "order_type": order.order_type or "",
+        "customer_name": order.customer_name or "",
+        "phone": order.phone or "",
+        "notes": order.notes or "",
+        "pickup_time": order.pickup_time or "",
+        "language": order.language or "",
     }
 
 
 _BACKEND_TIMEOUT_SECONDS = 8.0
 _BACKEND_ATTEMPTS = 3
 _PRICING_BACKEND_TIMEOUT_SECONDS = 2.5
-_PRICING_BACKEND_ATTEMPTS = 1
+_PRICING_BACKEND_ATTEMPTS = 2
 _SELECTION_BACKEND_TIMEOUT_SECONDS = 2.0
-_SELECTION_BACKEND_ATTEMPTS = 1
+_SELECTION_BACKEND_ATTEMPTS = 2
 
 
 def _backend_request(
@@ -299,9 +295,14 @@ def _backend_request(
         try:
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
+            if raw:
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    raise RuntimeError(f"Backend returned non-JSON response: {raw[:200]}")
+            return {}
         except urllib.error.HTTPError as exc:
-            if exc.code >= 500 and attempt + 1 < total_attempts:
+            if attempt + 1 < total_attempts and (exc.code >= 500 or exc.code == 429):
                 last_exc = exc
                 time.sleep(0.3 * (attempt + 1))
                 continue
@@ -478,8 +479,8 @@ def _order_update_response(order: OrderState, validation_errors: list[str], pric
     if price_quote is None:
         try:
             price_quote = build_price_quote(order)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to build price quote for order update response: %s", exc)
     if price_quote is not None:
         return f"{summary} Current price: subtotal {price_quote.subtotal}, tax {price_quote.tax}, total {price_quote.total}."
     return summary
@@ -650,6 +651,10 @@ def _absorb_combo_modifiers(order: OrderState) -> list[str]:
             }
 
     for combo_idx in combo_indices:
+        if combo_idx >= len(order.items):
+            continue
+        if order.items[combo_idx].item_id not in MENU_ITEMS or MENU_ITEMS[order.items[combo_idx].item_id].item_kind != "combo":
+            continue
         combo_line = order.items[combo_idx]
         for group_id in ("combo_side_choice", "combo_drink_choice"):
             group = MODIFIER_GROUPS.get(group_id)
@@ -672,6 +677,8 @@ def _absorb_combo_modifiers(order: OrderState) -> list[str]:
                 for other_idx in list(range(len(order.items))):
                     if other_idx == combo_idx:
                         continue
+                    if combo_idx >= len(order.items) or other_idx >= len(order.items):
+                        break
                     if option_id in [m for m in order.items[combo_idx].selected_modifier_ids
                                       if group_id in OPTION_TO_GROUP_IDS.get(m, set())]:
                         continue
@@ -875,7 +882,7 @@ def _extract_recovery_flavor_ids(text: str, *, max_flavors: int) -> list[str]:
 
 
 _AFFIRMATIVE_CONFIRMATION_RE = re.compile(
-    r"\b(yes|yeah|yep|correct|exactly|confirm|please place|place that|place it|do it)\b",
+    r"\b(?:yes|yeah|yep|correct|exactly|please place|place that|place it|go ahead)\b",
     re.IGNORECASE,
 )
 
@@ -975,11 +982,16 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
                     order.confirmed = True
                     recovered = True
                     break
-        elif has_placement_claim and user_texts:
-            last_user = _AFFIRMATIVE_CONFIRMATION_RE.search(user_texts[-1])
-            if last_user:
-                order.confirmed = True
-                recovered = True
+        elif has_placement_claim and user_texts and assistant_texts:
+            # Only auto-confirm from placement claim if the LAST assistant
+            # message asked for confirmation and the LAST user message
+            # responded affirmatively.
+            last_assistant = assistant_texts[-1].lower()
+            if ("place" in last_assistant or "confirm" in last_assistant or "ready" in last_assistant) and "?" in last_assistant:
+                last_user = _AFFIRMATIVE_CONFIRMATION_RE.search(user_texts[-1])
+                if last_user:
+                    order.confirmed = True
+                    recovered = True
 
     if recovered:
         logger.warning(
@@ -1031,43 +1043,47 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
     if not assistant_claimed_placement(assistant_text):
         return
 
-    order = session_state.order
-    decision = OrderStateMachine(order).authorize_submit()
-    if (decision.validation_errors or decision.confirmation_reasons) and _recover_order_from_transcript(session_state):
-        decision = OrderStateMachine(order).authorize_submit()
-    if decision.validation_errors or decision.confirmation_reasons:
-        session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
-        logger.warning(
-            "Assistant claimed placement but the order is not submittable; not auto-placing. "
-            "validation_errors=%s confirmation_reasons=%s",
-            decision.validation_errors,
-            decision.confirmation_reasons,
-        )
-        return
-
-    room = getattr(session_state, "room", None)
-    room_name = getattr(room, "name", "") or "demo-room"
-    if session_state.price_quote is None:
-        session_state.price_quote = build_price_quote(order)
-
-    OrderStateMachine(order).mark_submitting()
+    await _MUTEX.acquire()
     try:
-        submitted = await _submit_order_via_backend(room_name, order)
-        session_state.mock_order = MockOrder(
-            order_number=str(submitted["order_number"]),
-            total=str(submitted["total"]),
-            summary=summarize_order_state(order),
-            kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
-        )
-        OrderStateMachine(order).mark_submitted()
-        logger.info(
-            "Auto-placed order %s the assistant announced but did not tool-call",
-            session_state.mock_order.order_number,
-        )
-        await session_state.publish_snapshot(reason="mock_order_autoplaced")
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
-        logger.exception("Auto-placement backend submit failed")
-        session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
+        order = session_state.order
+        decision = OrderStateMachine(order).authorize_submit()
+        if (decision.validation_errors or decision.confirmation_reasons) and _recover_order_from_transcript(session_state):
+            decision = OrderStateMachine(order).authorize_submit()
+        if decision.validation_errors or decision.confirmation_reasons:
+            session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
+            logger.warning(
+                "Assistant claimed placement but the order is not submittable; not auto-placing. "
+                "validation_errors=%s confirmation_reasons=%s",
+                decision.validation_errors,
+                decision.confirmation_reasons,
+            )
+            return
+
+        room = getattr(session_state, "room", None)
+        room_name = getattr(room, "name", "") or "demo-room"
+        if session_state.price_quote is None:
+            session_state.price_quote = build_price_quote(order)
+
+        OrderStateMachine(order).mark_submitting()
+        try:
+            submitted = await _submit_order_via_backend(room_name, order)
+            session_state.mock_order = MockOrder(
+                order_number=str(submitted["order_number"]),
+                total=str(submitted["total"]),
+                summary=summarize_order_state(order),
+                kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
+            )
+            OrderStateMachine(order).mark_submitted()
+            logger.info(
+                "Auto-placed order %s the assistant announced but did not tool-call",
+                session_state.mock_order.order_number,
+            )
+            await session_state.publish_snapshot(reason="mock_order_autoplaced")
+        except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
+            logger.exception("Auto-placement backend submit failed")
+            session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
+    finally:
+        _MUTEX.release()
 
 
 def build_wingstop_snapshot(session_state: Any) -> dict[str, object]:
@@ -1596,7 +1612,7 @@ class WingstopAssistant(Agent):
         if phone is not None:
             order.phone = phone.strip()
         if language is not None:
-            normalized_language = _normalize_lookup_key(language)
+            normalized_language = _normalize_lookup_key(language.strip())
             if normalized_language in {"english", "spanish", "espanol"}:
                 order.language = "spanish" if normalized_language == "espanol" else normalized_language
         if notes is not None:
@@ -1745,28 +1761,33 @@ class WingstopAssistant(Agent):
             session_state.price_quote = build_price_quote(order)
 
         if session_state.mock_order is None:
-            room = getattr(session_state, "room", None)
-            room_name = getattr(room, "name", "") or "demo-room"
-            machine.mark_submitting()
+            await _MUTEX.acquire()
             try:
-                # Persist the order through the backend so it is durable and
-                # idempotent (a retry returns the same order number).
-                submitted = await _submit_order_via_backend(room_name, order)
-                session_state.mock_order = MockOrder(
-                    order_number=str(submitted["order_number"]),
-                    total=str(submitted["total"]),
-                    summary=summarize_order_state(order),
-                    kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
-                )
-            except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
-                # Keep the demo resilient: if the backend is unreachable, fall
-                # back to a local (non-persisted) order so the call still closes.
-                logger.warning(
-                    "Order persistence backend unavailable; using local fallback order",
-                    exc_info=True,
-                )
-                session_state.mock_order = create_mock_order(order, session_state.price_quote)
-            machine.mark_submitted()
+                room = getattr(session_state, "room", None)
+                room_name = getattr(room, "name", "") or "demo-room"
+                machine.mark_submitting()
+                try:
+                    # Persist the order through the backend so it is durable and
+                    # idempotent (a retry returns the same order number).
+                    submitted = await _submit_order_via_backend(room_name, order)
+                    session_state.mock_order = MockOrder(
+                        order_number=str(submitted["order_number"]),
+                        total=str(submitted["total"]),
+                        summary=summarize_order_state(order),
+                        kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
+                    )
+                except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError) as submit_err:
+                    # Keep the demo resilient: if the backend is unreachable, fall
+                    # back to a local (non-persisted) order so the call still closes.
+                    logger.critical(
+                        "Order NOT persisted to backend (falling back to local mock): %s",
+                        submit_err,
+                        exc_info=True,
+                    )
+                    session_state.mock_order = create_mock_order(order, session_state.price_quote)
+                machine.mark_submitted()
+            finally:
+                _MUTEX.release()
 
         logger.debug("Mock order created: %s", asdict(session_state.mock_order))
         await session_state.publish_snapshot(reason="mock_order_created")

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import difflib
+import logging
 import re
 from decimal import Decimal
 from pathlib import Path
@@ -1569,45 +1570,107 @@ def _get_max_flavors(item_id: str) -> int:
 # ── Catalog-backed lookups (new code should prefer these) ─────────────────
 
 
+# ── Legacy-to-catalog ID mapping ──────────────────────────────────────────────
+# The catalog JSON uses different ID conventions than the legacy Python dicts.
+# This mapping bridges the gap so all lookup functions work with either scheme.
+_LEGACY_TO_CATALOG_ID: dict[str, str] = {
+    "classic_6": "classic_wings_6",
+    "classic_8": "classic_wings_8",
+    "classic_10": "classic_wings_10",
+    "classic_15": "classic_wings_15",
+    "classic_20": "classic_wings_20",
+    "classic_30": "classic_wings_30",
+    "classic_50": "classic_wings_50",
+    "boneless_6": "boneless_wings_6",
+    "boneless_8": "boneless_wings_8",
+    "boneless_10": "boneless_wings_10",
+    "boneless_15": "boneless_wings_15",
+    "boneless_20": "boneless_wings_20",
+    "boneless_30": "boneless_wings_30",
+    "boneless_50": "boneless_wings_50",
+    "tenders_3": "crispy_tenders_3",
+    "tenders_4": "crispy_tenders_4",
+    "tenders_6": "crispy_tenders_6",
+    "tenders_10": "crispy_tenders_10",
+    "combo_classic_6": "classic_combo_6",
+    "combo_classic_8": "classic_combo_8",
+    "combo_classic_10": "classic_combo_10",
+    "combo_boneless_6": "boneless_combo_6",
+    "combo_boneless_8": "boneless_combo_8",
+    "combo_boneless_10": "boneless_combo_10",
+    "regular_fries": "regular_seasoned_fries",
+    "large_fries": "large_seasoned_fries",
+    "voodoo_fries": "louisiana_voodoo_fries",
+    "fried_corn": "cajun_fried_corn",
+    "side_ranch": "regular_ranch",
+    "side_blue_cheese": "regular_blue_cheese",
+    "side_honey_mustard": "regular_honey_mustard",
+    "side_cheese_sauce": "regular_cheese_sauce",
+    "drink_water_item": "bottled_water",
+}
+_CATALOG_TO_LEGACY_ID: dict[str, str] = {v: k for k, v in _LEGACY_TO_CATALOG_ID.items()}
+
+
+def _resolve_catalog_ids(item_id: str) -> set[str]:
+    """Return the set of catalog-valid IDs to try for a given item ID."""
+    ids = {item_id}
+    mapped = _LEGACY_TO_CATALOG_ID.get(item_id)
+    if mapped is not None:
+        ids.add(mapped)
+    return ids
+
+
 def get_item_template(item_id: str) -> ItemTemplate | None:
     """Look up an ItemTemplate by id from the catalog."""
     cat = get_catalog()
-    for t in cat.item_templates:
-        if t.id == item_id:
-            return t
+    if cat is None:
+        return None
+    for candidate in _resolve_catalog_ids(item_id):
+        for t in cat.item_templates:
+            if t.id == candidate:
+                return t
     return None
 
 
 def get_combo_template(combo_id: str) -> ComboTemplate | None:
     """Look up a ComboTemplate by id from the catalog."""
     cat = get_catalog()
-    for ct in cat.combo_templates:
-        if ct.id == combo_id:
-            return ct
+    if cat is None:
+        return None
+    for candidate in _resolve_catalog_ids(combo_id):
+        for ct in cat.combo_templates:
+            if ct.id == candidate:
+                return ct
     return None
 
 
 def get_group_pack_template(pack_id: str) -> GroupPackTemplate | None:
     """Look up a GroupPackTemplate by id from the catalog."""
     cat = get_catalog()
-    for gp in cat.group_pack_templates:
-        if gp.id == pack_id:
-            return gp
+    if cat is None:
+        return None
+    for candidate in _resolve_catalog_ids(pack_id):
+        for gp in cat.group_pack_templates:
+            if gp.id == candidate:
+                return gp
     return None
 
 
 def get_item_type(item_id: str) -> str | None:
     """Return the item_type for any catalog item (template, combo, or pack)."""
     cat = get_catalog()
-    for t in cat.item_templates:
-        if t.id == item_id:
-            return t.item_type
-    for ct in cat.combo_templates:
-        if ct.id == item_id:
-            return ct.item_type
-    for gp in cat.group_pack_templates:
-        if gp.id == item_id:
-            return gp.item_type
+    if cat is None:
+        return None
+    for candidate in _resolve_catalog_ids(item_id):
+        for t in cat.item_templates:
+            if t.id == candidate:
+                return t.item_type
+        for ct in cat.combo_templates:
+            if ct.id == candidate:
+                return ct.item_type
+        for gp in cat.group_pack_templates:
+            if gp.id == candidate:
+                return gp.item_type
     return None
 
 
@@ -1631,7 +1694,9 @@ def get_modifier_group_by_id(group_id: str) -> CatalogModifierGroup | None:
 
 # ── Attempt to load catalog at import time (graceful fallback to hardcoded) ──
 
+logger = logging.getLogger("voix_ordering.menu")
+
 try:
     load_catalog()
-except (FileNotFoundError, KeyError, json.JSONDecodeError):
-    pass
+except (FileNotFoundError, KeyError, json.JSONDecodeError) as exc:
+    logger.warning("Failed to load menu catalog at import time: %s", exc)
