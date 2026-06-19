@@ -24,15 +24,24 @@ export interface RoomOrder {
  * the backend for an order on this room — and drive the confirmation/redirect
  * from that. Polling stops as soon as an order is found.
  */
+const POLL_INITIAL_MS = 1000;
+const POLL_MAX_MS = 30000;
+const POLL_BACKOFF = 2;
+const POLL_MAX_RETRIES = 12;
+
 export function useRoomOrder(roomName: string | undefined, enabled: boolean): RoomOrder | null {
   const [order, setOrder] = useState<RoomOrder | null>(null);
 
   useEffect(() => {
-    if (!enabled || !roomName || order) {
+    // Reset order on roomName change so stale data from a previous session
+    // never bleeds into a new one.
+    setOrder(null);
+    if (!enabled || !roomName) {
       return;
     }
 
     let active = true;
+    let retries = 0;
     const controller = new AbortController();
 
     const poll = async () => {
@@ -51,14 +60,27 @@ export function useRoomOrder(roomName: string | undefined, enabled: boolean): Ro
       }
     };
 
-    void poll();
-    const id = window.setInterval(poll, 2500);
+    const schedule = () => {
+      if (!active || retries >= POLL_MAX_RETRIES) return;
+      const delay = Math.min(POLL_INITIAL_MS * Math.pow(POLL_BACKOFF, retries), POLL_MAX_MS);
+      retries += 1;
+      setTimeout(async () => {
+        await poll();
+        schedule();
+      }, delay);
+    };
+
+    // Fire first poll immediately, then schedule with backoff
+    (async () => {
+      await poll();
+      schedule();
+    })();
+
     return () => {
       active = false;
       controller.abort();
-      window.clearInterval(id);
     };
-  }, [roomName, enabled, order]);
+  }, [roomName, enabled]);
 
   return order;
 }

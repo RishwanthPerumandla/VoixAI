@@ -17,7 +17,8 @@ def _load_cases() -> list[dict[str, Any]]:
 def _build_initial_order(payload: dict[str, Any] | None) -> OrderState:
     payload = payload or {}
     order = OrderState()
-    order.order_type = payload.get("order_type")
+    if "order_type" in payload:
+        order.order_type = payload["order_type"]
     order.customer_name = payload.get("customer_name", "")
     order.phone = payload.get("phone", "")
     order.language = payload.get("language", "english")

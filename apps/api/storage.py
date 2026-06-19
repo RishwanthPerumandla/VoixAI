@@ -1,19 +1,16 @@
-"""Durable persistence for VoixAI (M3).
-
-This is the storage *port* for the API. Orders and sessions are persisted behind
-a small repository interface so the backing store can change without touching
-the HTTP layer or the ordering domain.
+"""Durable persistence for VoixAI (M3+).
 
 The shipped adapter is SQLite (stdlib ``sqlite3``), which gives durable storage
-and idempotency with zero external infrastructure — the local demo keeps working
-with no Postgres/Redis to stand up. A Postgres adapter is a drop-in via the same
-``Storage`` surface (gate it on ``DATABASE_URL`` in production).
+and idempotency with zero external infrastructure.
 
 Design notes:
-- Order submission is idempotent on ``idempotency_key`` (a unique index). A
-  retried submit returns the original order instead of creating a duplicate.
+- Order submission is idempotent on ``idempotency_key`` via ``INSERT OR IGNORE``.
+  A retried submit returns the original order instead of creating a duplicate.
+- All writes use explicit ``BEGIN IMMEDIATE`` / ``COMMIT`` transactions to
+  guarantee atomicity and prevent partial-write corruption.
 - ``sqlite3`` calls are synchronous; the async endpoints wrap them in
-  ``asyncio.to_thread`` and a process-wide lock guards the shared connection.
+  ``asyncio.to_thread`` and a re-entrant process-wide lock guards the connection.
+- Foreign keys are enforced via ``PRAGMA foreign_keys=ON``.
 """
 
 from __future__ import annotations
@@ -24,11 +21,6 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-
-
-class DuplicateKeyError(Exception):
-    """Raised when an insert violates a uniqueness constraint (idempotency key
-    or order number). The caller decides whether to replay or retry."""
 
 
 @dataclass
@@ -91,10 +83,11 @@ class SqliteStorage:
     def __init__(self, db_path: str | os.PathLike[str]) -> None:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")
         self._create_schema()
 
     def _create_schema(self) -> None:
@@ -115,6 +108,12 @@ class SqliteStorage:
                     created_at REAL NOT NULL
                 )
                 """
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_orders_room_name ON orders (room_name)"
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)"
             )
             self._conn.execute(
                 """
@@ -202,12 +201,20 @@ class SqliteStorage:
             ).fetchall()
         return [self._row_to_order(r) for r in rows], total
 
-    def insert_order(self, record: OrderRecord) -> None:
-        try:
-            with self._lock, self._conn:
-                self._conn.execute(
+    def insert_order(self, record: OrderRecord) -> OrderRecord | None:
+        """Atomically insert an order.
+
+        Returns ``None`` when the ``idempotency_key`` already exists (the caller
+        should look up and return the existing order). Uses ``INSERT OR IGNORE``
+        inside an explicit ``BEGIN IMMEDIATE`` transaction so there is no
+        check-then-insert race window.
+        """
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = self._conn.execute(
                     """
-                    INSERT INTO orders (
+                    INSERT OR IGNORE INTO orders (
                         order_number, idempotency_key, room_name, status,
                         subtotal, tax, total, eta_minutes, order_json,
                         kitchen_ticket, created_at
@@ -227,8 +234,13 @@ class SqliteStorage:
                         record.created_at,
                     ),
                 )
-        except sqlite3.IntegrityError as exc:
-            raise DuplicateKeyError(str(exc)) from exc
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        if cursor.rowcount == 0:
+            return None
+        return record
 
     # --- sessions -----------------------------------------------------------
 
@@ -286,12 +298,13 @@ class SqliteStorage:
             created_at=row["created_at"],
         )
 
-    def insert_call(self, record: CallRecord) -> None:
-        try:
-            with self._lock, self._conn:
-                self._conn.execute(
+    def insert_call(self, record: CallRecord) -> CallRecord | None:
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = self._conn.execute(
                     """
-                    INSERT INTO calls (
+                    INSERT OR IGNORE INTO calls (
                         call_id, room_name, scenario, channel, voice_provider,
                         llm_model, status, outcome, started_at, ended_at,
                         duration_seconds, turn_count, sentiment, language,
@@ -321,8 +334,13 @@ class SqliteStorage:
                         record.created_at,
                     ),
                 )
-        except sqlite3.IntegrityError as exc:
-            raise DuplicateKeyError(str(exc)) from exc
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        if cursor.rowcount == 0:
+            return None
+        return record
 
     # Columns the finalize call is allowed to update. Keeps the partial update
     # honest: the call_id and started_at are immutable once a call begins.
@@ -351,12 +369,18 @@ class SqliteStorage:
         assignments = ", ".join(f"{col} = ?" for col in updates)
         params = list(updates.values())
         params.append(call_id)
-        with self._lock, self._conn:
-            cursor = self._conn.execute(
-                f"UPDATE calls SET {assignments} WHERE call_id = ?", params
-            )
-            if cursor.rowcount == 0:
-                return None
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                cursor = self._conn.execute(
+                    f"UPDATE calls SET {assignments} WHERE call_id = ?", params
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        if cursor.rowcount == 0:
+            return None
         return self.get_call_by_id(call_id)
 
     def get_call_by_id(self, call_id: str) -> CallRecord | None:

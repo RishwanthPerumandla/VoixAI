@@ -152,6 +152,10 @@ export function useSessionTelemetry() {
   const [snapshot, setSnapshot] = React.useState<SessionTelemetrySnapshot | null>(null);
 
   React.useEffect(() => {
+    // Reset snapshot on room change so stale data from a previous session
+    // never bleeds into a new one.
+    setSnapshot(null);
+
     const decoder = new TextDecoder();
 
     const handleDataReceived = (

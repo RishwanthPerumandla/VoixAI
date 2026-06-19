@@ -3,7 +3,7 @@ import hashlib
 import json
 import logging
 import os
-import random
+import re
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -16,8 +16,6 @@ from livekit.api import AccessToken, VideoGrants
 from livekit.protocol.agent_dispatch import RoomAgentDispatch
 from livekit.protocol.room import RoomConfiguration
 
-# The ordering domain (menu, pricing, validation, order state) is the single
-# source of truth, shared with the agent runtime via the `voix-ordering` package.
 from voix_ordering import (
     FLAVOR_OPTIONS,
     MENU_ITEMS,
@@ -39,7 +37,7 @@ from voix_ordering.menu import (
 )
 from voix_ordering.validation import _validation_errors_for_line
 
-from storage import CallRecord, DuplicateKeyError, OrderRecord, build_storage
+from storage import CallRecord, OrderRecord, build_storage
 
 logger = logging.getLogger("voixai.api")
 
@@ -177,8 +175,8 @@ class OrderSubmitResponse(BaseModel):
 
 
 def _session_config_path(room_name: str) -> Path:
-    safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in room_name).strip("-")
-    return SESSION_CONFIG_DIR / f"{safe_name or 'default-room'}.json"
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", room_name).strip("-") or "default-room"
+    return SESSION_CONFIG_DIR / f"{safe_name}.json"
 
 
 def _order_state_from_payload(payload: OrderPayload) -> OrderState:
@@ -224,7 +222,7 @@ def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:
 
 
 def _new_order_number() -> str:
-    return f"MOCK-{random.randint(10001, 99999)}"
+    return f"MOCK-{uuid4().hex[:12].upper()}"
 
 
 def _order_record_to_response(record: OrderRecord, *, idempotent_replay: bool) -> "OrderSubmitResponse":
@@ -556,6 +554,7 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
 
     key = payload.idempotency_key or _derive_idempotency_key(payload.room_name, payload.order)
 
+    # Check for existing idempotent replay before building the record.
     existing = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
     if existing is not None:
         return _order_record_to_response(existing, idempotent_replay=True)
@@ -578,17 +577,15 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
             kitchen_ticket=_build_kitchen_ticket(order, quote, order_number),
             created_at=time.time(),
         )
-        try:
-            await asyncio.to_thread(ORDER_STORAGE.insert_order, candidate)
-        except DuplicateKeyError:
-            # Either the idempotency key was written concurrently (replay) or the
-            # random order number collided (retry with a new one).
-            replay = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
-            if replay is not None:
-                return _order_record_to_response(replay, idempotent_replay=True)
-            continue
-        logger.info("Persisted order %s for room %s", candidate.order_number, candidate.room_name)
-        return _order_record_to_response(candidate, idempotent_replay=False)
+        result = await asyncio.to_thread(ORDER_STORAGE.insert_order, candidate)
+        if result is not None:
+            logger.info("Persisted order %s for room %s", candidate.order_number, candidate.room_name)
+            return _order_record_to_response(candidate, idempotent_replay=False)
+        # INSERT OR IGNORE returned rowcount 0 — either a concurrent idempotent
+        # replay beat us, or an astronomically unlikely UUID collision.
+        replay = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
+        if replay is not None:
+            return _order_record_to_response(replay, idempotent_replay=True)
 
     raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
 
@@ -688,9 +685,8 @@ async def start_call(payload: CallStartRequest) -> CallDetail:
         error=None,
         created_at=now,
     )
-    try:
-        await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
-    except DuplicateKeyError:
+    result = await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
+    if result is None:
         replay = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, payload.call_id)
         if replay is not None:
             return _call_to_detail(replay)

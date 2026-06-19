@@ -139,11 +139,11 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - You may quote a single item's listed price, but state the order subtotal, tax, and total only from the price_order or review_order_for_confirmation tool, because sizes, modifiers, and tax change the math.
     - To place an order you MUST call the create_mock_order tool — saying "placing your order" or "your order is placed" in words does NOT place it. After the customer confirms, call create_mock_order, then read back the order number it returns. Never tell the caller the order is placed unless that tool has returned an order number.
     - Combos and wings come in specific sizes. If the customer names a combo or wings without a size (for example "classic combo" or "boneless wings"), ask which size before adding it instead of guessing.
-    - A combo is one item that includes a flavor, a side, and a drink. Add the combo with add_menu_item and pass the side and drink as its modifiers, or add the combo first and then attach the side and drink to it with update_last_item. Never add a combo's side or drink as separate items, and never add a drink like Coke as its own item — sides and drinks are selections that belong to the combo.
+    - A combo is one item that includes a flavor, a side, and a drink. You MUST add the side and drink as modifiers of the combo, never as separate items. If you call add_menu_item without all the modifiers, use update_last_item on the combo line to add them — never call add_menu_item a second time for a Combo Side or Combo Drink item.
     - You can add an item before every detail is known; the order will simply show what is still needed, and you can fill it in as the customer tells you. Do not refuse to add an item just because a detail is missing.
     - When the customer asks what is on the menu, answer from the menu below; never say something is unavailable when it is listed.
-    - After you know whether the order is pickup or delivery, ask for the order name next and get it before collecting any menu items.
-    - Before submitting an order, always read back the order, total, order type, and customer name or phone if needed.
+    - ask for the order name next and get it before collecting any menu items.
+    - Before submitting an order, always read back the order, total, and customer name or phone if needed.
     - If uncertain, ask one short clarification question.
     - Do not talk like a general assistant.
 
@@ -156,7 +156,6 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - Use remove_order_item when the customer removes an item.
     - Use cancel_order when the customer says cancel everything, cancel the whole order, or never mind.
     - Use restart_order when the customer says start over or wants to rebuild the order from scratch.
-    - Use set_order_type when pickup or delivery changes.
     - Use set_customer_details when the caller gives a name or phone number.
     - Use price_order when the caller asks for the total.
     - Use review_order_for_confirmation before asking if you should place the order.
@@ -285,7 +284,11 @@ def _backend_request(
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 raw = response.read().decode("utf-8")
             return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as exc:
+            if exc.code >= 500 and attempt + 1 < total_attempts:
+                last_exc = exc
+                time.sleep(0.3 * (attempt + 1))
+                continue
             raise
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last_exc = exc
@@ -592,6 +595,68 @@ def _split_standalone_items_from_modifier_tokens(
     return base_modifier_ids, extracted_lines
 
 
+def _absorb_combo_modifiers(order: OrderState) -> list[str]:
+    """Attach standalone items as combo modifiers when a combo is missing
+    a required side or drink and a standalone item matches.
+
+    Removes the standalone line and adds its matching modifier to the combo.
+    Returns a list of human-readable event descriptions.
+    """
+    events: list[str] = []
+    combo_indices = [
+        i for i, line in enumerate(order.items)
+        if MENU_ITEMS[line.item_id].item_kind == "combo"
+    ]
+    if not combo_indices:
+        return events
+
+    item_keys: dict[int, set[str]] = {}
+    for i, line in enumerate(order.items):
+        item = MENU_ITEMS.get(line.item_id)
+        if item:
+            item_keys[i] = {
+                _normalize_lookup_key(item.display_name),
+                *(_normalize_lookup_key(a) for a in item.aliases),
+            }
+
+    for combo_idx in combo_indices:
+        combo_line = order.items[combo_idx]
+        for group_id in ("combo_side_choice", "combo_drink_choice"):
+            group = MODIFIER_GROUPS.get(group_id)
+            if group is None:
+                continue
+            selected = [
+                m for m in combo_line.selected_modifier_ids
+                if group_id in OPTION_TO_GROUP_IDS.get(m, set())
+            ]
+            if selected:
+                continue
+            for option_id in group.option_ids:
+                mod = MODIFIER_OPTIONS.get(option_id)
+                if mod is None:
+                    continue
+                mod_keys = {
+                    _normalize_lookup_key(mod.display_name),
+                    *(_normalize_lookup_key(a) for a in mod.aliases),
+                }
+                for other_idx in list(range(len(order.items))):
+                    if other_idx == combo_idx:
+                        continue
+                    if option_id in [m for m in order.items[combo_idx].selected_modifier_ids
+                                      if group_id in OPTION_TO_GROUP_IDS.get(m, set())]:
+                        continue
+                    if mod_keys & item_keys.get(other_idx, set()):
+                        order.items[combo_idx].selected_modifier_ids.append(option_id)
+                        removed_name = MENU_ITEMS[order.items[other_idx].item_id].display_name
+                        order.items.pop(other_idx)
+                        events.append(
+                            f"absorbed {removed_name} as {mod.display_name}"
+                            f" on {MENU_ITEMS[combo_line.item_id].display_name}"
+                        )
+                        break
+    return events
+
+
 def _apply_intent_result(
     session_state: Any,
     result: ReducerResult,
@@ -714,20 +779,12 @@ _NUMBER_TOKEN_TO_DIGITS = {
 }
 
 
-def _extract_recovery_order_type(text: str) -> str | None:
-    normalized = _normalize_lookup_key(text)
-    if "pickup" in normalized:
-        return "pickup"
-    if "delivery" in normalized:
-        return "delivery"
-    return None
-
-
 def _extract_recovery_name(text: str) -> str | None:
     patterns = (
         r"\bname(?: for the order)? is (?P<name>[A-Za-z][A-Za-z'-]*)\b",
-        r"\bit(?:'s| is) for (?P<name>[A-Za-z][A-Za-z'-]*)\b",
-        r"\bfor (?P<mode>pickup|delivery) for (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+        r"\bfor \w+ for (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+        r"\bin (?:the )?name of (?P<name>[A-Za-z][A-Za-z'-]*)\b",
+        r"\bfor (?P<name>[A-Za-z][A-Za-z'-]*) (?:please|thanks)\b",
     )
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -828,21 +885,33 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
             order.quantity = 1
             recovered = True
 
-    if not order.order_type:
-        for text in texts_for_item:
-            if (order_type := _extract_recovery_order_type(text)) is not None:
-                order.order_type = order_type
-                recovered = True
-                break
+    _RESERVED_NAMES = frozenset({"pickup", "delivery", "pick up", "takeout"})
 
     if not order.customer_name.strip():
         for text in texts_for_item:
             if (customer_name := _extract_recovery_name(text)) is not None:
-                order.customer_name = customer_name
-                recovered = True
-                break
+                normalized = _normalize_lookup_key(customer_name) or customer_name.lower()
+                if normalized not in _RESERVED_NAMES:
+                    order.customer_name = customer_name
+                    recovered = True
+                    break
+
+    has_placement_claim = False
+    for entry in transcript_entries:
+        if str(entry.get("role", "")).lower() != "assistant":
+            continue
+        if _PLACEMENT_CLAIM_RE.search(str(entry.get("text", ""))):
+            has_placement_claim = True
+            break
 
     recap_index = -1
+    _PRICE_MENTION_RE = re.compile(
+        r"\$\s*\d+(?:[.,]\d+)?"
+        r"|total (?:is |comes to |will be )?\$?\s*\d+(?:[.,]\s*\d+)?"
+        r"|(?:subtotal|total|cost) (?:is |will be )?\d+(?:[.,]\s*\d+)",
+        re.IGNORECASE,
+    )
+
     for index, entry in enumerate(transcript_entries):
         if str(entry.get("role", "")).lower() != "assistant":
             continue
@@ -850,19 +919,28 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
         if "should i place" in assistant_text.lower():
             recap_index = index
             order.recap_readback = True
-            if "$" in assistant_text.lower():
+            if _PRICE_MENTION_RE.search(assistant_text):
                 order.total_shown = True
             recovered = True
+        elif not order.total_shown and _PRICE_MENTION_RE.search(assistant_text):
+            order.total_shown = True
+            recovered = True
 
-    if recap_index >= 0 and not order.confirmed:
-        for entry in transcript_entries[recap_index + 1 :]:
-            if str(entry.get("role", "")).lower() != "user":
-                continue
-            user_text = str(entry.get("text", "")).strip()
-            if _AFFIRMATIVE_CONFIRMATION_RE.search(user_text):
+    if not order.confirmed:
+        if recap_index >= 0:
+            for entry in transcript_entries[recap_index + 1 :]:
+                if str(entry.get("role", "")).lower() != "user":
+                    continue
+                user_text = str(entry.get("text", "")).strip()
+                if _AFFIRMATIVE_CONFIRMATION_RE.search(user_text):
+                    order.confirmed = True
+                    recovered = True
+                    break
+        elif has_placement_claim and user_texts:
+            last_user = _AFFIRMATIVE_CONFIRMATION_RE.search(user_texts[-1])
+            if last_user:
                 order.confirmed = True
                 recovered = True
-                break
 
     if recovered:
         logger.warning(
@@ -894,7 +972,7 @@ async def force_handoff(
         )
         _apply_intent_result(session_state, result)
     session_state.waiting_for_customer = False
-    setattr(session_state, "placement_failure_count", 0)
+    session_state.placement_failure_count = 0
     await session_state.publish_snapshot(reason="handoff_required")
     return "I'm sorry about that. I'll connect you with a team member now."
 
@@ -916,14 +994,10 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
 
     order = session_state.order
     decision = OrderStateMachine(order).authorize_submit()
-    if decision.validation_errors and _recover_order_from_transcript(session_state):
+    if (decision.validation_errors or decision.confirmation_reasons) and _recover_order_from_transcript(session_state):
         decision = OrderStateMachine(order).authorize_submit()
     if decision.validation_errors or decision.confirmation_reasons:
-        setattr(
-            session_state,
-            "placement_failure_count",
-            int(getattr(session_state, "placement_failure_count", 0)) + 1,
-        )
+        session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
         logger.warning(
             "Assistant claimed placement but the order is not submittable; not auto-placing. "
             "validation_errors=%s confirmation_reasons=%s",
@@ -954,11 +1028,7 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
         await session_state.publish_snapshot(reason="mock_order_autoplaced")
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
         logger.exception("Auto-placement backend submit failed")
-        setattr(
-            session_state,
-            "placement_failure_count",
-            int(getattr(session_state, "placement_failure_count", 0)) + 1,
-        )
+        session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
 
 
 def build_wingstop_snapshot(session_state: Any) -> dict[str, object]:
@@ -1086,6 +1156,11 @@ class WingstopAssistant(Agent):
             validation_errors = _apply_intent_result(session_state, extra_result)
             if not extra_result.applied and extra_result.clarification_question:
                 return extra_result.clarification_question
+        absorb_events = _absorb_combo_modifiers(order)
+        if absorb_events:
+            logger.info("Absorbed standalone items as combo modifiers: %s", "; ".join(absorb_events))
+            validation_errors = validate_order(order)
+            order.last_validation_errors = list(validation_errors)
         log_order_state(order, reason="add_menu_item")
         corrected_fields = detect_order_correction(previous_order, order)
         if corrected_fields:
@@ -1280,6 +1355,12 @@ class WingstopAssistant(Agent):
             if not note_result.applied and note_result.clarification_question:
                 return note_result.clarification_question
 
+        absorb_events = _absorb_combo_modifiers(order)
+        if absorb_events:
+            logger.info("Absorbed standalone items as combo modifiers: %s", "; ".join(absorb_events))
+            validation_errors = validate_order(order)
+            order.last_validation_errors = list(validation_errors)
+
         log_order_state(order, reason="update_last_item")
         corrected_fields = detect_order_correction(previous_order, order)
         if corrected_fields:
@@ -1352,32 +1433,6 @@ class WingstopAssistant(Agent):
         _apply_intent_result(session_state, result)
         await session_state.publish_snapshot(reason="handoff_required")
         return "I can connect you with a team member for that."
-
-    @function_tool
-    async def set_order_type(
-        self,
-        context: RunContext[Any],
-        order_type: str,
-    ) -> str:
-        session_state = context.userdata
-        order = session_state.order
-        previous_order = copy.deepcopy(order)
-        normalized = _normalize_lookup_key(order_type)
-        if normalized not in {"pickup", "delivery"}:
-            return "Please choose either pickup or delivery."
-        order.order_type = normalized
-        _mark_order_dirty(session_state)
-        try:
-            validation_errors = await _validate_order_via_backend(order)
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError):
-            validation_errors = validate_order(order)
-        _update_order_validation_state(order, validation_errors)
-        log_order_state(order, reason="set_order_type")
-        corrected_fields = detect_order_correction(previous_order, order)
-        if corrected_fields:
-            logger.debug("Correction detected in fields: %s", ", ".join(corrected_fields))
-        await context.userdata.publish_snapshot(reason="order_state_updated")
-        return _order_update_response(order, validation_errors)
 
     @function_tool
     async def set_customer_details(
@@ -1511,12 +1566,11 @@ class WingstopAssistant(Agent):
         # checklist every time. This is what makes placement reliable
         # independent of what the model said or which flags happen to be set.
         decision = machine.authorize_submit()
-        if decision.validation_errors and _recover_order_from_transcript(session_state):
+        if (decision.validation_errors or decision.confirmation_reasons) and _recover_order_from_transcript(session_state):
             decision = machine.authorize_submit()
         if decision.validation_errors:
-            failure_count = int(getattr(session_state, "placement_failure_count", 0)) + 1
-            setattr(session_state, "placement_failure_count", failure_count)
-            if failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
+            session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
+            if session_state.placement_failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
                 return await force_handoff(
                     session_state,
                     reason="Repeated placement attempts failed validation during checkout.",
@@ -1526,9 +1580,8 @@ class WingstopAssistant(Agent):
             return "I cannot place this order yet. " + " ".join(decision.validation_errors)
 
         if decision.confirmation_reasons:
-            failure_count = int(getattr(session_state, "placement_failure_count", 0)) + 1
-            setattr(session_state, "placement_failure_count", failure_count)
-            if failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
+            session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
+            if session_state.placement_failure_count >= PLACEMENT_FAILURE_HANDOFF_THRESHOLD:
                 return await force_handoff(
                     session_state,
                     reason="Repeated confirmation failures blocked checkout.",
@@ -1541,7 +1594,7 @@ class WingstopAssistant(Agent):
                 + "."
             )
 
-        setattr(session_state, "placement_failure_count", 0)
+        session_state.placement_failure_count = 0
 
         if session_state.price_quote is None:
             session_state.price_quote = build_price_quote(order)

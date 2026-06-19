@@ -82,9 +82,6 @@ def validate_order(order: OrderState) -> list[str]:
     if not order.items:
         errors.append("Add at least one valid item before placing the order.")
 
-    if not order.order_type:
-        errors.append("Please choose pickup or delivery.")
-
     for line in order.items:
         errors.extend(_validation_errors_for_line(line))
 

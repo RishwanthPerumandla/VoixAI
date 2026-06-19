@@ -20,7 +20,7 @@ from .intents import (
     INTENT_UNKNOWN,
     OrderIntent,
 )
-from .menu import MENU_ITEMS, OPTION_TO_GROUP_IDS, _normalize_lookup_key
+from .menu import MENU_ITEMS, MODIFIER_GROUPS, OPTION_TO_GROUP_IDS, _normalize_lookup_key
 from .models import OrderEvent, OrderLineItem, OrderState
 from .serialization import serialize_order_state
 from .state_machine import OrderPhase, OrderStateMachine
@@ -146,7 +146,7 @@ def _clear_for_restart(order: OrderState) -> None:
     order.items = []
     order.modifiers = []
     order.quantity = 1
-    order.order_type = None
+    order.order_type = "pickup"
     order.customer_name = ""
     order.phone = ""
     order.notes = ""
@@ -230,7 +230,7 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
         return ReducerResult(order=order, events=events, validation_errors=[])
 
     if intent.name == INTENT_RESTART_ORDER:
-        if order.items or order.order_type or order.customer_name:
+        if order.items or order.customer_name:
             order.archived_orders.append(serialize_order_state(copy.deepcopy(order)))
         _clear_for_restart(order)
         machine.reset_to_collecting()
@@ -327,6 +327,26 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
             if intent.add_modifier_ids:
                 for modifier_id in intent.add_modifier_ids:
                     if modifier_id not in target_line.selected_modifier_ids:
+                        # Auto-replace when adding to a group already at capacity.
+                        for group_id in OPTION_TO_GROUP_IDS.get(modifier_id, set()):
+                            group = MODIFIER_GROUPS.get(group_id)
+                            if group is not None and group.max_selections > 0:
+                                existing = [
+                                    m for m in target_line.selected_modifier_ids
+                                    if group_id in OPTION_TO_GROUP_IDS.get(m, set())
+                                ]
+                                while len(existing) >= group.max_selections:
+                                    removed = existing.pop(0)
+                                    target_line.selected_modifier_ids.remove(removed)
+                                    events.append(
+                                        _event(
+                                            "modifier_replaced",
+                                            f"Replaced {removed} with {modifier_id} in {group_id}.",
+                                            modifier_id=modifier_id,
+                                            replaced_id=removed,
+                                            line_id=target_line.line_id,
+                                        )
+                                    )
                         target_line.selected_modifier_ids.append(modifier_id)
                         events.append(
                             _event("modifier_added", "Modifier added to item.", modifier_id=modifier_id, line_id=target_line.line_id)

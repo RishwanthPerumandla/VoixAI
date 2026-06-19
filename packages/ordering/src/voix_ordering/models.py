@@ -142,7 +142,7 @@ class OrderState:
     items: list[OrderLineItem] = field(default_factory=list)
     modifiers: list[str] = field(default_factory=list)
     quantity: int = 1
-    order_type: str | None = None
+    order_type: str = "pickup"
     customer_name: str = ""
     phone: str = ""
     notes: str = ""
