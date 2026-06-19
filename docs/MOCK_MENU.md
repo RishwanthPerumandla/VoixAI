@@ -1,5 +1,7 @@
 # Mock Menu
 
+The single source of truth for the demo menu is now `apps/api/data/wingstop_demo_catalog.json`. The Python dicts used at runtime are built automatically from this catalog file, so menu changes only require editing the JSON.
+
 This repository now uses a realistic wing-restaurant demo menu for the VoixAI Wingstop scenario.
 
 Important:

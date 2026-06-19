@@ -136,16 +136,32 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     # Hard reliability rules
 
     - Never offer items, flavors, or sizes that are not on the menu below, and never invent taxes, discounts, prep times, policies, or order IDs.
-    - You may quote a single item's listed price, but state the order subtotal, tax, and total only from the price_order or review_order_for_confirmation tool, because sizes, modifiers, and tax change the math.
+    - The current order total is always included after every add/update/remove tool call, so you never need to guess or calculate it. When reading back the order, use that number — do not re-calculate or make up a total on your own.
+    - You may quote a single item's listed price, but state the order subtotal, tax, and total only from the price_order or review_order_for_confirmation tool, because sizes, modifiers, and tax change the math. If you read back an order and mention a total without calling price_order first, that is a serious error.
     - To place an order you MUST call the create_mock_order tool — saying "placing your order" or "your order is placed" in words does NOT place it. After the customer confirms, call create_mock_order, then read back the order number it returns. Never tell the caller the order is placed unless that tool has returned an order number.
     - Combos and wings come in specific sizes. If the customer names a combo or wings without a size (for example "classic combo" or "boneless wings"), ask which size before adding it instead of guessing.
     - A combo is one item that includes a flavor, a side, and a drink. You MUST add the side and drink as modifiers of the combo, never as separate items. If you call add_menu_item without all the modifiers, use update_last_item on the combo line to add them — never call add_menu_item a second time for a Combo Side or Combo Drink item.
     - You can add an item before every detail is known; the order will simply show what is still needed, and you can fill it in as the customer tells you. Do not refuse to add an item just because a detail is missing.
     - When the customer asks what is on the menu, answer from the menu below; never say something is unavailable when it is listed.
-    - ask for the order name next and get it before collecting any menu items.
+    - Ask for the order name next and get it before collecting any menu items.
     - Before submitting an order, always read back the order, total, and customer name or phone if needed.
     - If uncertain, ask one short clarification question.
     - Do not talk like a general assistant.
+
+    # Catalog-backed reliability rules
+
+    - The backend catalog is the source of truth for item validity and pricing. Do not invent item validity or prices.
+    - Do not confirm an order unless validation passed and the customer confirmed.
+    - Ask concise clarification questions when required slots (like flavor, side, drink) are missing.
+    - If a customer changes an order, preserve valid choices (e.g., flavor, dip, cook preference) and mention removed invalid choices (e.g., piece preference when switching from classic to boneless).
+    - For combos, always ensure side and drink are selected before pricing or confirmation.
+    - Example: customer says "I want a 10 piece combo." Ask "Classic bone-in or boneless, and what flavor would you like?"
+    - After the chicken type and flavor, ask: "What side and drink would you like with the combo?"
+    - For group packs (meal for 2, family pack, crew pack, party pack), ask "Classic bone-in or boneless?" if the customer does not specify.
+    - All flats and all drums are only available for classic bone-in wings, not boneless or tenders.
+    - Flavor splits (half-and-half) are valid when the item supports 2+ flavors.
+    - Fries, sides, dips, drinks, and desserts do not take wing flavors.
+    - Well done and extra crispy apply to wings and fries, not to drinks or desserts.
 
     # Tool discipline
 
@@ -453,10 +469,20 @@ def _tool_backend_error() -> str:
     )
 
 
-def _order_update_response(order: OrderState, validation_errors: list[str]) -> str:
+def _order_update_response(order: OrderState, validation_errors: list[str], price_quote: PriceQuote | None = None) -> str:
+    summary = summarize_order_state(order)
     if validation_errors:
-        return summarize_order_state(order) + " I still need: " + " ".join(validation_errors)
-    return summarize_order_state(order)
+        return summary + " I still need: " + " ".join(validation_errors)
+
+    # Always include the current price so the LLM never needs to guess totals.
+    if price_quote is None:
+        try:
+            price_quote = build_price_quote(order)
+        except Exception:
+            pass
+    if price_quote is not None:
+        return f"{summary} Current price: subtotal {price_quote.subtotal}, tax {price_quote.tax}, total {price_quote.total}."
+    return summary
 
 
 def _normalize_optional_tool_text(value: str | None) -> str | None:
@@ -552,6 +578,8 @@ def _split_standalone_items_from_modifier_tokens(
                 # Keep genuinely unknown/invalid-for-item modifiers on the base
                 # line so validation can still surface a real error.
                 base_modifier_ids.append(modifier_id)
+            elif modifier_id is None:
+                logger.debug("Unrecognized modifier token dropped: %r", token)
             index += 1
             continue
 
@@ -588,7 +616,9 @@ def _split_standalone_items_from_modifier_tokens(
                 index += 1
                 continue
 
-            break
+            # Unrecognized token — skip it rather than dropping all subsequent
+            # tokens for this extracted item. The outer loop will skip it too.
+            index += 1
 
         extracted_lines.append(new_line)
 
@@ -726,6 +756,15 @@ def audit_assistant_response(
 # Phrases that mean the assistant told the caller the order is going through. We
 # match broadly because realtime models paraphrase freely ("placing it now",
 # "ready for pickup in 15 minutes", "you're all set").
+_RECAP_PHRASE_RE = re.compile(
+    r"\b(?:"
+    r"I have|I've got|let me read|let me recap|read that back"
+    r"|here's what|here is what|you ordered|you've got|your order is"
+    r"|I'll read|I will read"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _PLACEMENT_CLAIM_RE = re.compile(
     r"order (?:was|is|has been|'s been) placed"
     r"|plac(?:e|ing|ed) (?:your |the |that |it )?order"
@@ -916,7 +955,7 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
         if str(entry.get("role", "")).lower() != "assistant":
             continue
         assistant_text = str(entry.get("text", "")).strip()
-        if "should i place" in assistant_text.lower():
+        if "should i place" in assistant_text.lower() and _RECAP_PHRASE_RE.search(assistant_text):
             recap_index = index
             order.recap_readback = True
             if _PRICE_MENTION_RE.search(assistant_text):
@@ -1093,7 +1132,7 @@ class WingstopAssistant(Agent):
             # Pricing and placement re-validate, so an incomplete order can never
             # be quoted or placed.
             resolved = await _resolve_selection(
-                item_name=item_name,
+                item_name=item_name.strip(),
                 quantity=quantity,
                 flavors=_split_csv(flavors),
                 modifiers=_split_csv(modifiers),
@@ -1118,10 +1157,58 @@ class WingstopAssistant(Agent):
 
         item_id = str(resolved["item_id"])
         selected_flavor_ids = [str(flavor_id) for flavor_id in resolved.get("flavor_ids", [])]
+
+        # Realtime models often put flavor names in the modifiers argument.
+        # Scan for those and route them to the flavors field instead.
+        modifier_tokens = _split_csv(modifiers)
+        clean_modifier_tokens: list[str] = []
+        for token in modifier_tokens:
+            fid = _resolve_flavor_id(token)
+            if fid is not None and fid not in selected_flavor_ids:
+                selected_flavor_ids.append(fid)
+            else:
+                clean_modifier_tokens.append(token)
+
         base_modifier_ids, extracted_lines = _split_standalone_items_from_modifier_tokens(
             item_id,
-            _split_csv(modifiers),
+            clean_modifier_tokens,
         )
+
+        # Guard: if the same item_id already exists, route through update_last_item
+        # semantics instead of adding a duplicate. This prevents the agent from
+        # accidentally creating duplicate combos during corrections.
+        existing_same = [l for l in order.items if l.item_id == item_id]
+        if existing_same:
+            existing = existing_same[0]
+            # Only merge when flavors are the same — if the customer wants a
+            # second batch with a different flavor that's a separate line.
+            flavors_match = (
+                not selected_flavor_ids
+                or set(selected_flavor_ids) == set(existing.selected_flavor_ids)
+            )
+            if flavors_match:
+                target_line = existing
+                modify_result = apply_order_intent(
+                    order,
+                    OrderIntent(
+                        name=INTENT_MODIFY_ITEM,
+                        target_line_id=target_line.line_id,
+                        quantity=max(1, quantity),
+                        flavor_ids=tuple(selected_flavor_ids),
+                        add_modifier_ids=tuple(base_modifier_ids),
+                        notes=_normalize_note(special_instructions) or None,
+                    ),
+                )
+                validation_errors = _apply_intent_result(session_state, modify_result)
+                if not modify_result.applied and modify_result.clarification_question:
+                    return modify_result.clarification_question
+                log_order_state(order, reason="add_menu_item_merged_into_existing")
+                corrected_fields = detect_order_correction(previous_order, order)
+                if corrected_fields:
+                    logger.debug("Correction detected in fields: %s", ", ".join(corrected_fields))
+                context.userdata.waiting_for_customer = False
+                await context.userdata.publish_snapshot(reason="order_state_updated")
+                return _order_update_response(order, validation_errors)
 
         add_result = apply_order_intent(
             order,
@@ -1279,12 +1366,45 @@ class WingstopAssistant(Agent):
 
         if add_modifiers is not None:
             raw_modifier_tokens = _split_csv(add_modifiers)
+            # Realtime models often put flavor names in the modifiers argument.
+            # Route those to a flavor update instead.
+            modifier_flavor_ids: list[str] = []
+            clean_modifier_tokens: list[str] = []
+            for token in raw_modifier_tokens:
+                fid = _resolve_flavor_id(token)
+                if fid is not None and fid not in modifier_flavor_ids:
+                    modifier_flavor_ids.append(fid)
+                else:
+                    clean_modifier_tokens.append(token)
+            target_line = _find_order_line(order, _normalize_optional_tool_text(target_item_name))
+            if target_line is None:
+                return "I could not find that item on the order yet."
+
+            # Apply flavor updates from modifiers BEFORE modifier validation,
+            # so a bad modifier doesn't silently drop flavors.
+            if modifier_flavor_ids:
+                combined = list(target_line.selected_flavor_ids)
+                for fid in modifier_flavor_ids:
+                    if fid not in combined:
+                        combined.append(fid)
+                flavor_result = apply_order_intent(
+                    order,
+                    OrderIntent(
+                        name=INTENT_CHANGE_FLAVOR,
+                        target_line_id=target_line.line_id,
+                        flavor_ids=tuple(combined),
+                    ),
+                )
+                validation_errors = _apply_intent_result(session_state, flavor_result)
+                if not flavor_result.applied and flavor_result.clarification_question:
+                    return flavor_result.clarification_question
+
             try:
                 resolved_modifiers = await _resolve_selection(
                     item_name=MENU_ITEMS[line.item_id].display_name,
                     quantity=line.quantity,
                     flavors=[],
-                    modifiers=raw_modifier_tokens,
+                    modifiers=clean_modifier_tokens,
                     special_instructions=line.notes,
                     validate_line=False,
                 )
@@ -1296,12 +1416,9 @@ class WingstopAssistant(Agent):
             if modifier_errors:
                 return " ".join(modifier_errors)
 
-            target_line = _find_order_line(order, _normalize_optional_tool_text(target_item_name))
-            if target_line is None:
-                return "I could not find that item on the order yet."
             base_modifier_ids, extracted_lines = _split_standalone_items_from_modifier_tokens(
                 target_line.item_id,
-                raw_modifier_tokens,
+                clean_modifier_tokens,
             )
             if base_modifier_ids:
                 modify_result = apply_order_intent(
@@ -1333,15 +1450,43 @@ class WingstopAssistant(Agent):
                 if not extra_result.applied and extra_result.clarification_question:
                     return extra_result.clarification_question
 
+        remove_modifier_tokens = _split_csv(remove_modifiers)
+        # Realtime models often put flavor names in remove_modifiers
+        # (e.g., "remove the lemon pepper"). Route those to a flavor update.
+        remove_flavor_ids: list[str] = []
+        clean_remove_tokens: list[str] = []
+        for token in remove_modifier_tokens:
+            fid = _resolve_flavor_id(token)
+            if fid is not None:
+                remove_flavor_ids.append(fid)
+            else:
+                clean_remove_tokens.append(token)
         remove_modifier_ids = [
             str(modifier_id)
-            for modifier_name in _split_csv(remove_modifiers)
+            for modifier_name in clean_remove_tokens
             if (modifier_id := _resolve_modifier_id(modifier_name)) is not None
         ]
-        if remove_modifier_ids or special_instructions is not None:
+        if remove_flavor_ids or remove_modifier_ids or special_instructions is not None:
             target_line = _find_order_line(order, _normalize_optional_tool_text(target_item_name))
             if target_line is None:
                 return "I could not find that item on the order yet."
+            if remove_flavor_ids:
+                remaining = [
+                    fid
+                    for fid in target_line.selected_flavor_ids
+                    if fid not in remove_flavor_ids
+                ]
+                flavor_result = apply_order_intent(
+                    order,
+                    OrderIntent(
+                        name=INTENT_CHANGE_FLAVOR,
+                        target_line_id=target_line.line_id,
+                        flavor_ids=tuple(remaining),
+                    ),
+                )
+                validation_errors = _apply_intent_result(session_state, flavor_result)
+                if not flavor_result.applied and flavor_result.clarification_question:
+                    return flavor_result.clarification_question
             note_result = apply_order_intent(
                 order,
                 OrderIntent(
@@ -1377,12 +1522,12 @@ class WingstopAssistant(Agent):
         session_state = context.userdata
         order = session_state.order
         previous_order = copy.deepcopy(order)
-        item_id = _resolve_item_id(item_name)
+        item_id = _resolve_item_id(item_name.strip())
         remove_result = apply_order_intent(
             order,
             OrderIntent(
                 name=INTENT_REMOVE_ITEM,
-                target_item=item_name,
+                target_item=item_name.strip(),
                 target_item_id=item_id,
             ),
         )

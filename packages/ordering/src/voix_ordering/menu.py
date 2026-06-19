@@ -1,24 +1,251 @@
 """Menu data and lookups for the VoixAI ordering domain.
 
 This module is the single source of truth for the ``Voix Wings Demo`` menu.
-Today the menu is declared as Python literals; the seam to replace is the data
-in this module (a future ``MenuRepository`` can load it from a DB/seed without
-changing any consumer that imports the lookups below).
+The menu is loaded from the POS-grade JSON catalog at
+``apps/api/data/wingstop_demo_catalog.json``, and the legacy Python dicts
+(``MENU_ITEMS``, ``FLAVOR_OPTIONS``, etc.) are built from it automatically for
+backward compatibility.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import difflib
 import re
 from decimal import Decimal
+from pathlib import Path
 
 from .models import (
+    Catalog,
+    CatalogFlavor,
+    CatalogModifierGroup,
+    CatalogModifierOption,
+    ComboRules,
+    ComboTemplate,
     FlavorOption,
+    GroupPackRules,
+    GroupPackTemplate,
+    IncludedComponents,
+    ItemTemplate,
+    MainComponent,
     MenuItem,
     ModifierGroup,
     ModifierOption,
     OrderLineItem,
+    RestaurantProfile,
 )
+
+
+# ── POS-grade catalog loading -------------------------------------------------
+
+_DEFAULT_CATALOG_PATH = str(
+    Path(__file__).resolve().parent.parent.parent.parent.parent
+    / "apps"
+    / "api"
+    / "data"
+    / "wingstop_demo_catalog.json"
+)
+
+_catalog: Catalog | None = None
+
+
+def _parse_catalog_modifier_options(raw_options: list[dict]) -> tuple[CatalogModifierOption, ...]:
+    return tuple(
+        CatalogModifierOption(
+            id=o["id"],
+            name=o["name"],
+            price_delta=Decimal(str(o.get("price_delta", "0"))),
+            aliases=tuple(o.get("aliases", [])),
+        )
+        for o in raw_options
+    )
+
+
+def load_catalog(path: str | None = None) -> Catalog:
+    """Load the POS-grade menu catalog from a JSON file.
+
+    If *path* is ``None`` the file is looked up relative to this package
+    (``apps/api/data/wingstop_demo_catalog.json`` under the repo root).
+    Subsequent calls return the cached instance.
+    """
+    global _catalog
+    if _catalog is not None:
+        return _catalog
+
+    catalog_path = path or os.environ.get("VOIXAI_CATALOG_PATH") or _DEFAULT_CATALOG_PATH
+    with open(catalog_path, encoding="utf-8") as f:
+        raw = json.load(f)
+
+    rp = raw["restaurant_profile"]
+    profile = RestaurantProfile(
+        name=rp["name"],
+        scenario=rp["scenario"],
+        disclaimer=rp["disclaimer"],
+        currency=rp["currency"],
+        tax_rate=Decimal(str(rp["tax_rate"])),
+        default_ready_minutes=rp["default_ready_minutes"],
+        supports_pickup=rp["supports_pickup"],
+        supports_delivery=rp["supports_delivery"],
+    )
+
+    flavors = tuple(
+        CatalogFlavor(
+            id=f["id"],
+            name=f["name"],
+            flavor_type=f["flavor_type"],
+            heat_level=f["heat_level"],
+            available=f.get("available", True),
+            aliases=tuple(f.get("aliases", [])),
+            allowed_for_item_types=tuple(f.get("allowed_for_item_types", [])),
+        )
+        for f in raw["flavors"]
+    )
+
+    modifier_groups = tuple(
+        CatalogModifierGroup(
+            id=g["id"],
+            name=g["name"],
+            applies_to_item_types=tuple(g.get("applies_to_item_types", [])),
+            required=g.get("required", False),
+            max_select=g.get("max_select", 1),
+            options=_parse_catalog_modifier_options(g.get("options", [])),
+        )
+        for g in raw["modifier_groups"]
+    )
+
+    item_templates = tuple(
+        ItemTemplate(
+            id=t["id"],
+            name=t["name"],
+            category_id=t["category_id"],
+            item_type=t["item_type"],
+            base_price=Decimal(str(t["base_price"])),
+            available=t.get("available", True),
+            piece_count=t.get("piece_count"),
+            included_flavor_count=t.get("included_flavor_count", 0),
+            included_dip_count=t.get("included_dip_count", 0),
+            max_flavors=t.get("max_flavors", 0),
+            required_slots=tuple(t.get("required_slots", [])),
+            optional_slots=tuple(t.get("optional_slots", [])),
+            modifier_group_ids=tuple(t.get("modifier_group_ids", [])),
+            prep_time_minutes=t.get("prep_time_minutes", 15),
+            aliases=tuple(t.get("aliases", [])),
+        )
+        for t in raw["item_templates"]
+    )
+
+    combo_templates = tuple(
+        ComboTemplate(
+            id=ct["id"],
+            name=ct["name"],
+            category_id=ct["category_id"],
+            item_type=ct["item_type"],
+            base_price=Decimal(str(ct["base_price"])),
+            available=ct.get("available", True),
+            main_component=_parse_main_component(ct["main_component"]) if "main_component" in ct else None,
+            included_components=_parse_included_components(ct["included_components"]) if "included_components" in ct else None,
+            max_flavors=ct.get("max_flavors", 1),
+            required_slots=tuple(ct.get("required_slots", [])),
+            optional_slots=tuple(ct.get("optional_slots", [])),
+            modifier_group_ids=tuple(ct.get("modifier_group_ids", [])),
+            rules=_parse_combo_rules(ct.get("rules", {})),
+            prep_time_minutes=ct.get("prep_time_minutes", 18),
+            aliases=tuple(ct.get("aliases", [])),
+        )
+        for ct in raw.get("combo_templates", [])
+    )
+
+    group_pack_templates = tuple(
+        GroupPackTemplate(
+            id=gp["id"],
+            name=gp["name"],
+            category_id=gp["category_id"],
+            item_type=gp["item_type"],
+            base_price=Decimal(str(gp["base_price"])),
+            available=gp.get("available", True),
+            main_component=_parse_main_component(gp["main_component"]) if "main_component" in gp else None,
+            included_components=_parse_included_components(gp["included_components"]) if "included_components" in gp else None,
+            max_flavors=gp.get("max_flavors", 2),
+            serves=gp.get("serves", 2),
+            required_slots=tuple(gp.get("required_slots", [])),
+            optional_slots=tuple(gp.get("optional_slots", [])),
+            modifier_group_ids=tuple(gp.get("modifier_group_ids", [])),
+            rules=_parse_group_pack_rules(gp.get("rules", {})),
+            prep_time_minutes=gp.get("prep_time_minutes", 22),
+            aliases=tuple(gp.get("aliases", [])),
+        )
+        for gp in raw.get("group_pack_templates", [])
+    )
+
+    categories = tuple(
+        {"id": c["id"], "name": c["name"]} for c in raw.get("categories", [])
+    )
+
+    synonyms = tuple(
+        {"input": s["input"], "maps_to": s["maps_to"]} for s in raw.get("synonyms", [])
+    )
+
+    _catalog = Catalog(
+        schema_version=raw["schema_version"],
+        restaurant_profile=profile,
+        categories=categories,
+        flavors=flavors,
+        modifier_groups=modifier_groups,
+        item_templates=item_templates,
+        combo_templates=combo_templates,
+        group_pack_templates=group_pack_templates,
+        synonyms=synonyms,
+    )
+    return _catalog
+
+
+def _parse_main_component(raw: dict) -> MainComponent:
+    return MainComponent(
+        component_type=raw["component_type"],
+        piece_count=raw.get("piece_count", 0),
+        required=raw.get("required", True),
+        allow_classic=raw.get("allow_classic", True),
+        allow_boneless=raw.get("allow_boneless", True),
+    )
+
+
+def _parse_included_components(raw: dict) -> IncludedComponents:
+    return IncludedComponents(
+        side_count=raw.get("side_count", 0),
+        drink_count=raw.get("drink_count", 0),
+        dip_count=raw.get("dip_count", 0),
+    )
+
+
+def _parse_combo_rules(raw: dict) -> ComboRules:
+    return ComboRules(
+        allows_piece_preference=raw.get("allows_piece_preference", False),
+        allows_all_flats=raw.get("allows_all_flats", False),
+        allows_all_drums=raw.get("allows_all_drums", False),
+        requires_side=raw.get("requires_side", True),
+        requires_drink=raw.get("requires_drink", True),
+    )
+
+
+def _parse_group_pack_rules(raw: dict) -> GroupPackRules:
+    return GroupPackRules(
+        allows_piece_preference=raw.get("allows_piece_preference", False),
+        requires_side=raw.get("requires_side", False),
+        requires_drink=raw.get("requires_drink", False),
+        wing_type_required=raw.get("wing_type_required", True),
+    )
+
+
+def get_catalog() -> Catalog:
+    """Return the loaded catalog, loading it on first access if needed."""
+    if _catalog is None:
+        return load_catalog()
+    return _catalog
+
+
+# ── Legacy Python dicts (built from catalog for backward compatibility) ────
+
 
 FLAVOR_OPTIONS: dict[str, FlavorOption] = {
     "plain": FlavorOption("plain", "Plain", "none", 0, aliases=("no sauce",)),
@@ -410,7 +637,7 @@ MENU_ITEMS: dict[str, MenuItem] = {
         "6 Classic Wings",
         "Wings By The Piece",
         Decimal("8.99"),
-        aliases=("6 bone in wings", "six bone in wings", "6 regular wings", "six classic wings"),
+        aliases=("6 bone in wings", "six bone in wings", "6 regular wings", "six classic wings", "bone in wings"),
         optional_modifier_group_ids=("wing_piece_preference", "cook_preference_wings", "dip_selection"),
         requires_flavors=True,
         max_flavors=1,
@@ -515,7 +742,7 @@ MENU_ITEMS: dict[str, MenuItem] = {
         "6 Boneless Wings",
         "Boneless Wings",
         Decimal("7.99"),
-        aliases=("6 boneless wings", "six boneless wings", "boneless"),
+        aliases=("6 boneless wings", "six boneless wings", "boneless", "naked wings"),
         optional_modifier_group_ids=("cook_preference_wings", "dip_selection"),
         requires_flavors=True,
         max_flavors=1,
@@ -737,7 +964,7 @@ MENU_ITEMS: dict[str, MenuItem] = {
         "Regular Seasoned Fries",
         "Fries",
         Decimal("3.49"),
-        aliases=("seasoned fries", "regular fries"),
+        aliases=("seasoned fries", "regular fries", "fries"),
         optional_modifier_group_ids=("fry_cook_preference", "fry_seasoning_level", "fry_add_ons"),
         prep_time_minutes=10,
     ),
@@ -924,6 +1151,13 @@ for flavor in FLAVOR_OPTIONS.values():
     FLAVOR_ALIAS_TO_ID[_normalize_lookup_key(flavor.display_name)] = flavor.id
     for alias in flavor.aliases:
         FLAVOR_ALIAS_TO_ID[_normalize_lookup_key(alias)] = flavor.id
+
+FLAVOR_FUZZY_INDEX: list[tuple[frozenset[str], str]] = []
+for flavor in FLAVOR_OPTIONS.values():
+    for label in (flavor.display_name, *flavor.aliases):
+        token_set = frozenset(_normalize_lookup_key(label).split())
+        if token_set:
+            FLAVOR_FUZZY_INDEX.append((token_set, flavor.id))
 
 for modifier in MODIFIER_OPTIONS.values():
     MODIFIER_ALIAS_TO_ID[_normalize_lookup_key(modifier.display_name)] = modifier.id
@@ -1196,7 +1430,15 @@ def build_menu_for_prompt() -> str:
 def _split_csv(value: str | None) -> list[str]:
     if not value:
         return []
-    return [part.strip() for part in value.split(",") if part.strip()]
+    # LLMs often use "and", "&", "plus", or "/" instead of commas between
+    # list items.  Split on those connectors first, then sub-split on commas.
+    parts: list[str] = []
+    for and_part in re.split(r"(?i)\s+(?:and|&|plus)\s+|\s*/\s*", value):
+        for part in and_part.split(","):
+            stripped = part.strip()
+            if stripped:
+                parts.append(stripped)
+    return parts
 
 
 def _normalize_note(value: str | None) -> str:
@@ -1211,20 +1453,69 @@ def _resolve_flavor_id(name: str) -> str | None:
     if direct is not None:
         return direct
 
-    # Voice transcripts often prefix split flavors with "half", "1/2", or
-    # "split" ("half lemon pepper", "split mango habanero"). Normalize those
-    # wrappers away so split-flavor requests resolve to the real menu flavors.
+    # Voice transcripts often prefix split flavors with "half", "1/2",
+    # "split", or a count like "5 mango habanero, 5 lemon pepper".
+    # Also strip "all" (e.g. "all lemon pepper") and common filler words
+    # that realtime models sprinkle into tool arguments.
     key = re.sub(
-        r"^(half|split|one half|1 2|one side|other side|half and half)\s+",
+        r"^(half|split|one half|1 2|one side|other side|half and half"
+        r"|\d+|all|the|some|just|want|add|get|like)\s+",
+        "",
+        key,
+    ).strip()
+    key = re.sub(
+        r"^(one|two|three|four|five|six|seven|eight|nine|ten)\s+",
         "",
         key,
     ).strip()
     key = re.sub(r"\s+(half|split)$", "", key).strip()
-    return FLAVOR_ALIAS_TO_ID.get(key)
+    direct = FLAVOR_ALIAS_TO_ID.get(key)
+    if direct is not None:
+        return direct
+
+    # Fuzzy fallback for STT homophones ("lemon paper" -> "lemon pepper")
+    key_tokens = set(key.split())
+    if len(key_tokens) >= 1:
+        best: list[tuple[str, float]] = []
+        for token_set, flavor_id in FLAVOR_FUZZY_INDEX:
+            overlap = len(key_tokens & token_set)
+            if overlap == 0:
+                continue
+            precision = overlap / len(token_set)
+            recall = overlap / len(key_tokens)
+            best.append((flavor_id, precision + recall))
+        if best:
+            best.sort(key=lambda kv: (-kv[1], kv[0]))
+            if len(best) == 1 or best[0][1] > best[1][1]:
+                return best[0][0]
+
+    return None
+
+
+_MODIFIER_FUZZY_STOPWORDS = frozenset(
+    {"the", "a", "an", "some", "add", "get", "want", "like", "with", "and", "my"}
+)
 
 
 def _resolve_modifier_id(name: str) -> str | None:
-    return MODIFIER_ALIAS_TO_ID.get(_normalize_lookup_key(name))
+    key = _normalize_lookup_key(name)
+    exact = MODIFIER_ALIAS_TO_ID.get(key)
+    if exact is not None:
+        return exact
+
+    # Fuzzy fallback: try stopword-cleaned tokens directly, then
+    # progressively strip trailing words.  Handles "the ranch" (single
+    # remaining token after stopword removal) and LLM verbosity like
+    # "extra crispy fries" -> "extra crispy".
+    tokens = [t for t in key.split() if t not in _MODIFIER_FUZZY_STOPWORDS]
+    while tokens:
+        candidate = " ".join(tokens)
+        result = MODIFIER_ALIAS_TO_ID.get(candidate)
+        if result is not None:
+            return result
+        tokens.pop()
+
+    return None
 
 
 def _menu_summary_lines() -> str:
@@ -1256,3 +1547,91 @@ def _selected_by_group(line: OrderLineItem, group_id: str) -> list[str]:
         for modifier_id in line.selected_modifier_ids
         if group_id in OPTION_TO_GROUP_IDS.get(modifier_id, set())
     ]
+
+
+def _get_max_flavors(item_id: str) -> int:
+    """Resolve max flavors from catalog templates, falling back to legacy MenuItem."""
+    cat_tpl = get_item_template(item_id)
+    if cat_tpl:
+        return cat_tpl.max_flavors
+    combo_tpl = get_combo_template(item_id)
+    if combo_tpl:
+        return combo_tpl.max_flavors
+    pack_tpl = get_group_pack_template(item_id)
+    if pack_tpl:
+        return pack_tpl.max_flavors
+    menu_item = MENU_ITEMS.get(item_id)
+    if menu_item:
+        return menu_item.max_flavors
+    return 0
+
+
+# ── Catalog-backed lookups (new code should prefer these) ─────────────────
+
+
+def get_item_template(item_id: str) -> ItemTemplate | None:
+    """Look up an ItemTemplate by id from the catalog."""
+    cat = get_catalog()
+    for t in cat.item_templates:
+        if t.id == item_id:
+            return t
+    return None
+
+
+def get_combo_template(combo_id: str) -> ComboTemplate | None:
+    """Look up a ComboTemplate by id from the catalog."""
+    cat = get_catalog()
+    for ct in cat.combo_templates:
+        if ct.id == combo_id:
+            return ct
+    return None
+
+
+def get_group_pack_template(pack_id: str) -> GroupPackTemplate | None:
+    """Look up a GroupPackTemplate by id from the catalog."""
+    cat = get_catalog()
+    for gp in cat.group_pack_templates:
+        if gp.id == pack_id:
+            return gp
+    return None
+
+
+def get_item_type(item_id: str) -> str | None:
+    """Return the item_type for any catalog item (template, combo, or pack)."""
+    cat = get_catalog()
+    for t in cat.item_templates:
+        if t.id == item_id:
+            return t.item_type
+    for ct in cat.combo_templates:
+        if ct.id == item_id:
+            return ct.item_type
+    for gp in cat.group_pack_templates:
+        if gp.id == item_id:
+            return gp.item_type
+    return None
+
+
+def get_flavor_by_id(flavor_id: str) -> CatalogFlavor | None:
+    """Look up a CatalogFlavor by id."""
+    cat = get_catalog()
+    for f in cat.flavors:
+        if f.id == flavor_id:
+            return f
+    return None
+
+
+def get_modifier_group_by_id(group_id: str) -> CatalogModifierGroup | None:
+    """Look up a CatalogModifierGroup by id."""
+    cat = get_catalog()
+    for g in cat.modifier_groups:
+        if g.id == group_id:
+            return g
+    return None
+
+
+# ── Attempt to load catalog at import time (graceful fallback to hardcoded) ──
+
+try:
+    load_catalog()
+except (FileNotFoundError, KeyError, json.JSONDecodeError):
+    pass
