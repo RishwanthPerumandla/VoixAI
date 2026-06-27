@@ -7,20 +7,37 @@ the root README, all files in `docs/`, and the current `apps/agent-runtime`
 voice paths against the code in `apps/api`, `apps/agent-runtime`, and
 `packages/ordering`.
 
+Phase 1 update (2026-06-27): `apps/api` now has a SQLAlchemy/Alembic
+persistence foundation with SQLite test/dev fallback and Postgres selected by
+`DATABASE_URL`. Confirmed orders persist as `WS-####` public codes with
+`customers`, `stores`, `menu_items`, `orders`, and `order_items` tables behind
+`CustomerService`, `StoreService`, and `OrderService`.
+
+Phase 2 update (2026-06-27): `apps/agent-runtime` now has a shared
+`conversation_core` layer with the closed-set intent router and top-level
+`GREETING -> IDENTIFY -> ROUTE -> ORDER/TRACK/STORE_INFO/CANCEL/ESCALATE`
+state machine. The runtime starts this layer before the provider greeting and
+routes caller turns from the common session event path used by `classic`,
+`openai_realtime`, and `gemini_live`. `apps/api` exposes the thin conversation
+session endpoints needed to persist `call_sessions.current_node`, identify
+callers by phone, and persist confirmed names on the customer record. ORDER,
+TRACK, STORE_INFO, CANCEL, and ESCALATE are intentionally stubs until the
+later scoped phases.
+
 ## Executive Summary
 
 VoixAI is already a working LiveKit-centered voice demo with three selectable
-worker-side voice paths, a shared deterministic ordering package, SQLite-backed
-order/call persistence, best-effort dashboard telemetry, and a 191-scenario
-offline reliability suite.
+worker-side voice paths, a shared deterministic ordering package, SQLAlchemy
+order/customer/menu persistence, a shared call-level router/FSM foundation,
+best-effort dashboard telemetry, and a 193-scenario offline reliability suite.
 
-It is not yet the target production-style system in the new brief. The biggest
-missing layer is the call-level conversation core: there is no closed-set intent
-router and no top-level FSM for `GREETING -> IDENTIFY -> ROUTE -> ORDER/TRACK/...`.
-The current Wingstop flow is still mainly one LiveKit agent prompt with tools,
+It is not yet the target production-style system in the new brief. The
+call-level conversation core now exists, but most destination nodes are still
+Phase 2 stubs and the hard ORDER sub-FSM is not implemented yet. The current
+Wingstop order-taking flow is still mainly one LiveKit agent prompt with tools,
 plus a deterministic ordering reducer/state machine underneath. That ordering
-core is valuable and should be preserved, but the call orchestration above it is
-not explicit yet.
+core is valuable and should be preserved, but Phase 3 still needs to move the
+configurable item collection flow behind explicit ORDER nodes.
 
 ## Real System Shape Today
 
@@ -73,11 +90,14 @@ STT/LLM/TTS metrics.
    requirements, and connects to the room.
 6. If a realtime provider is selected, the worker probes data publishing and can
    fall back to `classic` on publisher connection failure.
-7. The worker builds the provider model/session, starts `WingstopAssistant`, marks
-   the order state as `greeting`, triggers the hardcoded greeting
-   `Hello, Wingstop Dallas. How can I help you.`, and publishes a startup snapshot.
-8. Customer turns are handled by the LiveKit session and the assistant prompt.
-   The model calls tools such as `set_customer_details`, `add_menu_item`,
+7. The worker builds the provider model/session, starts `WingstopAssistant`,
+   starts the shared conversation FSM, persists `call_sessions.current_node`,
+   deterministically greets as `Hello, Wingstop Dallas.`, identifies the caller
+   by `caller_id`/phone when present, and publishes a startup snapshot.
+8. Customer turns are handled by the shared router/FSM first, then by the
+   LiveKit session and assistant prompt. The model calls tools such as
+   `capture_customer_name`, `confirm_customer_name`, `set_customer_details`,
+   `add_menu_item`,
    `update_last_item`, `price_order`, `review_order_for_confirmation`, and
    `create_mock_order`.
 9. Tool calls mutate the shared `OrderState` through `packages/ordering` reducer
@@ -104,10 +124,11 @@ STT/LLM/TTS metrics.
 - The menu is catalog-driven from `apps/api/data/wingstop_demo_catalog.json`.
 - The order submit gate is deterministic and rerun server-side before persistence.
 - Order submission is idempotent in SQLite.
-- The reliability suite is offline and key-free, with 191 scenarios in the latest
+- The reliability suite is offline and key-free, with 193 scenarios in the latest
   report.
 - Live telemetry snapshots drive the current UI and include order/price/mock-order
-  state, runtime profile, latency fields, and guardrail violations.
+  state, runtime profile, conversation node/last intent, latency fields, and
+  guardrail violations.
 - The API already has useful dashboard primitives: calls, orders, analytics
   overview, and observability health.
 
@@ -115,21 +136,23 @@ STT/LLM/TTS metrics.
 
 ### Conversation Core
 
-- Missing closed-set call intent router. The shared ordering package has
-  `OrderIntent` for order mutations, but not the required call intents:
-  `place_order`, `modify_order`, `track_order`, `cancel_order`, `store_info`,
-  `speak_to_human`, `smalltalk_or_unknown`.
-- Missing top-level call FSM. There is no explicit persisted
-  `GREETING -> IDENTIFY -> ROUTE -> ORDER/TRACK/STORE_INFO/CANCEL/ESCALATE -> WRAPUP`
-  graph.
-- The current explicit state machine is order-lifecycle-only
-  (`idle`, `greeting`, `collecting_order`, `pricing_order`,
-  `awaiting_confirmation`, `completed`, etc.).
-- There is no persisted current call node for reconnect resume.
-- Greeting is deterministic on session start, but it is not caller-aware and does
-  not branch for returning callers.
-- Name capture exists as `set_customer_details`, but there is no confirmation
-  flow, spelling fallback, or persisted customer profile.
+- Phase 2 added the closed-set call intent router in
+  `apps/agent-runtime/src/conversation_core/router.py`. It supports the required
+  intents: `place_order`, `modify_order`, `track_order`, `cancel_order`,
+  `store_info`, `speak_to_human`, and `smalltalk_or_unknown`.
+- Phase 2 added the explicit top-level FSM in
+  `apps/agent-runtime/src/conversation_core/state_machine.py` with
+  `StateNode` declarations for `GREETING`, `IDENTIFY`, `ROUTE`, `ORDER`,
+  `TRACK`, `STORE_INFO`, `CANCEL`, `ESCALATE`, and `WRAPUP`.
+- `call_sessions.current_node` is persisted through `apps/api` conversation
+  endpoints so a simulated reconnect can resume from the last node.
+- Greeting is deterministic on session start and now branches through
+  identification. Returning callers with a known name hear a personalized
+  greeting and last-order summary; new callers continue to the route prompt.
+- Name capture now has explicit capture/confirm tools, spelling fallback, and
+  persistence to the customer record. Filled names are not re-asked.
+- Remaining gap: ORDER/TRACK/STORE_INFO/CANCEL/ESCALATE are Phase 2 stubs. Their
+  real behavior belongs to Phases 3, 4, and 6.
 
 ### Order Flow
 
@@ -149,27 +172,31 @@ STT/LLM/TTS metrics.
 
 ### Backend And Data Model
 
-- Persistence is SQLite only. There is no Postgres adapter, SQLAlchemy 2.x model
-  layer, Alembic migration setup, or migration/seed command.
-- The current SQLite schema has `orders`, `sessions`, and `calls`. It does not
-  have the target `customers`, `stores`, `menu_items`, `order_items`,
-  `transcript_turns`, `call_events`, or `escalations` tables.
-- There is no `CustomerService`, `StoreService`, or full `OrderService` object
-  layer. The FastAPI module owns most service behavior directly.
-- Order lifecycle is stored as `submitted` only in persisted rows. The target
-  lifecycle (`draft`, `confirmed`, `in_kitchen`, `ready`, `completed`,
-  `cancelled`) and kitchen ticker do not exist.
-- There is no returning-customer lookup by phone and no order rollup fields such
-  as `order_count` or `total_spend`.
+- Phase 1 added SQLAlchemy 2.x models, Alembic, a first migration, and a seed
+  command. SQLite remains the deterministic test/dev path; Postgres is selected
+  by `DATABASE_URL`.
+- The current schema now includes `customers`, `stores`, `menu_items`, `orders`,
+  `order_items`, plus compatibility `sessions` and `calls`. It still does not
+  have `transcript_turns`, `call_events`, or `escalations`.
+- `CustomerService`, `StoreService`, and `OrderService` now exist. Order
+  submission uses them for demo store/menu seed, customer upsert when a phone is
+  present, idempotent confirm, order line persistence, and customer rollups.
+- Confirmed orders now store the target lifecycle status `confirmed` and return
+  `WS-####` public codes. Server-owned kitchen progression
+  (`confirmed -> in_kitchen -> ready -> completed`) is still future work.
+- Returning-customer conversational lookup by phone is implemented for Phase 2
+  identification. Full tracking by latest active order is still Phase 4.
 
 ### Tracking, Cancel, Store Info
 
-- There is a `GET /api/orders/{order_number}` endpoint, but no conversational
-  tracking flow and no latest-active-order lookup by phone.
-- Cancellation exists only for the in-memory active order before submission.
-  There is no persisted order cancellation endpoint or server-owned transition.
-- Store info is not backed by a `stores` table. Demo hours are static menu/domain
-  data, not persisted store records.
+- There is a `GET /api/orders/{order_number}` endpoint and the Phase 2 router
+  can dispatch to a TRACK node, but TRACK is still a stub. Full tracking flow
+  and latest-active-order lookup by phone remain Phase 4.
+- Cancellation exists only for the in-memory active order before submission, and
+  the Phase 2 CANCEL node is a stub. There is no persisted order cancellation
+  endpoint or server-owned transition yet.
+- Store data is persisted through Phase 1, and the Phase 2 STORE_INFO node is a
+  stub. Deterministic store-hours answers remain Phase 4.
 
 ### Observability
 
@@ -196,10 +223,12 @@ STT/LLM/TTS metrics.
 
 ### Reliability And Scale
 
-- The reliability suite is healthy and broad for ordering, but it does not yet
-  cover identification, tracking, persisted cancellation, store-info nodes,
-  escalation monitor thresholds, idempotent confirm against the target service
-  layer, or provider circuit breakers.
+- The reliability suite is healthy and broad for ordering. Phase 2 added
+  separate offline router/FSM tests for routing, identification, name capture,
+  and reconnect resume. It still does not cover full tracking, persisted
+  cancellation, store-info node behavior, escalation monitor thresholds,
+  idempotent confirm against the target service layer, or provider circuit
+  breakers.
 - There are provider fallbacks for missing dependencies and realtime startup
   probe failure, but no general timeout/retry/jitter/circuit-breaker abstraction.
 - Runtime state is still in worker memory for the active order and transcript
@@ -227,17 +256,12 @@ STT/LLM/TTS metrics.
 
 ## Phase Implications
 
-Phase 1 should build on the existing SQLite storage and `packages/ordering`
-domain rather than replacing them casually. The safest next foundation is:
-
-- introduce SQLAlchemy/Alembic and the target tables behind a service layer,
-- preserve the current SQLite test/offline path,
-- migrate current order/call behavior into services without changing the
-  `runtime_config` contract or the three voice paths,
-- add customer/store/order lifecycle primitives needed by Phase 2 routing.
+Phase 1 is complete as a persistence foundation. Phase 2 is complete as a shared
+conversation-core foundation without changing the `runtime_config` contract or
+the three voice paths.
 
 The most important constraint for future phases is to put new call-level routing,
 FSM, persistence, analytics, and escalation behind shared modules called by all
-three voice paths. The current structure already has one shared assistant/tools
-surface, but it does not yet have the explicit router/state-machine boundary the
-brief requires.
+three voice paths. The current structure now has that first shared
+router/state-machine boundary; Phase 3 should attach the ORDER sub-FSM to the
+existing ORDER node entry point.

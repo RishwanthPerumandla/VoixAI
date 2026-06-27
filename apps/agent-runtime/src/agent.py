@@ -32,6 +32,8 @@ from livekit.plugins import ai_coustics, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from call_recorder import finalize_call, open_call
 from channels import CHANNEL_REGISTRY, DEFAULT_CHANNEL_ID, get_channel_definition
+from conversation_core.api_repository import ApiConversationRepository
+from conversation_core.state_machine import ConversationContext, ConversationStateMachine, InMemoryConversationRepository
 from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_definition
 from scenarios.wingstop import (
     MockOrder,
@@ -169,6 +171,13 @@ class SessionState:
     telemetry_publish_failures: int = 0
     telemetry_cooldown_until: float = 0.0
     placement_failure_count: int = 0
+    conversation_context: ConversationContext | None = None
+    conversation_core: Any | None = field(default=None, repr=False, compare=False)
+    conversation_node: str | None = None
+    last_intent: str | None = None
+    last_intent_confidence: float | None = None
+    last_router_slots: dict[str, object] = field(default_factory=dict)
+    conversation_clarification_count: int = 0
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -198,6 +207,8 @@ class RuntimeConfig:
     requested_voice_provider: str | None = None
     requested_voice_engine: str | None = None
     fallback_reason: str | None = None
+    caller_id: str | None = None
+    caller_phone: str | None = None
 
 def _session_config_path(room_name: str) -> Path:
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", room_name).strip("-") or "default-room"
@@ -285,6 +296,12 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
         requested_voice_engine=(
             str(payload["voice_engine"]).strip().lower() if payload.get("voice_engine") else None
         ),
+        caller_id=str(payload["caller_id"]).strip() if payload.get("caller_id") else None,
+        caller_phone=(
+            str(payload.get("caller_phone", payload.get("phone", ""))).strip()
+            if payload.get("caller_phone") or payload.get("phone")
+            else None
+        ),
     )
 
 
@@ -364,6 +381,7 @@ def _runtime_profile_payload(runtime_config: RuntimeConfig) -> dict[str, object]
         "preset_label": runtime_config.preset_label,
         "comparison_label": runtime_config.comparison_label,
         "fallback_reason": runtime_config.fallback_reason,
+        "caller_id_present": bool(runtime_config.caller_id or runtime_config.caller_phone),
     }
 
 
@@ -381,6 +399,13 @@ def _snapshot_payload(session_state: SessionState, *, reason: str) -> dict[str, 
         "runtime_profile": session_state.runtime_profile,
         "user_turn_metrics": session_state.user_turn_metrics,
         "assistant_turn_metrics": session_state.assistant_turn_metrics,
+        "conversation": {
+            "current_node": session_state.conversation_node,
+            "last_intent": session_state.last_intent,
+            "last_intent_confidence": session_state.last_intent_confidence,
+            "last_router_slots": dict(session_state.last_router_slots),
+            "clarification_count": session_state.conversation_clarification_count,
+        },
         "transcript": list(session_state.transcript[-60:]),
     }
     payload.update(scenario.snapshot_builder(session_state))
@@ -1069,6 +1094,86 @@ def _trigger_initial_greeting(
     )
 
 
+def _build_conversation_state_machine() -> ConversationStateMachine:
+    repository = ApiConversationRepository()
+    return ConversationStateMachine(repository=repository)
+
+
+def _conversation_context_from_session(
+    *,
+    call_id: str,
+    room_name: str,
+    runtime_config: RuntimeConfig,
+) -> ConversationContext:
+    return ConversationContext(
+        call_id=call_id,
+        room_name=room_name,
+        caller_id=runtime_config.caller_id,
+        caller_phone=runtime_config.caller_phone,
+    )
+
+
+def _apply_conversation_action(
+    session_state: SessionState,
+    context: ConversationContext,
+    action,
+) -> None:
+    session_state.conversation_context = context
+    session_state.conversation_node = action.node.value
+    session_state.conversation_clarification_count = context.clarification_count
+    if action.router_result is not None:
+        session_state.last_intent = action.router_result.intent.value
+        session_state.last_intent_confidence = action.router_result.confidence
+        session_state.last_router_slots = dict(action.router_result.slots)
+    if context.customer_name and not session_state.order.customer_name:
+        session_state.order.customer_name = context.customer_name
+    if context.caller_phone and not session_state.order.phone:
+        session_state.order.phone = context.caller_phone
+
+
+async def _start_conversation_core(
+    session_state: SessionState,
+    *,
+    call_id: str,
+    room_name: str,
+    runtime_config: RuntimeConfig,
+) -> str:
+    fsm = _build_conversation_state_machine()
+    context = _conversation_context_from_session(
+        call_id=call_id,
+        room_name=room_name,
+        runtime_config=runtime_config,
+    )
+    try:
+        action = await asyncio.to_thread(fsm.start, context)
+    except Exception:
+        logger.exception("Conversation core startup failed; using default greeting")
+        fsm = ConversationStateMachine(repository=InMemoryConversationRepository())
+        context = _conversation_context_from_session(
+            call_id=call_id,
+            room_name=room_name,
+            runtime_config=runtime_config,
+        )
+        action = fsm.start(context)
+    session_state.conversation_core = fsm
+    _apply_conversation_action(session_state, context, action)
+    return action.message.strip() or build_initial_greeting(get_channel_definition(session_state.channel_id))
+
+
+async def _route_caller_turn(session_state: SessionState, turn_text: str) -> None:
+    fsm = getattr(session_state, "conversation_core", None)
+    context = session_state.conversation_context
+    if fsm is None or context is None:
+        return
+    try:
+        action = await asyncio.to_thread(fsm.handle_turn, context, turn_text)
+    except Exception:
+        logger.debug("Conversation routing failed for caller turn", exc_info=True)
+        return
+    _apply_conversation_action(session_state, context, action)
+    await session_state.publish_snapshot(reason="conversation_routed")
+
+
 server = AgentServer(num_idle_processes=1)
 
 _preload_optional_realtime_plugins()
@@ -1212,6 +1317,7 @@ async def my_agent(ctx: JobContext):
                     _respond_with_handoff(session, runtime_config)
 
                 asyncio.create_task(_force_handoff_response())
+            asyncio.create_task(_route_caller_turn(session.userdata, turn_text))
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
@@ -1306,10 +1412,16 @@ async def my_agent(ctx: JobContext):
         room_options=_build_room_options(),
     )
     OrderStateMachine(session.userdata.order).start_greeting()
+    greeting_text = await _start_conversation_core(
+        session.userdata,
+        call_id=call_id,
+        room_name=ctx.room.name,
+        runtime_config=runtime_config,
+    )
     _trigger_initial_greeting(
         session,
         runtime_config,
-        build_initial_greeting(channel),
+        greeting_text,
     )
     await _publish_session_snapshot(session.userdata, reason="session_started")
 

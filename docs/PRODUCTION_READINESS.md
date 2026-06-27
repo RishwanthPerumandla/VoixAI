@@ -1,6 +1,6 @@
 # VoixAI — Production Readiness & Target Architecture
 
-Last reviewed: 2026-06-15
+Last reviewed: 2026-06-27
 
 This is the bridge document between **where the code is today**
 ([ARCHITECTURE.md](./ARCHITECTURE.md)) and **the long-term platform vision**
@@ -398,6 +398,19 @@ Remaining for M3:
 - **Postgres adapter** behind `DATABASE_URL` for true multi-instance durability.
 - Drop the `.voixai/session-configs` file fallback once metadata delivery is
   verified end-to-end against live LiveKit.
+
+**Hardening program Phase 2 is complete.** Shipped after the original M3 notes:
+
+- Shared call-level `conversation_core` in `apps/agent-runtime` with the
+  closed-set intent router and explicit top-level FSM.
+- Deterministic startup `GREETING -> IDENTIFY -> ROUTE`, caller identification
+  by phone, returning-caller greeting with latest-order summary, and confirmed
+  name capture with spelling fallback.
+- `call_sessions.current_node` persistence through thin conversation endpoints
+  in `apps/api`, with reconnect-resume coverage.
+- ORDER/TRACK/STORE_INFO/CANCEL/ESCALATE destination nodes are still stubs by
+  design. Phase 3 attaches the real ORDER sub-FSM to the existing ORDER entry
+  point; Phase 4 fills tracking, cancel, and store-info behavior.
 
 ---
 

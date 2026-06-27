@@ -27,6 +27,8 @@ The root env file is shared local-development configuration for the API and work
 - `WEB_PORT`: local web port, default `3000`
 - `API_PORT`: local API port, default `8000`
 - `VOIXAI_API_URL`: agent telemetry endpoint, default `http://127.0.0.1:8000`
+- `DATABASE_URL`: optional SQLAlchemy database URL for `apps/api`; leave empty for SQLite or set a Postgres URL in dev/prod
+- `VOIXAI_DB_PATH`: SQLite fallback path when `DATABASE_URL` is unset, default `.voixai/voixai.db`
 
 Docker note:
 
@@ -116,7 +118,9 @@ and not just the worker startup provider log.
 - `API_PORT`: API bind port
 - `ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
 - `ALLOWED_ORIGIN_REGEX`: optional regex allowlist for browser origins
-- `VOIXAI_DB_PATH`: optional SQLite path for persisted orders/calls/sessions; defaults to `.voixai/voixai.db`
+- `DATABASE_URL`: SQLAlchemy URL for the API database. Use Postgres for dev/prod, for example `postgresql+psycopg://voixai:voixai@localhost:5432/voixai`
+- `VOIXAI_DATABASE_URL`: optional VoixAI-specific alias for `DATABASE_URL`
+- `VOIXAI_DB_PATH`: optional SQLite path used only when `DATABASE_URL`/`VOIXAI_DATABASE_URL` are unset; defaults to `.voixai/voixai.db`
 
 Local development note:
 
@@ -126,4 +130,10 @@ Local development note:
 
 The API uses these variables to mint browser participant tokens, persist room-scoped runtime config, connect the web client to a fresh room for each new order, and dispatch the Python agent by name.
 
-For the current Wingstop scenario, the API also serves the backend-backed menu lookup, order validation, and pricing endpoints used by the agent runtime.
+For the current Wingstop scenario, the API also serves the backend-backed menu lookup, order validation, pricing, and Phase 1 persistence endpoints used by the agent runtime.
+
+Phase 1 persistence note:
+
+- `apps/api` uses SQLAlchemy models and Alembic migrations.
+- SQLite remains the deterministic offline/test path.
+- Postgres is selected by setting `DATABASE_URL`; no provider API keys are needed for persistence tests.

@@ -1,6 +1,6 @@
 # Architecture (Current State)
 
-Last reviewed: 2026-06-15
+Last reviewed: 2026-06-27
 
 This document describes **what the system actually is today**, including the parts
 that are not production-grade yet. For the future/target design and the gap
@@ -67,10 +67,17 @@ the actual voice path.
 6. The worker resolves the room-scoped runtime config, validates it, builds the
    correct session type, and starts `WingstopAssistant`
    ([agent.py](../apps/agent-runtime/src/agent.py)).
-7. During the conversation, the agent's order tools call the API's menu
+7. On session start, the runtime starts the shared conversation FSM
+   (`GREETING -> IDENTIFY -> ROUTE`), persists `call_sessions.current_node`
+   through `apps/api`, and uses the FSM response as the deterministic greeting.
+8. During each caller turn, the common session event path routes the transcript
+   through the shared intent router/FSM before the provider-specific voice path
+   continues. This keeps `classic`, `openai_realtime`, and `gemini_live` behind
+   the same intent-and-slots boundary.
+9. During the conversation, the agent's order tools call the API's menu
    endpoints (`/api/menu/resolve-selection`, `/validate-order`, `/price-order`)
    over HTTP ([wingstop.py](../apps/agent-runtime/src/scenarios/wingstop.py)).
-8. After every order mutation / metric event, the worker publishes a JSON
+10. After every order mutation / metric event, the worker publishes a JSON
    `session_snapshot` on the `voixai.telemetry` data topic. The web app renders
    transcript, order summary, confirmation, and the developer panel from those
    snapshots.
@@ -98,6 +105,14 @@ Key files:
 ### 3.2 `apps/api` — FastAPI
 
 Endpoints:
+
+Phase 2 conversation endpoints:
+- `GET /api/conversation/sessions/{call_id}` - read the persisted top-level FSM node
+- `PATCH /api/conversation/sessions/{call_id}/node` - persist the current top-level FSM node
+- `POST /api/conversation/identify` - identify or create a customer by caller phone
+- `POST /api/conversation/name` - persist a confirmed caller name
+
+Existing token/menu/order endpoints:
 - `GET /health`
 - `POST /api/livekit/token` — persist runtime config, mint JWT, dispatch agent
 - `GET /api/menu/summary`
@@ -107,7 +122,21 @@ Endpoints:
 - `POST /api/orders` — idempotent order submission (re-runs the submit gate server-side, persists the order)
 - `GET /api/orders/{order_number}` — read back a persisted order
 
-Key file: [main.py](../apps/api/main.py).
+Key files:
+- [main.py](../apps/api/main.py) - FastAPI routes and LiveKit token/session dispatch
+- [models.py](../apps/api/models.py) - SQLAlchemy Phase 1 schema
+- [services.py](../apps/api/services.py) - `CustomerService`, `StoreService`, `OrderService`,
+  `ConversationSessionService`, and menu seeding
+- [alembic/versions/0001_phase1_persistence.py](../apps/api/alembic/versions/0001_phase1_persistence.py) - first migration
+
+Persistence is now SQLAlchemy-backed. SQLite remains the local/offline test
+database when `DATABASE_URL` is unset; Postgres is selected by setting
+`DATABASE_URL`. Phase 1 tables include `customers`, `stores`, `menu_items`,
+`orders`, `order_items`, and compatibility `sessions`/`calls` tables for the
+existing dashboard/session flows. Order submission returns a `WS-####` public
+code and stores lifecycle status `confirmed`. Phase 2 also uses
+`call_sessions.current_node` to persist the top-level conversation node for
+reconnect resume.
 
 The API imports the menu, pricing, and validation from the shared
 `packages/ordering` (`voix_ordering`) package — the single source of truth, also
@@ -121,6 +150,29 @@ gone — see [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md) §5.1.)
 Responsibilities: runtime-config resolution/validation, classic/realtime session
 construction, order tools, in-memory order state, telemetry publishing, session
 event handling.
+
+Phase 2 adds `src/conversation_core/`:
+
+- `router.py` contains the closed-set call intent router.
+- `state_machine.py` contains the top-level `StateNode` FSM, identity, and name
+  capture.
+- `api_repository.py` contains the thin internal API client for persisted
+  conversation session state.
+
+The router returns `RouterResult(intent, confidence, slots,
+requires_disambiguation)` for the closed enum `place_order`, `modify_order`,
+`track_order`, `cancel_order`, `store_info`, `speak_to_human`, and
+`smalltalk_or_unknown`. Deterministic grammar/keyword rules win for high-signal
+phrases. A constrained classifier hook can be supplied for lower-signal
+transcripts, but the offline tests run with no API key.
+
+`ConversationStateMachine` declares `StateNode` objects for `GREETING`,
+`IDENTIFY`, `ROUTE`, `ORDER`, `TRACK`, `STORE_INFO`, `CANCEL`, `ESCALATE`, and
+`WRAPUP`. Destination nodes are stubs until later phases. `GREETING` fires on
+session start; `IDENTIFY` resolves the caller by `runtime_config.caller_id`,
+`runtime_config.caller_phone`, or participant identity; and the
+`capture_customer_name` / `confirm_customer_name` tools provide confirmed name
+capture with spelling fallback.
 
 Key files:
 - [src/agent.py](../apps/agent-runtime/src/agent.py) — ~1,070-line module holding
@@ -200,8 +252,10 @@ what structurally blocks).
 |---------|----------------|------------|
 | Per-room runtime config | primary: agent dispatch metadata (`ctx.job.metadata`); fallback: `.voixai/session-configs/<room>.json` | metadata travels with the job (no shared FS); file is a single-host fallback |
 | Order state (in progress) | `SessionState.order` in worker process memory | lost on disconnect/restart (rehydration is a remaining M3 item) |
-| Placed order | `orders` table in SQLite (`.voixai/voixai.db`) via `POST /api/orders` | durable + idempotent (M3); local fallback if API unreachable |
-| Session record | `sessions` table in SQLite (best-effort on token mint) | durable (M3) |
+| Placed order | SQLAlchemy `orders` + `order_items` tables via `POST /api/orders`; SQLite by default, Postgres via `DATABASE_URL` | durable + idempotent (Phase 1); local runtime fallback still exists if API unreachable |
+| Customer/store/menu mirror | SQLAlchemy `customers`, `stores`, `menu_items` tables | durable (Phase 1) |
+| Top-level conversation node | SQLAlchemy `call_sessions.current_node` via `/api/conversation/*`; in-memory fallback if API is unreachable | durable when API is reachable (Phase 2) |
+| Session record | SQLAlchemy `sessions` table (best-effort on token mint) | durable (Phase 1 compatibility) |
 | Telemetry | LiveKit data channel `voixai.telemetry` | ephemeral, not stored |
 | Secrets | `.env` files loaded in each app | env-only |
 
@@ -221,6 +275,13 @@ The worker publishes reliable JSON messages on topic `voixai.telemetry`
   "runtime_profile": { /* provider/model/preset/fallback_reason */ },
   "user_turn_metrics": { /* classic only */ },
   "assistant_turn_metrics": { /* classic only */ },
+  "conversation": {
+    "current_node": "ROUTE",
+    "last_intent": "place_order",
+    "last_intent_confidence": 0.84,
+    "last_router_slots": {},
+    "clarification_count": 0
+  },
   // scenario-specific (build_wingstop_snapshot):
   "order": { /* serialize_order_state */ },
   "price_quote": { /* or null */ },
@@ -231,14 +292,23 @@ The worker publishes reliable JSON messages on topic `voixai.telemetry`
 
 ## 8. Tests
 
+Phase 2 deterministic conversation-core tests:
+
+- [apps/agent-runtime/tests/test_intent_router.py](../apps/agent-runtime/tests/test_intent_router.py)
+  - offline fixed-transcript intent routing
+- [apps/agent-runtime/tests/test_conversation_state_machine.py](../apps/agent-runtime/tests/test_conversation_state_machine.py)
+  - greeting, identification, clarification, node resume, and name capture
+- [apps/api/tests/test_conversation_core.py](../apps/api/tests/test_conversation_core.py)
+  - conversation session, identity, and name persistence endpoints
+
 - [apps/agent-runtime/tests/test_order_state.py](../apps/agent-runtime/tests/test_order_state.py)
   — menu validation, pricing, confirmation gating, provider mapping, greeting paths
 - [apps/agent-runtime/tests/test_agent.py](../apps/agent-runtime/tests/test_agent.py)
 - [apps/api/tests/test_main.py](../apps/api/tests/test_main.py) — API handoff
 - Frontend: build + `tsc --noEmit` only
 
-No cross-service integration tests, no conversation/eval simulations, no
-browser-level E2E.
+No browser-level E2E. Full order-sub-FSM conversation simulations are still
+Phase 3+ work.
 
 ## 9. Known Architectural Debt (summary)
 
@@ -251,13 +321,20 @@ These are expanded with severity, evidence, and fixes in
 2. ~~Order-placement reliability depends on prompt-sequenced tool calls~~ —
    **Fixed (M2).** `OrderStateMachine.authorize_submit()` is the deterministic
    hard gate; phase is derived in one place and published in telemetry.
-3. Order state and placed orders are in-memory only — nothing is persisted.
-4. Runtime config is passed through local JSON files (`.voixai/session-configs`),
+3. ~~Placed orders are in-memory only~~ - **Fixed (Phase 1).** Confirmed
+   orders now persist through SQLAlchemy with `WS-####` public codes, line
+   items, customer rollups when a phone is present, demo store, and menu mirror.
+   In-progress order rehydration is still future work.
+4. ~~No shared call-level router/FSM~~ - **Fixed (Phase 2 foundation).** A
+   shared intent router and top-level state machine now sit behind all three
+   voice paths. ORDER/TRACK/STORE_INFO/CANCEL/ESCALATE are still stubs until
+   later phases.
+5. Runtime config is passed through local JSON files (`.voixai/session-configs`),
    which is not multi-instance safe and is never garbage-collected.
-5. The token endpoint has no auth, no rate limiting; CORS is permissive.
-6. `agent.py` and `wingstop.py` are large multi-responsibility modules.
-7. Telemetry/analytics/cost are ephemeral; no persisted session record.
-8. Guardrails flag but do not block; menu/pricing is demo data, not POS-backed.
+6. The token endpoint has no auth, no rate limiting; CORS is permissive.
+7. `agent.py` and `wingstop.py` are large multi-responsibility modules.
+8. Telemetry/analytics/cost are ephemeral; no persisted per-turn event stream.
+9. Guardrails flag but do not block; menu/pricing is demo data, not POS-backed.
 
 ## 10. Source of Truth
 
@@ -265,6 +342,7 @@ These are expanded with severity, evidence, and fixes in
 |----------|------|
 | End-to-end flow & current behavior | this file |
 | Runtime/provider behavior | `apps/agent-runtime/src/agent.py` |
+| Call intent routing and top-level FSM | `apps/agent-runtime/src/conversation_core/` |
 | Menu/order/pricing logic | `apps/agent-runtime/src/scenarios/wingstop.py` |
 | API surface | `apps/api/main.py` |
 | Frontend payload shape | `apps/web/lib/runtime-config.ts` |

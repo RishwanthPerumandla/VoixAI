@@ -154,6 +154,19 @@ python -m pip install -e .
 python -m pip install -e ../../packages/ordering
 ```
 
+Database:
+
+- leave `DATABASE_URL` empty to use SQLite at `.voixai/voixai.db`
+- set `DATABASE_URL` to a Postgres URL for dev/prod, for example `postgresql+psycopg://voixai:voixai@localhost:5432/voixai`
+- after installing API dependencies, run migrations and seed the demo store/menu:
+
+```powershell
+cd apps/api
+.\.venv\Scripts\python.exe -m alembic -c alembic.ini upgrade head
+cd ..\..
+.\scripts\seed-api-db.ps1
+```
+
 ## 3. Start everything with one command
 
 From the repo root:
@@ -241,6 +254,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
 python -m pip install -e ../../packages/ordering
+python -m alembic -c alembic.ini upgrade head
+python -m seed
 python -m uvicorn main:app --reload --port 8000
 ```
 

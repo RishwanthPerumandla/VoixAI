@@ -2,6 +2,13 @@
 
 VoixAI ships a deterministic Wingstop reliability suite so we can prove the ordering backend behaves safely across messy customer flows without relying on Gemini Live, LiveKit, rooms, microphones, or API keys.
 
+Phase 2 adds a second deterministic layer for the call-level conversation core:
+offline router/FSM tests cover fixed transcripts, the one-clarification reroute
+path, startup greeting, identify-by-phone, confirmed name capture, and persisted
+node resume. These tests are intentionally separate from the larger order
+scenario corpus because they exercise `apps/agent-runtime/src/conversation_core`
+and the thin `apps/api` conversation endpoints rather than the order reducer.
+
 ## What It Tests
 
 The suite exercises the same shared order domain used by the runtime for:
@@ -13,6 +20,17 @@ The suite exercises the same shared order domain used by the runtime for:
 - confirmation-gated placement
 - handoff/escalation behavior
 - session restart and stale-state protection
+
+Conversation-core focused tests exercise:
+
+- high-signal routing for tracking, cancellation, store info, ordering, modify,
+  and human handoff phrases
+- low-confidence routing that asks exactly one clarification before rerouting
+- startup `GREETING -> IDENTIFY -> ROUTE`
+- returning-caller and new-caller identification by phone
+- name capture with confirmation, spelling fallback, persistence, and no
+  re-asking a filled slot
+- simulated reconnect resume from persisted `call_sessions.current_node`
 
 The current deterministic corpus includes `191` scenarios across:
 
@@ -47,6 +65,9 @@ Key pieces:
 - `apps/agent-runtime/tests/reliability/generate_scenarios.js`: corpus generator
 - `apps/agent-runtime/tests/reliability/test_reliability_suite.py`: pytest entrypoint
 - `apps/agent-runtime/tests/reliability/reports/reliability_report.json`: latest JSON summary
+- `apps/agent-runtime/tests/test_intent_router.py`: Phase 2 fixed-transcript router tests
+- `apps/agent-runtime/tests/test_conversation_state_machine.py`: Phase 2 FSM and name-capture tests
+- `apps/api/tests/test_conversation_core.py`: Phase 2 conversation persistence endpoint tests
 
 Each scenario defines:
 
@@ -69,6 +90,16 @@ Or directly:
 ```powershell
 cd apps/agent-runtime
 .venv\Scripts\python.exe -m pytest tests/reliability -q
+```
+
+Run the Phase 2 focused tests directly:
+
+```powershell
+cd apps/agent-runtime
+.venv\Scripts\python.exe -m pytest tests\test_intent_router.py tests\test_conversation_state_machine.py -q
+
+cd ..\api
+.venv\Scripts\python.exe -m pytest tests\test_conversation_core.py -q
 ```
 
 ## Report Output

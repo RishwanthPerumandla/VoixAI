@@ -175,6 +175,7 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - Use cancel_order when the customer says cancel everything, cancel the whole order, or never mind.
     - Use restart_order when the customer says start over or wants to rebuild the order from scratch.
     - Use set_customer_details when the caller gives a name or phone number.
+    - For the order name, use capture_customer_name first, ask the confirmation it returns, then use confirm_customer_name after the customer confirms. If the caller corrects the name, pass the correction or spelling to confirm_customer_name.
     - Use price_order when the caller asks for the total.
     - Use review_order_for_confirmation before asking if you should place the order.
     - Use set_confirmation_status only after the customer explicitly confirms the reviewed order.
@@ -1629,6 +1630,70 @@ class WingstopAssistant(Agent):
             logger.debug("Correction detected in fields: %s", ", ".join(corrected_fields))
         await context.userdata.publish_snapshot(reason="order_state_updated")
         return _order_update_response(order, validation_errors)
+
+    @function_tool
+    async def capture_customer_name(
+        self,
+        context: RunContext[Any],
+        customer_name: str,
+        spelled_name: str | None = None,
+    ) -> str:
+        session_state = context.userdata
+        fsm = getattr(session_state, "conversation_core", None)
+        conversation_context = getattr(session_state, "conversation_context", None)
+        if fsm is None or conversation_context is None:
+            order = session_state.order
+            if order.customer_name.strip():
+                return f"I already have the name as {order.customer_name}."
+            order.customer_name = (spelled_name or customer_name).strip().title()
+            await session_state.publish_snapshot(reason="name_capture_pending")
+            return f"Just to confirm, is the name {order.customer_name}?"
+
+        action = fsm.capture_name(
+            conversation_context,
+            customer_name,
+            spelled_name=spelled_name,
+        )
+        if conversation_context.pending_name:
+            session_state.order.customer_name = conversation_context.pending_name
+        await session_state.publish_snapshot(reason="name_capture_pending")
+        return action.message
+
+    @function_tool
+    async def confirm_customer_name(
+        self,
+        context: RunContext[Any],
+        confirmed: bool,
+        corrected_name: str | None = None,
+        spelled_name: str | None = None,
+    ) -> str:
+        session_state = context.userdata
+        fsm = getattr(session_state, "conversation_core", None)
+        conversation_context = getattr(session_state, "conversation_context", None)
+        if fsm is None or conversation_context is None:
+            if corrected_name or spelled_name:
+                session_state.order.customer_name = (spelled_name or corrected_name or "").strip().title()
+                await session_state.publish_snapshot(reason="name_capture_pending")
+                return f"Just to confirm, is the name {session_state.order.customer_name}?"
+            if confirmed and session_state.order.customer_name.strip():
+                await session_state.publish_snapshot(reason="name_captured")
+                return f"Thanks, I have the name as {session_state.order.customer_name}."
+            return "No problem. Please spell the name for me."
+
+        action = fsm.confirm_name(
+            conversation_context,
+            accepted=confirmed,
+            corrected_name=corrected_name,
+            spelled_name=spelled_name,
+        )
+        if conversation_context.customer_name:
+            session_state.order.customer_name = conversation_context.customer_name
+        elif conversation_context.pending_name:
+            session_state.order.customer_name = conversation_context.pending_name
+        await session_state.publish_snapshot(
+            reason="name_captured" if conversation_context.name_confirmed else "name_capture_pending"
+        )
+        return action.message
 
     @function_tool
     async def set_confirmation_status(

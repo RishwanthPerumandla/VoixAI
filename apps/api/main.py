@@ -37,6 +37,17 @@ from voix_ordering.menu import (
 )
 from voix_ordering.validation import _validation_errors_for_line
 
+from services import (
+    ConversationSessionService,
+    CustomerService,
+    MenuSeedService,
+    OrderService,
+    StoreService,
+    format_money,
+    line_inputs_from_quote,
+    make_public_code,
+    normalize_phone,
+)
 from storage import CallRecord, OrderRecord, build_storage
 
 logger = logging.getLogger("voixai.api")
@@ -215,6 +226,18 @@ def _closest_menu_suggestions(raw_name: str) -> list[str]:
     return suggest_item_names(raw_name, limit=3)
 
 
+def _api_validation_messages(errors: list[str]) -> list[str]:
+    messages: list[str] = []
+    for error in errors:
+        if error.startswith("combo_side_selection is required"):
+            messages.append("This combo requires a side selection.")
+        elif error.startswith("combo_drink_selection is required"):
+            messages.append("This combo requires a drink selection.")
+        else:
+            messages.append(error)
+    return messages
+
+
 def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:
     canonical = json.dumps(payload.model_dump(mode="json"), sort_keys=True)
     digest = hashlib.sha256(f"{room_name}\n{canonical}".encode("utf-8")).hexdigest()
@@ -296,6 +319,45 @@ class CallSummary(BaseModel):
 class CallDetail(CallSummary):
     transcript: list[TranscriptTurn] = Field(default_factory=list)
     error: str | None = None
+
+
+class ConversationSessionResponse(BaseModel):
+    call_id: str
+    room_name: str
+    current_node: str | None = None
+    outcome: str | None = None
+
+
+class ConversationNodeUpdateRequest(BaseModel):
+    room_name: str = Field(min_length=1)
+    current_node: str = Field(min_length=1)
+
+
+class ConversationIdentifyRequest(BaseModel):
+    call_id: str = Field(min_length=1)
+    room_name: str = Field(min_length=1)
+    caller_id: str | None = None
+    phone: str | None = None
+
+
+class ConversationIdentifyResponse(BaseModel):
+    call_id: str
+    room_name: str
+    current_node: str | None = None
+    customer_id: str | None = None
+    phone: str | None = None
+    name: str | None = None
+    is_returning: bool = False
+    last_order_code: str | None = None
+    last_order_summary: str | None = None
+
+
+class ConversationNameRequest(BaseModel):
+    call_id: str = Field(min_length=1)
+    room_name: str = Field(min_length=1)
+    customer_id: str | None = None
+    phone: str | None = None
+    name: str = Field(min_length=1)
 
 
 class CallListResponse(BaseModel):
@@ -407,6 +469,21 @@ def _call_to_detail(record: CallRecord) -> CallDetail:
     )
 
 
+def _conversation_session_to_response(row) -> ConversationSessionResponse:
+    return ConversationSessionResponse(
+        call_id=row.call_id,
+        room_name=row.room_name,
+        current_node=row.current_node,
+        outcome=row.outcome,
+    )
+
+
+def _latest_order_summary(order) -> str | None:
+    if order is None:
+        return None
+    return f"{order.public_code} ({order.status}, total {format_money(order.total)}, ETA {order.eta_minutes} minutes)"
+
+
 _SERVER_STARTED_AT = time.time()
 
 
@@ -486,7 +563,7 @@ async def resolve_menu_selection(payload: MenuResolveRequest) -> MenuResolveResp
             selected_modifier_ids=modifier_ids,
             notes=(payload.special_instructions or "").strip(),
         )
-        line_errors = _validation_errors_for_line(line)
+        line_errors = _api_validation_messages(_validation_errors_for_line(line))
 
     return MenuResolveResponse(
         item_id=item_id,
@@ -561,6 +638,77 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
 
     quote = build_price_quote(order)
     order_json = json.dumps(payload.order.model_dump(mode="json"))
+    order_payload = payload.order.model_dump(mode="json")
+
+    if hasattr(ORDER_STORAGE, "_Session"):
+        for _ in range(5):
+            try:
+                with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+                    existing_order = OrderService(session)._by_idempotency_key(key)
+                    if existing_order is not None:
+                        record = OrderRecord(
+                            order_number=existing_order.public_code,
+                            idempotency_key=existing_order.idempotency_key or key,
+                            room_name=existing_order.room_name or payload.room_name,
+                            status=existing_order.status,
+                            subtotal=f"${existing_order.subtotal:,.2f}",
+                            tax=f"${existing_order.tax:,.2f}",
+                            total=f"${existing_order.total:,.2f}",
+                            eta_minutes=existing_order.eta_minutes,
+                            order_json=existing_order.order_json,
+                            kitchen_ticket=existing_order.kitchen_ticket,
+                            created_at=(existing_order.placed_at or existing_order.updated_at).timestamp(),
+                        )
+                        return _order_record_to_response(record, idempotent_replay=True)
+
+                    MenuSeedService(session).seed_menu()
+                    store = StoreService(session).get_default_store()
+                    customer = None
+                    if payload.order.phone.strip():
+                        customer = CustomerService(session).upsert_by_phone(
+                            payload.order.phone,
+                            name=payload.order.customer_name,
+                            preferred_language=payload.order.language,
+                        )
+                    order_number = make_public_code(session)
+                    kitchen_ticket = _build_kitchen_ticket(order, quote, order_number)
+                    draft = OrderService(session).create_draft(
+                        public_code=order_number,
+                        customer=customer,
+                        store=store,
+                        room_name=payload.room_name,
+                        idempotency_key=key,
+                    )
+                    OrderService(session).mutate_lines(
+                        draft,
+                        line_inputs_from_quote(order_payload, quote.line_items),
+                        subtotal=quote.subtotal,
+                        tax=quote.tax,
+                        total=quote.total,
+                        eta_minutes=quote.eta_minutes,
+                        order_json=order_json,
+                        kitchen_ticket=kitchen_ticket,
+                    )
+                    confirmed = OrderService(session).confirm(draft, idempotency_key=key)
+                    session.commit()
+                    logger.info("Persisted order %s for room %s", confirmed.public_code, payload.room_name)
+                    record = OrderRecord(
+                        order_number=confirmed.public_code,
+                        idempotency_key=confirmed.idempotency_key or key,
+                        room_name=confirmed.room_name or payload.room_name,
+                        status=confirmed.status,
+                        subtotal=f"${confirmed.subtotal:,.2f}",
+                        tax=f"${confirmed.tax:,.2f}",
+                        total=f"${confirmed.total:,.2f}",
+                        eta_minutes=confirmed.eta_minutes,
+                        order_json=confirmed.order_json,
+                        kitchen_ticket=confirmed.kitchen_ticket,
+                        created_at=(confirmed.placed_at or confirmed.updated_at).timestamp(),
+                    )
+                    return _order_record_to_response(record, idempotent_replay=False)
+            except Exception:
+                logger.exception("SQLAlchemy order persist failed; retrying if possible")
+        raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
 
     for _ in range(5):
         order_number = _new_order_number()
@@ -653,6 +801,108 @@ async def get_order(order_number: str) -> OrderSubmitResponse:
     if record is None:
         raise HTTPException(status_code=404, detail="Order not found.")
     return _order_record_to_response(record, idempotent_replay=False)
+
+
+@app.get("/api/conversation/sessions/{call_id}", response_model=ConversationSessionResponse)
+async def get_conversation_session(call_id: str) -> ConversationSessionResponse:
+    def _get():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            from models import CallSession
+            from sqlalchemy import select
+
+            row = session.scalar(select(CallSession).where(CallSession.call_id == call_id))
+            return _conversation_session_to_response(row) if row else None
+
+    record = await asyncio.to_thread(_get)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Conversation session not found.")
+    return record
+
+
+@app.patch("/api/conversation/sessions/{call_id}/node", response_model=ConversationSessionResponse)
+async def update_conversation_node(
+    call_id: str,
+    payload: ConversationNodeUpdateRequest,
+) -> ConversationSessionResponse:
+    def _update():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            row = ConversationSessionService(session).set_current_node(
+                call_id=call_id,
+                room_name=payload.room_name,
+                current_node=payload.current_node,
+            )
+            session.commit()
+            return _conversation_session_to_response(row)
+
+    return await asyncio.to_thread(_update)
+
+
+@app.post("/api/conversation/identify", response_model=ConversationIdentifyResponse)
+async def identify_conversation_caller(
+    payload: ConversationIdentifyRequest,
+) -> ConversationIdentifyResponse:
+    def _identify():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            call_session, customer, is_returning, latest_order = ConversationSessionService(session).identify(
+                call_id=payload.call_id,
+                room_name=payload.room_name,
+                caller_id=payload.caller_id,
+                phone=payload.phone,
+            )
+            call_session.current_node = "IDENTIFY"
+            session.commit()
+            return ConversationIdentifyResponse(
+                call_id=call_session.call_id,
+                room_name=call_session.room_name,
+                current_node=call_session.current_node,
+                customer_id=customer.id if customer else None,
+                phone=customer.phone if customer else normalize_phone(payload.phone or payload.caller_id),
+                name=customer.name if customer else None,
+                is_returning=is_returning,
+                last_order_code=latest_order.public_code if latest_order else None,
+                last_order_summary=_latest_order_summary(latest_order),
+            )
+
+    return await asyncio.to_thread(_identify)
+
+
+@app.post("/api/conversation/name", response_model=ConversationIdentifyResponse)
+async def persist_conversation_name(
+    payload: ConversationNameRequest,
+) -> ConversationIdentifyResponse:
+    def _persist_name():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            conversation = ConversationSessionService(session).start_or_resume(
+                call_id=payload.call_id,
+                room_name=payload.room_name,
+                current_node="IDENTIFY",
+            )
+            customer = None
+            if payload.customer_id:
+                from models import Customer
+
+                customer = session.get(Customer, payload.customer_id)
+            if customer is None:
+                phone = normalize_phone(payload.phone)
+                if not phone:
+                    raise HTTPException(status_code=422, detail="A phone number is required to persist the caller name.")
+                customer = CustomerService(session).upsert_by_phone(phone)
+            customer = CustomerService(session).attach_name(customer.id, payload.name)
+            latest_order = OrderService(session).get_latest_by_phone(customer.phone)
+            session.commit()
+            return ConversationIdentifyResponse(
+                call_id=conversation.call_id,
+                room_name=conversation.room_name,
+                current_node=conversation.current_node,
+                customer_id=customer.id,
+                phone=customer.phone,
+                name=customer.name,
+                is_returning=True,
+                last_order_code=latest_order.public_code if latest_order else None,
+                last_order_summary=_latest_order_summary(latest_order),
+            )
+
+    return await asyncio.to_thread(_persist_name)
 
 
 @app.post("/api/calls", response_model=CallDetail)

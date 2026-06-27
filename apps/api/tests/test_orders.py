@@ -45,8 +45,8 @@ async def test_submit_order_persists_and_returns_number(storage: SqliteStorage) 
         api_main.OrderSubmitRequest(room_name="room-a", order=_confirmed_order_payload())
     )
 
-    assert response.order_number.startswith("MOCK-")
-    assert response.status == "submitted"
+    assert response.order_number.startswith("WS-")
+    assert response.status == "confirmed"
     assert response.total == "$8.65"  # boneless_6 ($7.99) + 8.25% tax
     assert response.idempotent_replay is False
     assert "VOIX WINGS DEMO" in response.kitchen_ticket
