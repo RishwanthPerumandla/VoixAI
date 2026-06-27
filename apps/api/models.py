@@ -87,6 +87,8 @@ class CallSession(Base):
     room_name = Column(String(255), nullable=False, index=True)
     current_node = Column(String(80), nullable=True)
     outcome = Column(String(40), nullable=True)
+    recording_url = Column(Text, nullable=True)
+    call_intent = Column(String(80), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -143,6 +145,48 @@ class OrderItem(Base):
     menu_item = relationship("MenuItem", back_populates="order_items")
 
 
+class TranscriptTurnModel(Base):
+    __tablename__ = "transcript_turns"
+
+    id = Column(String(32), primary_key=True, default=new_id)
+    call_id = Column(String(120), nullable=False, index=True)
+    seq = Column(Integer, nullable=False)
+    speaker = Column(String(32), nullable=False)
+    text = Column(Text, nullable=False, default="")
+    ts_start = Column(Float, nullable=True)
+    ts_end = Column(Float, nullable=True)
+    stt_confidence = Column(Float, nullable=True)
+    state_node = Column(String(80), nullable=True)
+    intent = Column(String(80), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (Index("ix_transcript_turns_call_seq", "call_id", "seq"),)
+
+
+class CallEventModel(Base):
+    __tablename__ = "call_events"
+
+    id = Column(String(32), primary_key=True, default=new_id)
+    call_id = Column(String(120), nullable=False, index=True)
+    ts = Column(Float, nullable=False)
+    type = Column(String(80), nullable=False, index=True)
+    payload = Column(JsonType, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (Index("ix_call_events_call_ts", "call_id", "ts"),)
+
+
+class EscalationModel(Base):
+    __tablename__ = "escalations"
+
+    id = Column(String(32), primary_key=True, default=new_id)
+    call_id = Column(String(120), nullable=False, index=True)
+    reason_code = Column(String(80), nullable=False)
+    frustration_score = Column(Float, nullable=False, default=0.0)
+    triggered_at = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
 class RuntimeSession(Base):
     __tablename__ = "sessions"
 
@@ -163,6 +207,7 @@ class CallRecordModel(Base):
     llm_model = Column(String(120), nullable=False, default="")
     status = Column(String(32), nullable=False, default="in_progress")
     outcome = Column(String(32), nullable=False, default="unknown")
+    call_intent = Column(String(80), nullable=True)
     started_at = Column(Float, nullable=False)
     ended_at = Column(Float, nullable=True)
     duration_seconds = Column(Float, nullable=True)
@@ -170,6 +215,7 @@ class CallRecordModel(Base):
     sentiment = Column(Float, nullable=True)
     language = Column(String(32), nullable=False, default="english")
     order_number = Column(String(32), nullable=True)
+    recording_url = Column(Text, nullable=True)
     transcript_json = Column(Text, nullable=False, default="[]")
     guardrail_violations = Column(Integer, nullable=False, default=0)
     error = Column(Text, nullable=True)

@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -318,7 +319,45 @@ class CallSummary(BaseModel):
 
 class CallDetail(CallSummary):
     transcript: list[TranscriptTurn] = Field(default_factory=list)
+    recording_url: str | None = None
+    call_intent: str | None = None
     error: str | None = None
+
+
+class TurnAppendRequest(BaseModel):
+    speaker: str = Field(min_length=1)
+    text: str = ""
+    ts_start: float | None = None
+    ts_end: float | None = None
+    stt_confidence: float | None = None
+    state_node: str | None = None
+    intent: str | None = None
+
+
+class TurnResponse(BaseModel):
+    id: str
+    seq: int
+    speaker: str
+    text: str
+    ts_start: float | None = None
+    ts_end: float | None = None
+    stt_confidence: float | None = None
+    state_node: str | None = None
+    intent: str | None = None
+
+
+class EventRequest(BaseModel):
+    ts: float
+    type: str = Field(min_length=1)
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class EventResponse(BaseModel):
+    id: str
+    call_id: str
+    ts: float
+    type: str
+    payload: dict[str, object]
 
 
 class ConversationSessionResponse(BaseModel):
@@ -405,15 +444,21 @@ class AnalyticsOverview(BaseModel):
     failed_calls: int
     success_rate: float
     containment_rate: float
+    completion_rate: float
     orders_placed: int
     revenue_total: str
+    aov: str
     avg_duration_seconds: float
     avg_turns: float
     avg_sentiment: float | None
+    p50_latency_seconds: float | None
+    p95_latency_seconds: float | None
     transfers: int
     abandoned: int
+    abandonment_rate: float
     outcomes: dict[str, int]
     sentiment_breakdown: dict[str, int]
+    intent_distribution: dict[str, int]
     series: list[TimeBucket]
 
 
@@ -465,6 +510,8 @@ def _call_to_detail(record: CallRecord) -> CallDetail:
     return CallDetail(
         **_call_to_summary(record).model_dump(),
         transcript=[TranscriptTurn(**t) for t in turns if isinstance(t, dict)],
+        recording_url=record.recording_url,
+        call_intent=record.call_intent,
         error=record.error,
     )
 
@@ -487,7 +534,20 @@ def _latest_order_summary(order) -> str | None:
 _SERVER_STARTED_AT = time.time()
 
 
-app = FastAPI(title="VoixAI MVP API", version="0.2.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    from kitchen_ticker import KitchenTicker
+
+    storage = build_storage()
+    ticker = KitchenTicker(session_factory=storage._Session)
+    ticker.start()
+    try:
+        yield
+    finally:
+        await ticker.stop()
+
+
+app = FastAPI(title="VoixAI MVP API", version="0.2.0", lifespan=_lifespan)
 allow_origins = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
 allow_origin_regex = ALLOWED_ORIGIN_REGEX
 
@@ -915,26 +975,28 @@ async def start_call(payload: CallStartRequest) -> CallDetail:
 
     now = time.time()
     record = CallRecord(
-        call_id=payload.call_id,
-        room_name=payload.room_name,
-        scenario=payload.scenario,
-        channel=payload.channel,
-        voice_provider=payload.voice_provider,
-        llm_model=payload.llm_model,
-        status="in_progress",
-        outcome="unknown",
-        started_at=payload.started_at or now,
-        ended_at=None,
-        duration_seconds=None,
-        turn_count=0,
-        sentiment=None,
-        language=payload.language,
-        order_number=None,
-        transcript_json="[]",
-        guardrail_violations=0,
-        error=None,
-        created_at=now,
-    )
+            call_id=payload.call_id,
+            room_name=payload.room_name,
+            scenario=payload.scenario,
+            channel=payload.channel,
+            voice_provider=payload.voice_provider,
+            llm_model=payload.llm_model,
+            status="in_progress",
+            outcome="unknown",
+            call_intent=None,
+            started_at=payload.started_at or now,
+            ended_at=None,
+            duration_seconds=None,
+            turn_count=0,
+            sentiment=None,
+            language=payload.language,
+            order_number=None,
+            recording_url=None,
+            transcript_json="[]",
+            guardrail_violations=0,
+            error=None,
+            created_at=now,
+        )
     result = await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
     if result is None:
         replay = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, payload.call_id)
@@ -990,6 +1052,77 @@ async def get_call(call_id: str) -> CallDetail:
     return _call_to_detail(record)
 
 
+# ── Transcript turns (per-turn persistence) ──────────────────────────────
+
+
+class TurnAppendBatchRequest(BaseModel):
+    turns: list[TurnAppendRequest]
+
+
+@app.post("/api/calls/{call_id}/turns", status_code=201)
+async def append_call_turns(call_id: str, payload: TurnAppendBatchRequest) -> dict[str, int]:
+    """Append one or more transcript turns. The caller supplies the seq number."""
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    next_seq = await asyncio.to_thread(ORDER_STORAGE.count_turns, call_id)
+    inserted = 0
+    for i, turn in enumerate(payload.turns):
+        ok = await asyncio.to_thread(
+            ORDER_STORAGE.insert_turn,
+            call_id,
+            next_seq + i + 1,
+            turn.speaker,
+            turn.text,
+            ts_start=turn.ts_start,
+            ts_end=turn.ts_end,
+            stt_confidence=turn.stt_confidence,
+            state_node=turn.state_node,
+            intent=turn.intent,
+        )
+        if ok:
+            inserted += 1
+    return {"inserted": inserted}
+
+
+@app.get("/api/calls/{call_id}/transcript", response_model=list[TurnResponse])
+async def get_call_transcript(call_id: str) -> list[TurnResponse]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    turns = await asyncio.to_thread(ORDER_STORAGE.list_turns, call_id)
+    return [TurnResponse(**t) for t in turns]
+
+
+# ── Analytics events ──────────────────────────────────────────────────────
+
+
+@app.post("/api/calls/{call_id}/events", status_code=201)
+async def record_call_event(call_id: str, payload: EventRequest) -> dict[str, str]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    ok = await asyncio.to_thread(
+        ORDER_STORAGE.insert_event,
+        call_id,
+        payload.ts,
+        payload.type,
+        dict(payload.payload),
+    )
+    if not ok:
+        raise HTTPException(status_code=409, detail="Event could not be recorded.")
+    return {"status": "ok"}
+
+
+@app.get("/api/calls/{call_id}/events", response_model=list[EventResponse])
+async def get_call_events(call_id: str) -> list[EventResponse]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    events = await asyncio.to_thread(ORDER_STORAGE.list_events, call_id=call_id)
+    return [EventResponse(**e) for e in events]
+
+
 def _money_to_float(value: str) -> float:
     try:
         return float(str(value).replace("$", "").replace(",", "").strip() or 0)
@@ -1017,8 +1150,8 @@ async def analytics_overview(
 
     durations = [r.duration_seconds for r in records if r.duration_seconds is not None]
     avg_duration = sum(durations) / len(durations) if durations else 0.0
-    turns = [r.turn_count for r in records if r.turn_count]
-    avg_turns = sum(turns) / len(turns) if turns else 0.0
+    turns_list = [r.turn_count for r in records if r.turn_count]
+    avg_turns = sum(turns_list) / len(turns_list) if turns_list else 0.0
     sentiments = [r.sentiment for r in records if r.sentiment is not None]
     avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else None
 
@@ -1044,6 +1177,20 @@ async def analytics_overview(
         if order is not None:
             revenue += _money_to_float(order.total)
 
+    aov = revenue / orders_placed if orders_placed else 0.0
+
+    # Latency samples from call_events.
+    latency_samples = await asyncio.to_thread(ORDER_STORAGE.get_latency_samples, since)
+    p50 = None
+    p95 = None
+    if latency_samples:
+        sorted_lat = sorted(latency_samples)
+        p50 = sorted_lat[len(sorted_lat) // 2]
+        p95 = sorted_lat[int(len(sorted_lat) * 0.95) - 1]
+
+    # Intent distribution from call_sessions.call_intent.
+    intent_distribution = await asyncio.to_thread(ORDER_STORAGE.get_intent_distribution, since)
+
     # Time series buckets across the window.
     bucket_span = (window_hours * 3600) / buckets
     series: list[TimeBucket] = []
@@ -1064,6 +1211,8 @@ async def analytics_overview(
 
     success_rate = (completed / len(finished)) if finished else 0.0
     containment_rate = (1 - (transfers / len(finished))) if finished else 0.0
+    completion_rate = orders_placed / total if total else 0.0
+    abandonment_rate = abandoned / total if total else 0.0
 
     return AnalyticsOverview(
         window_hours=window_hours,
@@ -1073,15 +1222,21 @@ async def analytics_overview(
         failed_calls=failed,
         success_rate=round(success_rate, 4),
         containment_rate=round(containment_rate, 4),
+        completion_rate=round(completion_rate, 4),
         orders_placed=orders_placed,
         revenue_total=f"${revenue:,.2f}",
+        aov=f"${aov:,.2f}",
         avg_duration_seconds=round(avg_duration, 1),
         avg_turns=round(avg_turns, 1),
         avg_sentiment=round(avg_sentiment, 3) if avg_sentiment is not None else None,
+        p50_latency_seconds=round(p50, 3) if p50 is not None else None,
+        p95_latency_seconds=round(p95, 3) if p95 is not None else None,
         transfers=transfers,
         abandoned=abandoned,
+        abandonment_rate=round(abandonment_rate, 4),
         outcomes=outcomes,
         sentiment_breakdown=sentiment_breakdown,
+        intent_distribution=intent_distribution,
         series=series,
     )
 

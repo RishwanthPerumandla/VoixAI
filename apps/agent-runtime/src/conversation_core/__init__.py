@@ -1,5 +1,6 @@
 """Shared conversation-core layer for all voice providers."""
 
+from .order_fsm import OrderSubFSM, OrderSubNode
 from .router import Intent, RouterResult, IntentRouter
 from .state_machine import (
     ConversationContext,
@@ -17,6 +18,8 @@ __all__ = [
     "Intent",
     "IntentRouter",
     "NodeName",
+    "OrderSubFSM",
+    "OrderSubNode",
     "RouterResult",
     "StateAction",
     "StateNode",

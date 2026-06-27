@@ -378,6 +378,23 @@ class OrderService:
             .limit(1)
         )
 
+    def advance_kitchen_ticker(self) -> int:
+        """Advance every order in the *earliest* non-empty stage by one stage.
+        confirmed→in_kitchen→ready→completed. Returns number advanced."""
+        for stage in ("confirmed", "in_kitchen", "ready"):
+            rows = self.session.scalars(
+                select(Order).where(Order.status == stage).limit(10)
+            ).all()
+            if not rows:
+                continue
+            next_stage = {"confirmed": "in_kitchen", "in_kitchen": "ready", "ready": "completed"}[stage]
+            for row in rows:
+                row.status = next_stage
+                row.updated_at = utc_now()
+            self.session.flush()
+            return len(rows)
+        return 0
+
     def _by_idempotency_key(self, key: str | None) -> Order | None:
         if not key:
             return None

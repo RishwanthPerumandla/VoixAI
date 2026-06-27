@@ -1,6 +1,6 @@
 {
-  "total_scenarios": 191,
-  "passed": 191,
+  "total_scenarios": 199,
+  "passed": 199,
   "failed": 0,
   "pass_rate": 100.0,
   "failures_by_category": {
@@ -14,11 +14,15 @@
     "bilingual": 0,
     "confirmation_gate": 0,
     "pricing_repricing": 0,
-    "session_lifecycle": 0
+    "session_lifecycle": 0,
+    "split_flavor": 0,
+    "mid_order_correction": 0,
+    "escalation": 0,
+    "idempotent_confirm": 0
   },
   "validation_failures_expected": 21,
   "correction_cases_passed": 34,
   "cancellation_cases_passed": 20,
   "confirmation_gate_cases_passed": 18,
-  "generated_at": "2026-06-27T15:01:37.354019+00:00"
+  "generated_at": "2026-06-27T19:00:18.855732+00:00"
 }

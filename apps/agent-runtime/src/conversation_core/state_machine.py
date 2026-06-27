@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from .router import Intent, IntentRouter, RouterResult
 
@@ -22,6 +23,27 @@ class NodeName(str, Enum):
 
 
 @dataclass
+class OrderRecord:
+    order_number: str
+    status: str
+    subtotal: str
+    tax: str
+    total: str
+    eta_minutes: int
+    created_at: float | None = None
+
+
+@dataclass
+class StoreInfoRecord:
+    name: str
+    address: str
+    phone: str
+    timezone: str
+    hours: dict[str, dict[str, str]]
+    is_open_now: bool
+
+
+@dataclass
 class ConversationContext:
     call_id: str
     room_name: str
@@ -36,6 +58,15 @@ class ConversationContext:
     clarification_count: int = 0
     pending_name: str | None = None
     name_confirmed: bool = False
+    order_sub_fsm: Any | None = field(default=None, repr=False, compare=False)
+    order_sub_node: str | None = None
+    # Multi-turn flow flags
+    track_pending: bool = False
+    cancel_pending_order: str | None = None
+    cancel_pending_text: str = ""
+    # Escalation
+    frustration_decision: Any | None = field(default=None, repr=False, compare=False)
+    outcome: str | None = None
     telemetry: list[dict[str, object]] = field(default_factory=list)
 
 
@@ -66,12 +97,92 @@ class ConversationRepository(Protocol):
 
     def persist_customer_name(self, context: ConversationContext, name: str) -> ConversationContext: ...
 
+    def get_order_by_code(self, code: str) -> OrderRecord | None: ...
+
+    def get_latest_active_order_by_phone(self, phone: str) -> OrderRecord | None: ...
+
+    def cancel_order(self, order_number: str) -> bool: ...
+
+    def get_store_info(self) -> StoreInfoRecord: ...
+
+    def get_item_available(self, item_name_or_id: str) -> bool: ...
+
+    def record_escalation(
+        self, call_id: str, reason_code: str, frustration_score: float, triggered_at: float
+    ) -> None: ...
+
+    def set_call_outcome(self, call_id: str, outcome: str) -> None: ...
+
 
 class InMemoryConversationRepository:
     def __init__(self) -> None:
         self.nodes: dict[str, NodeName] = {}
         self.customers: dict[str, dict[str, object]] = {}
         self.persisted_names: dict[str, str] = {}
+        self._orders: dict[str, OrderRecord] = {}
+        self._store: StoreInfoRecord | None = None
+        self._unavailable_items: set[str] = set()
+        self._outcomes: dict[str, str] = {}
+        self._escalations: list[dict[str, object]] = []
+
+    def seed_order(self, record: OrderRecord) -> None:
+        self._orders[record.order_number] = record
+
+    def seed_store(self, record: StoreInfoRecord) -> None:
+        self._store = record
+
+    def mark_item_unavailable(self, item_name_or_id: str) -> None:
+        self._unavailable_items.add(item_name_or_id.lower())
+
+    # --- protocol methods for ordering data ---
+
+    def record_escalation(self, call_id: str, reason_code: str, frustration_score: float, triggered_at: float) -> None:
+        self._escalations.append({
+            "call_id": call_id,
+            "reason_code": reason_code,
+            "frustration_score": frustration_score,
+            "triggered_at": triggered_at,
+        })
+
+    def set_call_outcome(self, call_id: str, outcome: str) -> None:
+        self._outcomes[call_id] = outcome
+
+    def get_order_by_code(self, code: str) -> OrderRecord | None:
+        return self._orders.get(code)
+
+    def get_latest_active_order_by_phone(self, phone: str) -> OrderRecord | None:
+        active = [o for o in self._orders.values() if o.status in ("confirmed", "in_kitchen", "ready")]
+        if not active:
+            return None
+        return max(active, key=lambda o: o.created_at or 0)
+
+    def cancel_order(self, order_number: str) -> bool:
+        record = self._orders.get(order_number)
+        if record is None or record.status in ("completed", "cancelled"):
+            return False
+        record.status = "cancelled"
+        return True
+
+    def get_store_info(self) -> StoreInfoRecord:
+        if self._store is not None:
+            return self._store
+        return StoreInfoRecord(
+            name="Wingstop Dallas",
+            address="Demo Store - Dallas, TX",
+            phone="2145550100",
+            timezone="America/Chicago",
+            hours={
+                day: {"open": "10:30", "close": "23:00"}
+                for day in ("mon", "tue", "wed", "thu", "sun")
+            } | {
+                day: {"open": "10:30", "close": "00:00"}
+                for day in ("fri", "sat")
+            },
+            is_open_now=True,
+        )
+
+    def get_item_available(self, item_name_or_id: str) -> bool:
+        return item_name_or_id.lower() not in self._unavailable_items
 
     def seed_customer(
         self,
@@ -215,6 +326,25 @@ class ConversationStateMachine:
     def handle_turn(self, context: ConversationContext, text: str) -> StateAction:
         current = self.repository.get_current_node(context.call_id) or context.current_node or NodeName.ROUTE
         context.current_node = current
+
+        # When in ORDER sub-FSM, delegate directly without re-routing.
+        if current == NodeName.ORDER and context.order_sub_fsm is not None:
+            action = context.order_sub_fsm.handle_turn(context, getattr(context, "_order_state", None), text)
+            telemetry_events = list(action.telemetry_events)
+            context.telemetry.extend(telemetry_events)
+            if action.node == NodeName.ROUTE:
+                self._persist(context, NodeName.ROUTE)
+            return action
+
+        # Multi-turn flows: stay in node without re-routing when pending flags set
+        if current == NodeName.TRACK and context.track_pending:
+            context.track_pending = False
+            result = self.router.route(text)
+            return self._enter(NodeName.TRACK, context, result)
+        if current == NodeName.CANCEL and context.cancel_pending_order:
+            context.cancel_pending_text = text
+            return self._enter(NodeName.CANCEL, context, None)
+
         if current != NodeName.ROUTE:
             self._persist(context, NodeName.ROUTE)
             context.current_node = NodeName.ROUTE
@@ -252,6 +382,21 @@ class ConversationStateMachine:
             corrected_name=corrected_name,
             spelled_name=spelled_name,
         )
+
+    def force_escalate(self, context: ConversationContext, decision: Any) -> StateAction:
+        """Bypass routing and force the FSM into the ESCALATE node."""
+        context.frustration_decision = decision
+        context.outcome = "escalated"
+        return self._enter(NodeName.ESCALATE, context, None)
+
+    def record_escalation(self, context: ConversationContext, decision: Any) -> None:
+        import time
+        reason_code = decision.reason_code if decision else "explicit_handoff_request"
+        score = decision.frustration_score if decision else 100.0
+        self.repository.record_escalation(
+            context.call_id, reason_code, score, time.time()
+        )
+        self.repository.set_call_outcome(context.call_id, "escalated")
 
     def _enter(
         self,
@@ -299,11 +444,11 @@ class ConversationStateMachine:
                 ("state_enter", "intent_routed"),
                 lambda ctx, result: StateAction(NodeName.ROUTE, "", (), result, False),
             ),
-            NodeName.ORDER: self._stub(NodeName.ORDER, "I can help start that order.", (Intent.PLACE_ORDER, Intent.MODIFY_ORDER)),
-            NodeName.TRACK: self._stub(NodeName.TRACK, "I can help track that order.", (Intent.TRACK_ORDER,)),
-            NodeName.STORE_INFO: self._stub(NodeName.STORE_INFO, "I can help with store information.", (Intent.STORE_INFO,)),
-            NodeName.CANCEL: self._stub(NodeName.CANCEL, "I can help cancel an order after confirming the details.", (Intent.CANCEL_ORDER,)),
-            NodeName.ESCALATE: self._stub(NodeName.ESCALATE, "I will get a team member to help.", (Intent.SPEAK_TO_HUMAN,)),
+            NodeName.ORDER: self._order_node(),
+            NodeName.TRACK: self._track_node(),
+            NodeName.STORE_INFO: self._store_info_node(),
+            NodeName.CANCEL: self._cancel_node(),
+            NodeName.ESCALATE: self._escalate_node(),
             NodeName.WRAPUP: StateNode(
                 NodeName.WRAPUP,
                 frozenset(),
@@ -317,6 +462,273 @@ class ConversationStateMachine:
                 ),
             ),
         }
+
+    def _order_node(self) -> StateNode:
+        return StateNode(
+            NodeName.ORDER,
+            frozenset(Intent),
+            {
+                Intent.CANCEL_ORDER: NodeName.CANCEL,
+                Intent.SPEAK_TO_HUMAN: NodeName.ESCALATE,
+                Intent.SMALLTALK_OR_UNKNOWN: NodeName.ROUTE,
+            },
+            ("state_enter", "order_started"),
+            self._on_order_enter,
+        )
+
+    def _on_order_enter(self, context: ConversationContext, result: RouterResult | None) -> StateAction:
+        from .order_fsm import OrderSubFSM
+
+        context.order_sub_fsm = OrderSubFSM(context)
+        context.order_sub_node = "SELECT_ITEM"
+        message = "Let me help you place an order. What would you like today?"
+        return StateAction(
+            NodeName.ORDER,
+            message,
+            (
+                {"type": "state_enter", "node": NodeName.ORDER.value},
+                {"type": "order_sub_fsm_started", "sub_node": "SELECT_ITEM"},
+            ),
+            result,
+        )
+
+    # ── TRACK node ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _status_text(status: str) -> str:
+        return {
+            "draft": "is still being prepared",
+            "confirmed": "has been confirmed",
+            "in_kitchen": "is being prepared in the kitchen",
+            "ready": "is ready for pickup",
+            "completed": "has been completed",
+            "cancelled": "was cancelled",
+        }.get(status, f"is {status}")
+
+    def _track_node(self) -> StateNode:
+        return StateNode(
+            NodeName.TRACK,
+            frozenset({Intent.TRACK_ORDER}),
+            {},
+            ("state_enter", "track_started"),
+            self._on_track_enter,
+        )
+
+    def _on_track_enter(self, context: ConversationContext, result: RouterResult | None) -> StateAction:
+        slots = result.slots if result else {}
+        code = slots.get("order_code", "")
+
+        # If pending was cleared, code was extracted by router in the re-route pass
+        if code:
+            record = self.repository.get_order_by_code(str(code))
+            if record is not None:
+                status = self._status_text(record.status)
+                eta = f" It should be ready in about {record.eta_minutes} minutes." if record.eta_minutes else ""
+                self._persist(context, NodeName.ROUTE)
+                return StateAction(
+                    NodeName.ROUTE,
+                    f"Order {record.order_number} {status}.{eta} The total was {record.total}.",
+                    ({"type": "track_result", "order_number": record.order_number, "status": record.status},),
+                    router_result=result,
+                    requires_response=False,
+                )
+            self._persist(context, NodeName.ROUTE)
+            return StateAction(
+                NodeName.ROUTE,
+                f"I couldn't find an order with code {code}. Would you like to try again or can I help with something else?",
+                ({"type": "track_not_found", "code": code},),
+                router_result=result,
+                requires_response=False,
+            )
+
+        # No code — try phone fallback
+        phone = context.caller_phone or ""
+        if phone:
+            record = self.repository.get_latest_active_order_by_phone(phone)
+            if record is not None:
+                status = self._status_text(record.status)
+                eta = f" It should be ready in about {record.eta_minutes} minutes." if record.eta_minutes else ""
+                self._persist(context, NodeName.ROUTE)
+                return StateAction(
+                    NodeName.ROUTE,
+                    f"Order {record.order_number} {status}.{eta} The total was {record.total}.",
+                    ({"type": "track_result", "order_number": record.order_number, "status": record.status},),
+                    router_result=result,
+                    requires_response=False,
+                )
+            self._persist(context, NodeName.ROUTE)
+            return StateAction(
+                NodeName.ROUTE,
+                "I couldn't find any active orders under your phone number. Would you like to place a new order?",
+                ({"type": "track_no_active_order"},),
+                router_result=result,
+                requires_response=False,
+            )
+
+        # No code and no phone — ask for the code
+        context.track_pending = True
+        self._persist(context, NodeName.TRACK)
+        return StateAction(
+            NodeName.TRACK,
+            "I can look up your order. Do you have an order number you can share?",
+            ({"type": "track_ask_code"},),
+            router_result=result,
+        )
+
+    # ── ESCALATE node ──────────────────────────────────────────────────────
+
+    def _escalate_node(self) -> StateNode:
+        return StateNode(
+            NodeName.ESCALATE,
+            frozenset({Intent.SPEAK_TO_HUMAN}),
+            {Intent.SPEAK_TO_HUMAN: NodeName.WRAPUP},
+            ("state_enter", "escalation_trigger"),
+            self._on_escalate_enter,
+        )
+
+    @staticmethod
+    def _on_escalate_enter(context: ConversationContext, result: RouterResult | None) -> StateAction:
+        import time
+        from .handoff import HANDOFF_MESSAGE
+
+        decision = context.frustration_decision
+        reason_code = decision.reason_code if decision else "explicit_handoff_request"
+        frustration_score = decision.frustration_score if decision else 100.0
+
+        context.outcome = "escalated"
+        now = time.time()
+
+        telemetry_events: list[dict[str, object]] = [
+            {"type": "state_enter", "node": NodeName.ESCALATE.value},
+            {
+                "type": "escalation_trigger",
+                "reason_code": reason_code,
+                "frustration_score": frustration_score,
+            },
+        ]
+
+        return StateAction(
+            NodeName.WRAPUP,
+            HANDOFF_MESSAGE,
+            tuple(telemetry_events),
+            router_result=result,
+            requires_response=False,
+        )
+
+    # ── CANCEL node ─────────────────────────────────────────────────────────
+
+    def _cancel_node(self) -> StateNode:
+        return StateNode(
+            NodeName.CANCEL,
+            frozenset({Intent.CANCEL_ORDER}),
+            {},
+            ("state_enter", "cancel_started"),
+            self._on_cancel_enter,
+        )
+
+    def _on_cancel_enter(self, context: ConversationContext, result: RouterResult | None) -> StateAction:
+        # If we have a pending cancellation, this is the confirmation turn
+        pending_code = context.cancel_pending_order
+        if pending_code:
+            text = context.cancel_pending_text
+            context.cancel_pending_order = None
+            context.cancel_pending_text = ""
+            if self._is_affirmative(text):
+                ok = self.repository.cancel_order(pending_code)
+                if ok:
+                    self._persist(context, NodeName.ROUTE)
+                    return StateAction(
+                        NodeName.ROUTE,
+                        f"OK, order {pending_code} has been cancelled.",
+                        ({"type": "cancel_completed", "order_number": pending_code},),
+                        router_result=result,
+                        requires_response=False,
+                    )
+                self._persist(context, NodeName.ROUTE)
+                return StateAction(
+                    NodeName.ROUTE,
+                    f"I wasn't able to cancel order {pending_code}. It may already be completed or cancelled.",
+                    ({"type": "cancel_failed", "order_number": pending_code},),
+                    router_result=result,
+                    requires_response=False,
+                )
+            self._persist(context, NodeName.ROUTE)
+            return StateAction(
+                NodeName.ROUTE,
+                f"OK, I won't cancel order {pending_code}. Is there anything else I can help with?",
+                ({"type": "cancel_aborted", "order_number": pending_code},),
+                router_result=result,
+                requires_response=False,
+            )
+
+        slots = result.slots if result else {}
+        code = slots.get("order_code", "")
+        phone = context.caller_phone or ""
+
+        if code:
+            record = self.repository.get_order_by_code(str(code))
+        elif phone:
+            record = self.repository.get_latest_active_order_by_phone(phone)
+        else:
+            record = None
+
+        if record is None:
+            self._persist(context, NodeName.ROUTE)
+            return StateAction(
+                NodeName.ROUTE,
+                "I couldn't find an order to cancel. Do you have an order number?",
+                ({"type": "cancel_not_found"},),
+                router_result=result,
+                requires_response=False,
+            )
+
+        # Found the order — ask for confirmation (gate)
+        context.cancel_pending_order = record.order_number
+        self._persist(context, NodeName.CANCEL)
+        return StateAction(
+            NodeName.CANCEL,
+            f"Should I cancel order {record.order_number} for {record.total}?",
+            ({"type": "cancel_ask_confirm", "order_number": record.order_number},),
+            router_result=result,
+        )
+
+    # ── STORE_INFO node ─────────────────────────────────────────────────────
+
+    def _store_info_node(self) -> StateNode:
+        return StateNode(
+            NodeName.STORE_INFO,
+            frozenset({Intent.STORE_INFO}),
+            {},
+            ("state_enter", "store_info_started"),
+            self._on_store_info_enter,
+        )
+
+    def _on_store_info_enter(self, context: ConversationContext, result: RouterResult | None) -> StateAction:
+        store = self.repository.get_store_info()
+        is_open = store.is_open_now
+        open_status = "open now" if is_open else "closed right now"
+
+        parts = [f"{store.name} is {open_status}."]
+        parts.append("We're located at " + store.address + ".")
+        parts.append("Our phone number is " + store.phone + ".")
+        parts.append("Hours vary by day — most days 10:30 AM to 11:00 PM, Friday and Saturday until midnight.")
+
+        self._persist(context, NodeName.ROUTE)
+        return StateAction(
+            NodeName.ROUTE,
+            " ".join(parts),
+            ({"type": "store_info_result", "is_open": is_open},),
+            router_result=result,
+            requires_response=False,
+        )
+
+    @staticmethod
+    def _is_affirmative(text: str) -> bool:
+        lowered = text.lower().strip()
+        return any(
+            lowered.startswith(p) or p in lowered
+            for p in ("yes", "yeah", "sure", "correct", "that's right", "place it", "confirm", "go ahead", "si")
+        )
 
     def _stub(self, node_name: NodeName, message: str, intents: tuple[Intent, ...]) -> StateNode:
         return StateNode(

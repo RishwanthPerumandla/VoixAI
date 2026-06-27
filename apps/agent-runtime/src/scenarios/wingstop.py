@@ -31,7 +31,9 @@ from typing import Any
 
 from livekit.agents import Agent, RunContext, function_tool
 
+from call_recorder import record_provider_error
 from channels import ChannelDefinition
+from conversation_core.circuit_breaker import CircuitBreaker, CircuitState
 from scenarios.base import ScenarioDefinition
 
 # --- Ordering domain (single source of truth) -------------------------------
@@ -100,7 +102,19 @@ logger = logging.getLogger("agent")
 
 _MUTEX = asyncio.Lock()
 
+# Shared circuit breaker for backend HTTP calls.
+_BACKEND_CIRCUIT_BREAKER = CircuitBreaker(
+    failure_threshold=5,
+    recovery_timeout_seconds=30.0,
+    half_open_max_retries=3,
+    jitter_max_seconds=0.5,
+)
+
 API_BASE_URL = os.getenv("VOIXAI_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+
+
+def reset_backend_circuit_breaker() -> None:
+    _BACKEND_CIRCUIT_BREAKER.reset()
 
 
 # --- Prompt + greeting ------------------------------------------------------
@@ -319,6 +333,9 @@ def _backend_request(
     return {}
 
 
+_BACKEND_CIRCUIT_BREAKER_SKIP = False  # set True in tests to force fallback path
+
+
 async def _backend_request_async(
     method: str,
     path: str,
@@ -327,14 +344,35 @@ async def _backend_request_async(
     timeout_seconds: float = _BACKEND_TIMEOUT_SECONDS,
     attempts: int = _BACKEND_ATTEMPTS,
 ) -> dict[str, object]:
-    return await asyncio.to_thread(
-        _backend_request,
-        method,
-        path,
-        payload,
-        timeout_seconds=timeout_seconds,
-        attempts=attempts,
+    if _BACKEND_CIRCUIT_BREAKER_SKIP:
+        raise RuntimeError("Backend circuit breaker forced open (test mode)")
+
+    async def _do_request() -> dict[str, object]:
+        return await asyncio.to_thread(
+            _backend_request,
+            method,
+            path,
+            payload,
+            timeout_seconds=timeout_seconds,
+            attempts=attempts,
+        )
+
+    state = _BACKEND_CIRCUIT_BREAKER.state
+    if state == CircuitState.CLOSED or state == CircuitState.HALF_OPEN:
+        return await _BACKEND_CIRCUIT_BREAKER.acall(
+            _do_request,
+            fallback=None,
+        )
+
+    state_name = state.name
+    logger.warning("Backend circuit breaker %s — raising provider_error", state_name)
+    record_provider_error(
+        provider="backend_api",
+        operation=f"{method} {path}",
+        error=f"Circuit breaker {state_name}",
+        circuit_breaker_state=state_name,
     )
+    raise RuntimeError(f"Backend circuit breaker {state_name}")
 
 
 async def _resolve_selection_via_backend(
@@ -1080,7 +1118,7 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
                 session_state.mock_order.order_number,
             )
             await session_state.publish_snapshot(reason="mock_order_autoplaced")
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError):
+        except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError, RuntimeError):
             logger.exception("Auto-placement backend submit failed")
             session_state.placement_failure_count = getattr(session_state, "placement_failure_count", 0) + 1
     finally:
@@ -1841,7 +1879,7 @@ class WingstopAssistant(Agent):
                         summary=summarize_order_state(order),
                         kitchen_ticket=str(submitted.get("kitchen_ticket", "")),
                     )
-                except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError) as submit_err:
+                except (OSError, urllib.error.URLError, urllib.error.HTTPError, KeyError, RuntimeError) as submit_err:
                     # Keep the demo resilient: if the backend is unreachable, fall
                     # back to a local (non-persisted) order so the call still closes.
                     logger.critical(

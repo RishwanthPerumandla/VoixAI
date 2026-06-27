@@ -126,16 +126,47 @@ async def test_list_orders_filters_by_room(storage: SqliteStorage) -> None:
         api_main.OrderSubmitRequest(room_name="room-y", order=_confirmed_order_payload())
     )
 
-    # Scoped to a room -> only that room's order (drives the confirmation fallback).
     scoped = await api_main.list_orders(limit=50, offset=0, room_name="room-y")
     assert scoped.total == 1
     assert scoped.orders[0].room_name == "room-y"
     assert scoped.orders[0].order_number == placed_y.order_number
 
-    # Unknown room -> empty.
     empty = await api_main.list_orders(limit=50, offset=0, room_name="room-none")
     assert empty.total == 0
 
-    # No filter -> all orders.
     every = await api_main.list_orders(limit=50, offset=0, room_name=None)
     assert every.total == 2
+
+
+def test_kitchen_ticker_advances_orders(storage: SqliteStorage) -> None:
+    from sqlalchemy import select
+    from models import Order, utc_now
+    from services import OrderService
+
+    session = storage._Session()
+    try:
+        svc = OrderService(session)
+        now = utc_now()
+        svc.create_draft(public_code="K-1", customer=None, store=None)
+        svc.create_draft(public_code="K-2", customer=None, store=None)
+        svc.create_draft(public_code="K-3", customer=None, store=None)
+        for code, status in [("K-1", "confirmed"), ("K-2", "in_kitchen"), ("K-3", "ready")]:
+            row = session.scalar(select(Order).where(Order.public_code == code))
+            row.status = status
+            row.placed_at = now
+        session.flush()
+
+        # First tick advances all confirmed orders (only K-1)
+        assert svc.advance_kitchen_ticker() == 1
+        # Second tick advances all in_kitchen orders (K-1, K-2)
+        assert svc.advance_kitchen_ticker() == 2
+        # Third tick advances all ready orders (K-1, K-2, K-3)
+        assert svc.advance_kitchen_ticker() == 3
+
+        for code, expected in [("K-1", "completed"), ("K-2", "completed"), ("K-3", "completed")]:
+            row = session.scalar(select(Order).where(Order.public_code == code))
+            assert row.status == expected, f"{code} expected {expected} got {row.status}"
+
+        assert svc.advance_kitchen_ticker() == 0
+    finally:
+        session.close()

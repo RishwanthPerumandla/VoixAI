@@ -129,6 +129,75 @@ def open_call(
     )
 
 
+def append_turn(
+    *,
+    call_id: str,
+    speaker: str,
+    text: str,
+    ts_start: float | None = None,
+    ts_end: float | None = None,
+    stt_confidence: float | None = None,
+    state_node: str | None = None,
+    intent: str | None = None,
+) -> None:
+    """Persist a single transcript turn. Fire-and-forget, best-effort."""
+    _post_json(
+        f"/api/calls/{call_id}/turns",
+        {
+            "turns": [
+                {
+                    "speaker": speaker,
+                    "text": text,
+                    "ts_start": ts_start,
+                    "ts_end": ts_end,
+                    "stt_confidence": stt_confidence,
+                    "state_node": state_node,
+                    "intent": intent,
+                }
+            ]
+        },
+    )
+
+
+def record_event(
+    *,
+    call_id: str,
+    ts: float,
+    event_type: str,
+    payload: dict[str, object] | None = None,
+) -> None:
+    """Record an analytics event. Fire-and-forget, best-effort."""
+    _post_json(
+        f"/api/calls/{call_id}/events",
+        {
+            "ts": ts,
+            "type": event_type,
+            "payload": payload or {},
+        },
+    )
+
+
+def record_provider_error(
+    *,
+    provider: str,
+    operation: str,
+    error: str,
+    call_id: str = "",
+    circuit_breaker_state: str = "",
+) -> None:
+    """Log a provider error event for observability. Fire-and-forget."""
+    logger.warning("Provider error: %s/%s — %s", provider, operation, error)
+    payload: dict[str, object] = {
+        "provider": provider,
+        "operation": operation,
+        "error": str(error)[:500],
+    }
+    if circuit_breaker_state:
+        payload["circuit_breaker_state"] = circuit_breaker_state
+    if call_id:
+        record_event(call_id=call_id, ts=time.time(), event_type="provider_error", payload=payload)
+
+
 def finalize_call(
     *,
     call_id: str,

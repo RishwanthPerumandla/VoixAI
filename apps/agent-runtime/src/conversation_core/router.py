@@ -79,11 +79,18 @@ class IntentRouter:
         if self._has_any(normalized, ("manager", "human", "representative", "real person", "real human", "supervisor")):
             return RouterResult(Intent.SPEAK_TO_HUMAN, 0.98, {**slots, "handoff_requested": True}, False)
 
-        if "order_code" in slots or re.search(r"\b(track|status|where(?:'s| is)?|check).{0,24}\border\b", normalized):
+        # Cancel takes priority over track when cancel keywords are present
+        if re.search(r"\b(cancel|void)\b", normalized):
+            if "order_code" in slots or re.search(r"\border\b", normalized):
+                return RouterResult(Intent.CANCEL_ORDER, 0.95, slots, False)
+            return RouterResult(Intent.CANCEL_ORDER, 0.85, slots, False)
+
+        # Order-code only (no cancel keyword) → track
+        if "order_code" in slots:
             return RouterResult(Intent.TRACK_ORDER, 0.96, slots, False)
 
-        if re.search(r"\b(cancel|void).{0,24}\border\b", normalized) or normalized in {"cancel", "never mind cancel it"}:
-            return RouterResult(Intent.CANCEL_ORDER, 0.95, slots, False)
+        if re.search(r"\b(track|status|where(?:'s| is)?|check).{0,24}\border\b", normalized):
+            return RouterResult(Intent.TRACK_ORDER, 0.96, slots, False)
 
         if self._has_any(normalized, ("hours", "open", "close", "location", "address", "directions", "store phone")):
             return RouterResult(Intent.STORE_INFO, 0.92, slots, False)

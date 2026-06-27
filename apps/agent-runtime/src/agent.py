@@ -7,7 +7,7 @@ import json
 import time
 import re
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -30,9 +30,11 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
-from call_recorder import finalize_call, open_call
+from call_recorder import append_turn, finalize_call, open_call, record_event
 from channels import CHANNEL_REGISTRY, DEFAULT_CHANNEL_ID, get_channel_definition
 from conversation_core.api_repository import ApiConversationRepository
+from conversation_core.frustration_monitor import FrustrationConfig, FrustrationMonitor
+from conversation_core.handoff import HANDOFF_MESSAGE, build_handoff_handler
 from conversation_core.state_machine import ConversationContext, ConversationStateMachine, InMemoryConversationRepository
 from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_definition
 from scenarios.wingstop import (
@@ -87,6 +89,12 @@ REALTIME_ENABLE_AFFECTIVE_DIALOG = (
 REALTIME_ENABLE_PROACTIVITY = (
     os.getenv("REALTIME_ENABLE_PROACTIVITY", "false").strip().lower() == "true"
 )
+# Frustration / escalation thresholds
+FRUSTRATION_HARD_TRIGGER_MIN_SCORE = float(os.getenv("FRUSTRATION_HARD_TRIGGER_MIN_SCORE", "0.85"))
+FRUSTRATION_ESCALATION_MIN_SCORE = float(os.getenv("FRUSTRATION_ESCALATION_MIN_SCORE", "0.60"))
+FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION = int(os.getenv("FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION", "8"))
+FRUSTRATION_MONITOR_MIN_TURNS = int(os.getenv("FRUSTRATION_MONITOR_MIN_TURNS", "3"))
+FRUSTRATION_SUSPICIOUS_COOLDOWN = int(os.getenv("FRUSTRATION_SUSPICIOUS_COOLDOWN", "300"))
 TELEMETRY_TOPIC = "voixai.telemetry"
 # Tools `await` snapshot publishing, so cap it hard — telemetry must never stall
 # a live turn even if the LiveKit data publisher is unhealthy.
@@ -174,10 +182,14 @@ class SessionState:
     conversation_context: ConversationContext | None = None
     conversation_core: Any | None = field(default=None, repr=False, compare=False)
     conversation_node: str | None = None
+    order_sub_node: str | None = None
     last_intent: str | None = None
     last_intent_confidence: float | None = None
     last_router_slots: dict[str, object] = field(default_factory=dict)
     conversation_clarification_count: int = 0
+    frustration_monitor: Any | None = field(default=None, repr=False, compare=False)
+    handoff_handler: Any | None = field(default=None, repr=False, compare=False)
+    handoff_message: str | None = None
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -209,6 +221,7 @@ class RuntimeConfig:
     fallback_reason: str | None = None
     caller_id: str | None = None
     caller_phone: str | None = None
+    frustration_config: FrustrationConfig = field(default_factory=FrustrationConfig)
 
 def _session_config_path(room_name: str) -> Path:
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", room_name).strip("-") or "default-room"
@@ -401,6 +414,7 @@ def _snapshot_payload(session_state: SessionState, *, reason: str) -> dict[str, 
         "assistant_turn_metrics": session_state.assistant_turn_metrics,
         "conversation": {
             "current_node": session_state.conversation_node,
+            "order_sub_node": session_state.order_sub_node,
             "last_intent": session_state.last_intent,
             "last_intent_confidence": session_state.last_intent_confidence,
             "last_router_slots": dict(session_state.last_router_slots),
@@ -625,6 +639,13 @@ def _runtime_config_from_env() -> RuntimeConfig:
         comparison_label=comparison_label,
         requested_voice_provider=requested_provider,
         requested_voice_engine=os.getenv("VOICE_ENGINE", "").strip().lower() or None,
+        frustration_config=FrustrationConfig(
+            hard_trigger_min_score=FRUSTRATION_HARD_TRIGGER_MIN_SCORE,
+            escalation_min_score=FRUSTRATION_ESCALATION_MIN_SCORE,
+            max_turns_before_escalation=FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION,
+            monitor_min_turns=FRUSTRATION_MONITOR_MIN_TURNS,
+            suspicious_cooldown_seconds=FRUSTRATION_SUSPICIOUS_COOLDOWN,
+        ),
     )
 
 
@@ -709,7 +730,7 @@ def _log_provider_startup(runtime_config: RuntimeConfig) -> None:
 
 
 def _resolve_runtime_config(runtime_config: RuntimeConfig) -> RuntimeConfig:
-    resolved = RuntimeConfig(**asdict(runtime_config))
+    resolved = replace(runtime_config)
     if resolved.scenario_id not in SCENARIO_REGISTRY:
         logger.warning(
             "Unsupported scenario `%s`. Falling back to `%s`.",
@@ -1120,6 +1141,7 @@ def _apply_conversation_action(
 ) -> None:
     session_state.conversation_context = context
     session_state.conversation_node = action.node.value
+    session_state.order_sub_node = context.order_sub_node
     session_state.conversation_clarification_count = context.clarification_count
     if action.router_result is not None:
         session_state.last_intent = action.router_result.intent.value
@@ -1156,22 +1178,99 @@ async def _start_conversation_core(
         )
         action = fsm.start(context)
     session_state.conversation_core = fsm
+    context._order_state = session_state.order  # noqa — for OrderSubFSM access
     _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, action.telemetry_events)
     return action.message.strip() or build_initial_greeting(get_channel_definition(session_state.channel_id))
 
 
-async def _route_caller_turn(session_state: SessionState, turn_text: str) -> None:
+async def _route_caller_turn(
+    session_state: SessionState,
+    turn_text: str,
+    session: Any = None,
+) -> None:
     fsm = getattr(session_state, "conversation_core", None)
     context = session_state.conversation_context
     if fsm is None or context is None:
         return
+
+    monitor = session_state.frustration_monitor
+    if monitor is not None:
+        call_duration = time.time() - (session_state.call_started_at or time.time())
+        monitor.update_turn(
+            text=turn_text,
+            state_node=context.current_node.value if context.current_node else None,
+            order_has_items=bool(session_state.order.items),
+            call_duration=call_duration,
+        )
+
+    await _check_frustration_escalation(session_state, fsm, context, turn_text, session)
+    if context.outcome == "escalated":
+        return
+
     try:
         action = await asyncio.to_thread(fsm.handle_turn, context, turn_text)
     except Exception:
         logger.debug("Conversation routing failed for caller turn", exc_info=True)
         return
     _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, getattr(action, "telemetry_events", ()))
     await session_state.publish_snapshot(reason="conversation_routed")
+
+
+async def _check_frustration_escalation(
+    session_state: SessionState,
+    fsm: ConversationStateMachine,
+    context: ConversationContext,
+    turn_text: str,
+    session: Any | None = None,
+) -> None:
+    monitor = session_state.frustration_monitor
+    if monitor is None:
+        return
+    if context.outcome:
+        return
+    call_duration = time.time() - (session_state.call_started_at or time.time())
+    decision = monitor.evaluate(
+        text=turn_text,
+        call_duration=call_duration,
+    )
+    if decision is None:
+        return
+
+    action = fsm.force_escalate(context, decision)
+    fsm.record_escalation(context, decision)
+    _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, action.telemetry_events)
+    session_state.handoff_message = HANDOFF_MESSAGE
+    if session is not None:
+        try:
+            session.say(HANDOFF_MESSAGE)
+        except Exception:
+            pass
+    await session_state.publish_snapshot(reason="escalation")
+
+
+def _emit_fsm_events(session_state: SessionState, events: tuple[dict[str, object], ...]) -> None:
+    if not events:
+        return
+    call_id = session_state.call_id
+    if not call_id:
+        return
+    now = time.time()
+    for event in events:
+        event_type = str(event.get("type", ""))
+        if not event_type:
+            continue
+        asyncio.create_task(
+            asyncio.to_thread(
+                record_event,
+                call_id=call_id,
+                ts=now,
+                event_type=event_type,
+                payload=dict(event),
+            )
+        )
 
 
 server = AgentServer(num_idle_processes=1)
@@ -1284,8 +1383,21 @@ async def my_agent(ctx: JobContext):
         # we only record user/assistant text turns.
         turn_text = (getattr(item, "text_content", "") or "").strip()
         if turn_text and item.role in {"user", "assistant"}:
+            now_ts = time.time()
             session.userdata.transcript.append(
-                {"role": item.role, "text": turn_text, "ts": time.time()}
+                {"role": item.role, "text": turn_text, "ts": now_ts}
+            )
+            # Persist per-turn (fire-and-forget, best-effort).
+            asyncio.create_task(
+                asyncio.to_thread(
+                    append_turn,
+                    call_id=call_id,
+                    speaker=item.role,
+                    text=turn_text,
+                    ts_start=now_ts,
+                    state_node=session.userdata.conversation_node,
+                    intent=session.userdata.last_intent,
+                )
             )
 
         metrics = item.metrics if isinstance(item.metrics, Mapping) else None
@@ -1311,13 +1423,12 @@ async def my_agent(ctx: JobContext):
                     if customer_requested_handoff(turn_text)
                     else "Customer sounded frustrated during the order."
                 )
-
-                async def _force_handoff_response() -> None:
-                    await force_handoff(session.userdata, reason=reason, complaint=complaint)
-                    _respond_with_handoff(session, runtime_config)
-
-                asyncio.create_task(_force_handoff_response())
-            asyncio.create_task(_route_caller_turn(session.userdata, turn_text))
+                asyncio.create_task(force_handoff(session.userdata, reason=reason, complaint=complaint))
+                try:
+                    session.say(HANDOFF_MESSAGE)
+                except Exception:
+                    pass
+            asyncio.create_task(_route_caller_turn(session.userdata, turn_text, session))
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
@@ -1336,6 +1447,25 @@ async def my_agent(ctx: JobContext):
                 }
             else:
                 session.userdata.assistant_turn_metrics = None
+
+            # Record a latency sample for the classic path (fire-and-forget).
+            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+                e2e = _metric_value(metrics.get("e2e_latency")) if metrics else None
+                if e2e is not None:
+                    asyncio.create_task(
+                        asyncio.to_thread(
+                            record_event,
+                            call_id=call_id,
+                            ts=time.time(),
+                            event_type="latency_sample",
+                            payload={
+                                "value_seconds": e2e,
+                                "phase": "assistant_turn",
+                                "voice_provider": VOICE_PROVIDER_CLASSIC,
+                            },
+                        )
+                    )
+
             assistant_text = getattr(item, "text_content", "") or ""
             session.userdata.assistant_guardrail_violations = audit_assistant_response(
                 assistant_text,
@@ -1370,6 +1500,11 @@ async def my_agent(ctx: JobContext):
     call_started_at = time.time()
     session.userdata.call_id = call_id
     session.userdata.call_started_at = call_started_at
+    session.userdata.frustration_monitor = FrustrationMonitor(
+        handoff_handler=build_handoff_handler(),
+        config=runtime_config.frustration_config,
+    )
+    session.userdata.handoff_handler = build_handoff_handler()
 
     asyncio.create_task(
         asyncio.to_thread(

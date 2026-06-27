@@ -32,7 +32,7 @@ Conversation-core focused tests exercise:
   re-asking a filled slot
 - simulated reconnect resume from persisted `call_sessions.current_node`
 
-The current deterministic corpus includes `191` scenarios across:
+The current deterministic corpus includes `201` scenarios across:
 
 - `happy_paths`: `22`
 - `corrections`: `31`
@@ -45,6 +45,9 @@ The current deterministic corpus includes `191` scenarios across:
 - `confirmation_gate`: `10`
 - `pricing_repricing`: `10`
 - `session_lifecycle`: `10`
+- `split_flavor`: `3` (Phase 7 — multiple flavors on one wing order)
+- `mid_order_correction`: `3` (Phase 7 — corrections during ordering)
+- `idempotent_confirm`: `2` (Phase 7 — duplicate place protection)
 
 It also includes transcript-derived regressions in `apps/agent-runtime/tests/reliability/scenarios/transcript_regressions.json`, grouped by:
 
@@ -62,9 +65,11 @@ Key pieces:
 - `apps/agent-runtime/tests/reliability/scenario_runner.py`: deterministic text-turn interpreter and runner
 - `apps/agent-runtime/tests/reliability/scenarios/generated_wingstop_reliability.json`: the current seed corpus
 - `apps/agent-runtime/tests/reliability/scenarios/transcript_regressions.json`: hand-curated regressions derived from real failed calls
+- `apps/agent-runtime/tests/reliability/scenarios/phase7_scenarios.json`: Phase 7 scenario groups (split_flavor, mid_order_correction, idempotent_confirm)
 - `apps/agent-runtime/tests/reliability/generate_scenarios.js`: corpus generator
 - `apps/agent-runtime/tests/reliability/test_reliability_suite.py`: pytest entrypoint
 - `apps/agent-runtime/tests/reliability/reports/reliability_report.json`: latest JSON summary
+- `apps/agent-runtime/tests/load_test_concurrent_orders.py`: concurrent ordering load test
 - `apps/agent-runtime/tests/test_intent_router.py`: Phase 2 fixed-transcript router tests
 - `apps/agent-runtime/tests/test_conversation_state_machine.py`: Phase 2 FSM and name-capture tests
 - `apps/api/tests/test_conversation_core.py`: Phase 2 conversation persistence endpoint tests
@@ -102,18 +107,40 @@ cd ..\api
 .venv\Scripts\python.exe -m pytest tests\test_conversation_core.py -q
 ```
 
+## Load Test
+
+A concurrent ordering load test exercises the deterministic core under
+simulated multi-session pressure. It uses the same `ReliabilityScenarioRunner`
+as the reliability suite — no LiveKit, audio, or API keys needed.
+
+Run it:
+
+```powershell
+cd apps/agent-runtime
+.venv\Scripts\python.exe -m tests.load_test_concurrent_orders --concurrency 10 --sessions 50
+```
+
+The test simulates N concurrent ordering sessions (configurable `--concurrency`
+and `--sessions`), each completing a name→item→price→review→confirm→place flow.
+It reports throughput (sessions/s), latency percentiles (P50/P95/P99), and
+pass/fail counts.
+
+The backend HTTP endpoint is not required for the load test: the circuit breaker
+will open after repeated backend failures, and the fallback to local order
+creation keeps every session passing.
+
 ## Report Output
 
 The run writes:
 
 - `apps/agent-runtime/tests/reliability/reports/reliability_report.json`
 
-Current example:
+Current example (Phase 7):
 
 ```json
 {
-  "total_scenarios": 191,
-  "passed": 191,
+  "total_scenarios": 201,
+  "passed": 201,
   "failed": 0,
   "pass_rate": 100.0
 }
@@ -123,8 +150,8 @@ It also prints a terminal summary like:
 
 ```text
 VoixAI Wingstop Reliability Suite
-Total scenarios: 191
-Passed: 191
+Total scenarios: 201
+Passed: 201
 Failed: 0
 Pass rate: 100.0%
 ```

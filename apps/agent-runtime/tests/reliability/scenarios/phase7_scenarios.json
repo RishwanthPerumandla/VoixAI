@@ -1,0 +1,117 @@
+[
+  {
+    "name": "split_flavor_half_hot_half_lemon",
+    "description": "Order classic 10 wings with half hot and half lemon pepper.",
+    "tags": ["split_flavor"],
+    "initial_state": {},
+    "turns": [
+      {"user": "This is pickup for Casey.", "expected": {}},
+      {"user": "I want 10 classic wings with hot and lemon pepper.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place it.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "item_count": 1, "completed_order": true}
+  },
+  {
+    "name": "split_flavor_half_mild_half_teriyaki",
+    "description": "Order boneless 10 with split mild and garlic parmesan.",
+    "tags": ["split_flavor"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Dana.", "expected": {}},
+      {"user": "Add 10 boneless wings with mild and garlic parmesan.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place it.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "item_count": 1, "completed_order": true}
+  },
+  {
+    "name": "split_flavor_three_way",
+    "description": "Order classic 20 wings with three even-split flavors.",
+    "tags": ["split_flavor"],
+    "initial_state": {},
+    "turns": [
+      {"user": "This is for Jordan, pickup.", "expected": {}},
+      {"user": "I'd like 20 classic wings with lemon pepper, hot, and barbecue.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place the order.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "item_count": 1, "completed_order": true}
+  },
+  {
+    "name": "mid_order_correction_boneless_to_classic",
+    "description": "Customer corrects boneless to classic mid-order.",
+    "tags": ["mid_order_correction"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Taylor.", "expected": {}},
+      {"user": "I want 10 boneless wings with hot.", "expected": {}},
+      {"user": "Actually, make those classic instead.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place it.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "completed_order": true}
+  },
+  {
+    "name": "mid_order_correction_flavor_swap",
+    "description": "Customer changes flavor after adding item.",
+    "tags": ["mid_order_correction"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Riley.", "expected": {}},
+      {"user": "10 classic wings with lemon pepper.", "expected": {}},
+      {"user": "Change that to hot instead.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place it.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "completed_order": true}
+  },
+  {
+    "name": "mid_order_correction_quantity_up",
+    "description": "Customer increases quantity mid-order.",
+    "tags": ["mid_order_correction"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Morgan.", "expected": {}},
+      {"user": "Add 10 boneless wings with garlic parmesan.", "expected": {}},
+      {"user": "Actually make it 20.", "expected": {}},
+      {"user": "What's my total?", "expected": {"total_present": true}},
+      {"user": "Review the order.", "expected": {}},
+      {"user": "Yes, place it.", "expected": {}}
+    ],
+    "final_expected": {"status": "completed", "completed_order": true}
+  },
+  {
+    "name": "idempotent_confirm_places_once",
+    "description": "Confirming twice with identical order creates one order.",
+    "tags": ["idempotent_confirm"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Avery.", "expected": {}},
+      {"user": "10 classic wings lemon pepper.", "expected": {}},
+      {"user": "I'm ready to order.", "expected": {}},
+      {"user": "Yes.", "expected": {}},
+      {"user": "Yes.", "expected": {"duplicate_confirmation_prevented": true}}
+    ],
+    "final_expected": {"status": "completed", "item_count": 1, "completed_order": true, "duplicate_confirmation_prevented": 1}
+  },
+  {
+    "name": "idempotent_confirm_same_order_same_result",
+    "description": "Saying 'yes' after the order is placed returns the existing order ID.",
+    "tags": ["idempotent_confirm"],
+    "initial_state": {},
+    "turns": [
+      {"user": "Pickup for Quinn.", "expected": {}},
+      {"user": "10 boneless wings hot.", "expected": {}},
+      {"user": "I'm ready to order.", "expected": {}},
+      {"user": "Yes.", "expected": {}},
+      {"user": "Yes.", "expected": {"duplicate_confirmation_prevented": true}}
+    ],
+    "final_expected": {"status": "completed", "completed_order": true, "duplicate_confirmation_prevented": 1}
+  }
+]

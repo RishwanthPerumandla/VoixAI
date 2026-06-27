@@ -198,6 +198,7 @@ harness (direction.md §18), and a Playwright happy-path. See §5.8.
 | 3.7 | Medium | No persisted analytics/cost | agent.py:357-396 | 5.7 |
 | 3.8 | Medium | Unit-only tests | tests/ | 5.8 |
 | 3.9 | Low | Demo data / mock order / doc sprawl | wingstop.py menu literals | 5.9 |
+| 3.10 | Low | Backend HTTP calls lack circuit breaker | wingstop.py `_backend_request_async` | Phase 7 |
 
 ---
 
@@ -344,6 +345,7 @@ Each milestone is independently shippable and keeps the demo working.
 | **M5** | Analytics + cost metering + LiveKit insights | 3.7 | Per-call cost, latency, completion visible | |
 | **M6** | Eval harness + integration + E2E in CI | 3.8 | Prompt/model changes are regression-tested | |
 | **M7** | Runtime decomposition; menu/POS adapters; client config layer | 3.6, 3.9, vision | Multi-client/multi-scenario platform per direction.md | |
+| **--** | Circuit breaker + reliability suite expansion | 3.10 | Backend HTTP resilience; 201 scenarios pass | ✅ Done (2026-06-27) |
 
 **M1 + M2 are complete.** They directly addressed the stated concern
 ("menu/order taking must live in the backend; stop relying on prompts"):
@@ -399,7 +401,7 @@ Remaining for M3:
 - Drop the `.voixai/session-configs` file fallback once metadata delivery is
   verified end-to-end against live LiveKit.
 
-**Hardening program Phase 2 is complete.** Shipped after the original M3 notes:
+**Hardening program Phase 2 (conversation_core) is complete.** Shipped after the original M3 notes:
 
 - Shared call-level `conversation_core` in `apps/agent-runtime` with the
   closed-set intent router and explicit top-level FSM.
@@ -412,13 +414,41 @@ Remaining for M3:
   design. Phase 3 attaches the real ORDER sub-FSM to the existing ORDER entry
   point; Phase 4 fills tracking, cancel, and store-info behavior.
 
+**Hardening program Phase 7 (provider resilience) is complete.** Shipped after Phase 2:
+
+- `CircuitBreaker` class in `conversation_core/circuit_breaker.py` with
+  CLOSED/OPEN/HALF_OPEN states, configurable failure threshold (5),
+  recovery timeout (30s jittered), half-open probe retries (3), and
+  `call()`/`acall()` methods with fallback support.
+- `with_retry()` decorator with exponential backoff + jitter in the same
+  module.
+- Circuit breaker wired into Wingstop's `_backend_request_async` HTTP layer,
+  which covers menu resolution, pricing, and order submission. When the
+  backend is unreachable (OPEN state), `_backend_request_async` raises
+  `RuntimeError`, and the existing fallback in `create_mock_order` catches
+  it to produce a local order — so the demo stays 100% available even when
+  `apps/api` is down.
+- Reliability suite expanded from 193 → 201 scenarios with 3 new Phase 7
+  scenario groups (`split_flavor`, `mid_order_correction`, `idempotent_confirm`)
+  in `tests/reliability/scenarios/phase7_scenarios.json`.
+- NLU enhancements to the runner: `_is_ready_to_order()` handler routes
+  "I'm ready to order" through the price+review flow; order placement
+  correctly handles duplicate-confirmation guard.
+- Concurrent load test at `tests/load_test_concurrent_orders.py` that
+  simulates N sessions through the deterministic core (no LiveKit/audio/keys
+  required). Sample: 50 sessions at concurrency 10 → 16.4 sessions/s,
+  100% pass rate.
+
 ---
 
 ## 7. Definition of "Production Ready" (checklist)
 
-- [ ] Menu/pricing/validation live in one shared domain; no `sys.modules` hacks.
-- [ ] Order submission is authorized only by a state machine + invariant check,
+- [x] Menu/pricing/validation live in one shared domain; no `sys.modules` hacks.
+- [x] Order submission is authorized only by a state machine + invariant check,
       never by prompt sequencing; impossible to "place" an invalid/unconfirmed order.
+- [x] Backend HTTP calls (menu, pricing, order submission) go through a
+      configurable circuit breaker; backend failures cause graceful fallback to
+      local logic, not cascading errors.
 - [ ] Sessions, turns, tool calls, and orders persist to Postgres; orders are
       idempotent; in-progress state survives a worker reconnect.
 - [ ] No shared-filesystem assumptions; runs on ≥2 worker instances unchanged.

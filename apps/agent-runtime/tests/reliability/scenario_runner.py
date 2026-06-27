@@ -214,6 +214,19 @@ def _is_place_request(normalized_text: str) -> bool:
     )
 
 
+def _is_ready_to_order(normalized_text: str) -> bool:
+    return _contains_phrase(
+        normalized_text,
+        "ready to order",
+        "im ready",
+        "i am ready",
+        "lets order",
+        "let's order",
+        "id like to order",
+        "i'd like to order",
+    )
+
+
 def _find_removal_target(user_text: str, normalized_text: str) -> str:
     target = _resolve_item_phrase(user_text)
     if target is not None:
@@ -254,6 +267,8 @@ class ReliabilityScenarioRunner:
         self.session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
 
     def reset(self, initial_state: dict[str, Any] | None = None) -> None:
+        from scenarios.wingstop import reset_backend_circuit_breaker
+        reset_backend_circuit_breaker()
         self.session_state = SessionState()
         self.context = SimpleNamespace(userdata=self.session_state)
         self._snapshot_reasons = []
@@ -406,6 +421,14 @@ class ReliabilityScenarioRunner:
             return " ".join(part for part in responses if part)
 
         if _is_review_request(normalized):
+            responses.append(await self.assistant.review_order_for_confirmation(self.context))
+            return " ".join(part for part in responses if part)
+
+        if _is_ready_to_order(normalized):
+            if self.session_state.order.status == "completed":
+                return summarize_order_state(self.session_state.order)
+            if self.session_state.price_quote is None:
+                responses.append(await self.assistant.price_order(self.context))
             responses.append(await self.assistant.review_order_for_confirmation(self.context))
             return " ".join(part for part in responses if part)
 
