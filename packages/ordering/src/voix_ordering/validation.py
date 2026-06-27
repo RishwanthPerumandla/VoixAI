@@ -33,6 +33,22 @@ from .menu import (
 from .models import OrderLineItem, OrderState
 
 
+def _flavor_validation_item_type(item_id: str) -> str | None:
+    item_type = get_item_type(item_id)
+    if item_type == "combo":
+        combo_tpl = get_combo_template(item_id)
+        if combo_tpl and combo_tpl.main_component:
+            return combo_tpl.main_component.component_type
+    if item_type == "group_pack":
+        pack_tpl = get_group_pack_template(item_id)
+        if pack_tpl and pack_tpl.main_component:
+            component_type = pack_tpl.main_component.component_type
+            if component_type == "classic_or_boneless_choice":
+                return "classic_wings"
+            return component_type
+    return item_type
+
+
 def _get_required_slots(item_id: str) -> list[str]:
     """Resolve required slots from catalog templates."""
     cat_tpl = get_item_template(item_id)
@@ -43,7 +59,11 @@ def _get_required_slots(item_id: str) -> list[str]:
         return list(combo_tpl.required_slots)
     pack_tpl = get_group_pack_template(item_id)
     if pack_tpl:
-        return list(pack_tpl.required_slots)
+        return [
+            slot
+            for slot in pack_tpl.required_slots
+            if slot != "combo_side_selection"
+        ]
     return []
 
 
@@ -75,11 +95,11 @@ def _item_type_allows_dip_selection(item_type: str | None) -> bool:
 def _slot_group_id(slot_name: str) -> str | None:
     mapping = {
         "flavor_selection": None,
-        "piece_preference": "piece_preference",
+        "piece_preference": "wing_piece_preference",
         "wing_cook_preference": "wing_cook_preference",
         "dip_selection": "dip_selection",
-        "combo_side_selection": "combo_side_selection",
-        "combo_drink_selection": "combo_drink_selection",
+        "combo_side_selection": "combo_side_choice",
+        "combo_drink_selection": "combo_drink_choice",
         "fry_cook_preference": "fry_cook_preference",
         "fry_seasoning_level": "fry_seasoning_level",
         "fry_add_ons": "fry_add_ons",
@@ -106,9 +126,11 @@ def _validation_errors_for_line(line: OrderLineItem) -> list[str]:
         errors.append("Quantity must be at least one.")
 
     item_type = get_item_type(line.item_id)
+    flavor_item_type = _flavor_validation_item_type(line.item_id)
 
     # --- Flavor validation ---
     flavors = []
+    required_slots = _get_required_slots(line.item_id)
     for flavor_id in line.selected_flavor_ids:
         flavor = FLAVOR_OPTIONS.get(flavor_id)
         cat_flavor = get_flavor_by_id(flavor_id)
@@ -117,13 +139,17 @@ def _validation_errors_for_line(line: OrderLineItem) -> list[str]:
             continue
         flavors.append(flavor)
         # Catalog-level: flavor must be allowed for item type
-        if cat_flavor and item_type and cat_flavor.allowed_for_item_types:
-            if item_type not in cat_flavor.allowed_for_item_types:
+        if cat_flavor and flavor_item_type and cat_flavor.allowed_for_item_types:
+            if flavor_item_type not in cat_flavor.allowed_for_item_types:
                 errors.append(
                     f"{flavor.display_name} is not available for {menu_item.display_name}."
                 )
 
-    if menu_item.requires_flavors and not flavors:
+    if (
+        menu_item.requires_flavors
+        and "flavor_selection" not in required_slots
+        and not flavors
+    ):
         errors.append("Please choose a flavor for your wings.")
 
     max_flavors = _get_max_flavors(line.item_id)
@@ -134,11 +160,10 @@ def _validation_errors_for_line(line: OrderLineItem) -> list[str]:
         )
 
     # --- Required slots validation ---
-    required_slots = _get_required_slots(line.item_id)
     for slot_name in required_slots:
         if slot_name == "flavor_selection":
             if not flavors:
-                errors.append("Please choose a flavor.")
+                errors.append("Please choose a flavor for your wings.")
             continue
         group_id = _slot_group_id(slot_name)
         if group_id is None:

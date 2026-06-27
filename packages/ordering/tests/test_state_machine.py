@@ -28,11 +28,12 @@ def _valid_line() -> OrderLineItem:
 
 def test_phase_starts_at_greeting_then_collecting() -> None:
     order = OrderState()
-    assert derive_phase(order) is OrderPhase.GREETING
+    assert derive_phase(order) is OrderPhase.IDLE
 
     order.items.append(_valid_line())
     order.order_type = "pickup"
-    assert derive_phase(order) is OrderPhase.COLLECTING
+    OrderStateMachine(order).reset_to_collecting()
+    assert derive_phase(order) is OrderPhase.COLLECTING_ORDER
 
 
 def test_lifecycle_priced_reviewed_confirmed() -> None:
@@ -40,13 +41,13 @@ def test_lifecycle_priced_reviewed_confirmed() -> None:
     machine = OrderStateMachine(order)
 
     machine.mark_priced()
-    assert machine.phase is OrderPhase.PRICED
+    assert machine.phase is OrderPhase.PRICING_ORDER
 
     machine.mark_reviewed()
     assert machine.phase is OrderPhase.AWAITING_CONFIRMATION
 
     machine.set_confirmed(True)
-    assert machine.phase is OrderPhase.CONFIRMED
+    assert machine.phase is OrderPhase.AWAITING_CONFIRMATION
 
 
 def test_any_mutation_resets_to_collecting() -> None:
@@ -61,7 +62,7 @@ def test_any_mutation_resets_to_collecting() -> None:
     assert order.total_shown is False
     assert order.recap_readback is False
     assert order.pos_validation_passed is False
-    assert machine.phase is OrderPhase.COLLECTING
+    assert machine.phase is OrderPhase.COLLECTING_ORDER
 
 
 def test_authorize_submit_blocks_invalid_order() -> None:

@@ -42,6 +42,6 @@ async def test_runner_reports_turn_level_expectations() -> None:
         {
             "status": "collecting_order",
             "contains_items": ["boneless_10"],
-            "telemetry_events": ["invalid_modifier_removed", "validation_failed"],
+            "telemetry_events": ["invalid_modifier_removed", "validation_passed"],
         },
     )

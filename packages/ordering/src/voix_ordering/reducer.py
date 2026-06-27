@@ -213,6 +213,7 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
             order,
             intent.clarification_question or "I want to make sure I got that right. What would you like to change?",
         )
+        machine.mark_collecting()
         result.events = events + result.events
         return result
 
@@ -493,6 +494,8 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
     machine.start_validation()
     validation_errors = validate_order(order)
     machine.apply_validation(validation_errors)
+    if intent.name == INTENT_REMOVE_ITEM and not order.items:
+        machine.mark_collecting()
     if validation_errors:
         order.metrics.validation_failure_count += 1
         events.append(_event("validation_failed", "Validation failed after reducer mutation.", errors=list(validation_errors)))

@@ -68,13 +68,16 @@ class OrderStateMachine:
     def start_greeting(self) -> None:
         self._set_status(OrderPhase.GREETING)
 
+    def mark_collecting(self) -> None:
+        self._set_status(OrderPhase.COLLECTING_ORDER)
+
     def reset_to_collecting(self) -> None:
         order = self.order
         order.confirmed = False
         order.total_shown = False
         order.recap_readback = False
         order.pos_validation_passed = False
-        self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+        self._set_status(OrderPhase.COLLECTING_ORDER if order.items else OrderPhase.IDLE)
 
     def start_validation(self) -> None:
         self._set_status(OrderPhase.VALIDATING_ORDER)
@@ -84,7 +87,7 @@ class OrderStateMachine:
         order.last_validation_errors = list(errors)
         order.pos_validation_passed = not errors
         if errors:
-            self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+            self._set_status(OrderPhase.COLLECTING_ORDER if order.items else OrderPhase.IDLE)
         elif order.confirmed and order.recap_readback and order.total_shown:
             self._set_status(OrderPhase.AWAITING_CONFIRMATION)
         elif order.recap_readback:
@@ -92,7 +95,7 @@ class OrderStateMachine:
         elif order.total_shown:
             self._set_status(OrderPhase.PRICING_ORDER)
         else:
-            self._set_status(OrderPhase.COLLECTING_ORDER if order.items or order.order_type else OrderPhase.IDLE)
+            self._set_status(OrderPhase.COLLECTING_ORDER if order.items else OrderPhase.IDLE)
 
     def start_pricing(self) -> None:
         self._set_status(OrderPhase.PRICING_ORDER)
@@ -118,7 +121,7 @@ class OrderStateMachine:
             self._set_status(OrderPhase.AWAITING_CONFIRMATION)
         else:
             self._set_status(
-                OrderPhase.COLLECTING_ORDER if self.order.items or self.order.order_type else OrderPhase.IDLE
+                OrderPhase.COLLECTING_ORDER if self.order.items else OrderPhase.IDLE
             )
 
     def mark_submitting(self) -> None:

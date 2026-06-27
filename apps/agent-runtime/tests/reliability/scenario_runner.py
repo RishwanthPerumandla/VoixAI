@@ -116,26 +116,36 @@ def _find_customer_name(text: str) -> str | None:
     return None
 
 
-def _collect_flavors(text: str) -> list[str]:
+def _collect_catalog_matches(text: str, source: dict[str, Any]) -> list[str]:
     lowered = text.lower()
-    flavor_ids: list[str] = []
-    for flavor in FLAVOR_OPTIONS.values():
-        aliases = (flavor.display_name, *flavor.aliases)
-        if any(alias.lower() in lowered for alias in aliases):
-            if flavor.id not in flavor_ids:
-                flavor_ids.append(flavor.id)
-    return flavor_ids
+    candidates: list[tuple[int, str, str]] = []
+    for value_id, value in source.items():
+        aliases = (value.display_name, *value.aliases)
+        for alias in aliases:
+            normalized = alias.strip().lower()
+            if normalized:
+                candidates.append((len(normalized), normalized, value_id))
+
+    matches: list[str] = []
+    occupied_spans: list[tuple[int, int]] = []
+    for _, candidate, value_id in sorted(candidates, reverse=True):
+        for match in re.finditer(rf"\b{re.escape(candidate)}\b", lowered):
+            span = match.span()
+            if any(max(span[0], used[0]) < min(span[1], used[1]) for used in occupied_spans):
+                continue
+            if value_id not in matches:
+                matches.append(value_id)
+            occupied_spans.append(span)
+            break
+    return matches
+
+
+def _collect_flavors(text: str) -> list[str]:
+    return _collect_catalog_matches(text, FLAVOR_OPTIONS)
 
 
 def _collect_modifiers(text: str) -> list[str]:
-    lowered = text.lower()
-    modifier_ids: list[str] = []
-    for modifier in MODIFIER_OPTIONS.values():
-        aliases = (modifier.display_name, *modifier.aliases)
-        if any(alias.lower() in lowered for alias in aliases):
-            if modifier.id not in modifier_ids:
-                modifier_ids.append(modifier.id)
-    return modifier_ids
+    return _collect_catalog_matches(text, MODIFIER_OPTIONS)
 
 
 def _resolve_item_phrase(text: str) -> str | None:
@@ -343,6 +353,7 @@ class ReliabilityScenarioRunner:
         item_phrase = _resolve_item_phrase(user_text)
 
         customer_name = _find_customer_name(user_text)
+        if customer_name is not None:
             responses.append(
                 await self.assistant.set_customer_details(
                     self.context,
@@ -383,6 +394,9 @@ class ReliabilityScenarioRunner:
                 ),
             )
             self.session_state.order = result.order
+            if not self.session_state.order.items:
+                self.session_state.order.status = "idle"
+                self.session_state.order.metrics.final_status = "idle"
             self.session_state.mock_order = None
             self.session_state.price_quote = None
             return result.clarification_question or AMBIGUOUS_PHRASES[normalized]
