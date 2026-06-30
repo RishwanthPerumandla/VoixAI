@@ -66,6 +66,7 @@ load_dotenv(ROOT_DIR / "apps" / "agent-runtime" / ".env")
 load_dotenv(API_DIR / ".env", override=True)
 
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_PUBLIC_URL = os.getenv("LIVEKIT_PUBLIC_URL", LIVEKIT_URL)
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 AGENT_NAME = os.getenv("AGENT_NAME", "my-agent")
@@ -1360,7 +1361,7 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
     )
 
     return TokenResponse(
-        livekit_url=LIVEKIT_URL,
+        livekit_url=LIVEKIT_PUBLIC_URL,
         token=token,
         room_name=payload.room_name,
     )

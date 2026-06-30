@@ -1,24 +1,58 @@
-.git
-.claude
-.codex
-.voixai
+# Docker build context ignore file
+# Exclude unnecessary files to speed up builds and reduce context size
 
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (will be installed in container)
+**/node_modules
+**/.venv
 **/__pycache__
-**/.pytest_cache
-**/.ruff_cache
-**/.mypy_cache
 **/*.pyc
 **/*.pyo
-**/*.pyd
+**/*.egg-info
 
-**/.venv
-**/venv
-**/node_modules
+# Build artifacts
 **/.next
 **/dist
 **/build
+**/coverage
 
-**/.env
-**/.env.local
-**/*.log
+# IDE and editor files
+**/.idea
+**/.vscode
+**/.cursor
+**/.claude
+**/.codex
+**/.gemini
 
+# Environment files (mounted at runtime)
+.env
+.env.*
+!.env.example
+
+# Python caches
+**/.pytest_cache
+**/.ruff_cache
+
+# Docker files (don't need to include in context)
+docker-compose.yml
+**/Dockerfile
+
+# Documentation (not needed in container)
+docs/
+*.md
+LICENSE
+
+# Scripts (not needed in container)
+scripts/
+
+# Local data (mounted at runtime)
+.voixai/
+
+# Testing
+**/tests/
+**/evals/
+**/reliability/

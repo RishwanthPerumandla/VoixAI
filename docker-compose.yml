@@ -1,0 +1,96 @@
+version: "3.9"
+
+services:
+  # LiveKit WebRTC server (used when LIVEKIT_URL points to localhost)
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "10000-10050:10000-10050/udp"
+    volumes:
+      - ./docker/livekit/livekit.yaml:/livekit.yaml
+    command: --config /livekit.yaml --bind 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7880 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # FastAPI backend service
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Docker-internal overrides only
+      - VOIXAI_DB_PATH=/app/.voixai/voixai.db
+      - VOIXAI_API_URL=http://api:8000
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      - voixai-data:/app/.voixai
+      - session-configs:/app/.voixai/session-configs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      livekit:
+        condition: service_healthy
+    command: >
+      sh -c "
+        python -m alembic -c alembic.ini upgrade head &&
+        python -c 'from seed import seed; seed()' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000
+      "
+
+  # Python LiveKit voice agent
+  agent-runtime:
+    build:
+      context: .
+      dockerfile: docker/agent-runtime/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Docker-internal overrides only
+      - VOIXAI_API_URL=http://api:8000
+      - VOIXAI_API_BASE_URL=http://api:8000
+    volumes:
+      - session-configs:/app/.voixai/session-configs
+    depends_on:
+      livekit:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  # Next.js frontend
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+        - NEXT_PUBLIC_LIVEKIT_ROOM_NAME=voixai-mvp-demo
+        - NEXT_PUBLIC_PARTICIPANT_NAME=web-user
+        - NEXT_PUBLIC_DEFAULT_VOICE_MODE=openai_realtime
+        - NEXT_PUBLIC_AGENT_NAME=my-agent
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  voixai-data:
+  session-configs:

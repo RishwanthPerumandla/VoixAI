@@ -21,7 +21,7 @@ The shared `packages/ordering` package is the single source of truth for menu, p
 # Full stack via Docker (easiest)
 Copy-Item .env.example .env
 # add at least one provider key to .env
-docker compose up --build
+make up
 
 # Or manual per-app (see docs/LOCAL_SETUP.md)
 .\scripts\start-all.ps1
@@ -30,8 +30,25 @@ docker compose up --build
 ## Package managers
 
 - **web:** `pnpm` (v9.15.9, via `corepack pnpm`)
-- **agent-runtime:** `uv` (preferred, prod) or `pip` + `venv` (local dev). Docker uses `uv`.
+- **agent-runtime:** `uv` (preferred, prod) or `pip` + `venv` (local dev). Docker uses `pip`.
 - **api:** `pip` + `venv`
+
+## Docker
+
+The Docker Compose setup includes:
+- `livekit` — Local LiveKit WebRTC server (bundled)
+- `api` — FastAPI backend service (runs migrations + seeds on startup)
+- `agent-runtime` — Python LiveKit voice agent
+- `web` — Next.js frontend
+
+Key commands:
+- `make up` — Build and start all services
+- `make down` — Stop all services
+- `make logs` — Tail logs from all services
+- `make seed` — Seed demo data (first time only)
+- `make clean` — Remove containers, volumes, and images
+
+The Docker stack overrides LiveKit connection details internally — no hosted LiveKit needed. Provider keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`) must be set in `.env` before running.
 
 ## Tests
 
