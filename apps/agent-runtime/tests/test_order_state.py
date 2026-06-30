@@ -77,7 +77,7 @@ from scenarios.wingstop import (
 def test_initial_greeting_is_simple_wingstop_dallas_greeting() -> None:
     greeting = build_initial_greeting(get_channel_definition("web"))
 
-    assert greeting == "Hello, Wingstop Dallas. How can I help you."
+    assert greeting == "Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?"
 
 
 def test_instructions_require_order_name_before_collecting_items() -> None:
@@ -1297,13 +1297,13 @@ def test_trigger_initial_greeting_uses_say_for_classic() -> None:
     _trigger_initial_greeting(
         FakeSession(),
         RuntimeConfig(voice_provider=VOICE_PROVIDER_CLASSIC, voice_engine=VOICE_ENGINE_PIPELINE),
-        "Hello, Wingstop Dallas. How can I help you.",
+        "Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?",
     )
 
     assert calls == [
         (
             "say",
-            ("Hello, Wingstop Dallas. How can I help you.",),
+            ("Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?",),
             {"allow_interruptions": True, "add_to_chat_ctx": True},
         )
     ]
@@ -1326,7 +1326,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_realtime() -> None:
             voice_engine=VOICE_ENGINE_GEMINI_LIVE,
             google_realtime_model="gemini-2.5-flash-native-audio-preview-12-2025",
         ),
-        "Hello, Wingstop Dallas. How can I help you.",
+        "Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?",
     )
 
     assert calls == [
@@ -1334,7 +1334,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_realtime() -> None:
             "generate_reply",
             (),
             {
-                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hello, Wingstop Dallas. How can I help you."
+                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?"
             },
         )
     ]
@@ -1357,7 +1357,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_gemini_31_realtime() -
             voice_engine=VOICE_ENGINE_GEMINI_LIVE,
             google_realtime_model="gemini-3.1-flash-live-preview",
         ),
-        "Hello, Wingstop Dallas. How can I help you.",
+        "Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?",
     )
 
     # Gemini 3.1 now greets once in its own voice via generate_reply, so there is
@@ -1367,7 +1367,7 @@ def test_trigger_initial_greeting_uses_generate_reply_for_gemini_31_realtime() -
             "generate_reply",
             (),
             {
-                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hello, Wingstop Dallas. How can I help you."
+                "instructions": "Greet the customer first. Use this exact greeting content naturally and only once: Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?"
             },
         )
     ]

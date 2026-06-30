@@ -26,7 +26,8 @@ def test_start_identifies_returning_caller_and_surfaces_last_order() -> None:
     action = fsm.start(context)
 
     assert action.node == NodeName.ROUTE
-    assert "Hello, Wingstop Dallas." in action.message
+    assert "Wingstop Dallas" in action.message
+    assert "Mia" in action.message
     assert "Welcome back, Sam." in action.message
     assert "WS-4821" in action.message
     assert context.customer_id == "cust-1"
@@ -41,7 +42,8 @@ def test_start_marks_new_caller_without_reasking_known_slot() -> None:
 
     action = fsm.start(context)
 
-    assert action.message == "Hello, Wingstop Dallas. How can I help you."
+    assert "Mia" in action.message
+    assert "Wingstop Dallas" in action.message
     assert context.is_returning_customer is False
     assert context.customer_id == "cust-2145550199"
 

@@ -123,7 +123,7 @@ Mode-specific settings:
 
 Wingstop voice defaults:
 
-- the startup greeting is `Hello, Wingstop Dallas. How can I help you.`
+- the startup greeting is `Hey, thanks for calling Wingstop Dallas, this is Mia — what can I get started for you?`
 - Gemini Live defaults to `GOOGLE_REALTIME_VOICE=Achernar`
 - recommended alternatives are `Sulafat` for a warmer hospitality tone and `Kore` for a calmer, firmer tone
 

@@ -751,7 +751,7 @@ class ConversationStateMachine:
     def _on_greeting(context: ConversationContext, _result: RouterResult | None) -> StateAction:
         return StateAction(
             NodeName.GREETING,
-            "Hello, Wingstop Dallas.",
+            "Hey, thanks for calling Wingstop Dallas, this is Mia.",
             ({"type": "state_enter", "node": NodeName.GREETING.value}, {"type": "greeting_started"}),
         )
 

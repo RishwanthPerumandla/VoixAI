@@ -50,6 +50,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY apps/agent-runtime/src/ ./apps/agent-runtime/src/
 COPY packages/ordering/ ./packages/ordering/
+COPY apps/api/data/ ./apps/api/data/
+
+ENV VOIXAI_CATALOG_PATH=/app/apps/api/data/wingstop_demo_catalog.json
 
 WORKDIR /app/apps/agent-runtime
 
