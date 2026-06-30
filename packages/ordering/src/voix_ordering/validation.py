@@ -170,9 +170,9 @@ def _validation_errors_for_line(line: OrderLineItem) -> list[str]:
             continue
         selected = _selected_by_group(line, group_id)
         if not selected:
-            if group_id == "combo_side_selection":
+            if group_id == "combo_side_choice":
                 errors.append("This combo requires a side selection.")
-            elif group_id == "combo_drink_selection":
+            elif group_id == "combo_drink_choice":
                 errors.append("This combo requires a drink selection.")
             else:
                 errors.append(f"{slot_name} is required for {menu_item.display_name}.")

@@ -1,0 +1,17 @@
+# Normalize all text files to LF (Unix) line endings
+* text=auto eol=lf
+
+# Binary files that should never be normalized
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
+*.mp3 binary
+*.wav binary
+*.zip binary
+*.tar.gz binary

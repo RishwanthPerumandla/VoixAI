@@ -1418,9 +1418,8 @@ def build_menu_for_prompt() -> str:
 
     lines.append(f"Flavors: {flavors}.")
     lines.append(
-        f"Combos include one flavor, one side ({sides}), and one drink ({drinks})."
+        f"Combos include one flavor, one side ({sides}), one drink ({drinks}), and one dip ({dips})."
     )
-    lines.append(f"Dips: {dips}.")
     lines.append(
         "Classic bone-in wings can be all flats or all drums for a small upcharge; "
         "boneless wings cannot."

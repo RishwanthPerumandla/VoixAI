@@ -20,7 +20,7 @@ The root env file is shared local-development configuration for the API and work
 - `OPENAI_REALTIME_VOICE`: OpenAI Realtime voice, default `alloy`
 - `OPENAI_REALTIME_EAGERNESS`: OpenAI semantic VAD eagerness, default `medium`
 - `GOOGLE_REALTIME_MODEL`: Gemini Live model, default `gemini-3.1-flash-live-preview`
-- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achird`
+- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achernar`
 - `REALTIME_TEMPERATURE`: realtime model temperature, default `0.6`
 - `REALTIME_ENABLE_AFFECTIVE_DIALOG`: Google realtime feature flag
 - `REALTIME_ENABLE_PROACTIVITY`: Google realtime feature flag
@@ -74,7 +74,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `OPENAI_REALTIME_VOICE`: OpenAI Realtime voice, default `alloy`
 - `OPENAI_REALTIME_EAGERNESS`: OpenAI semantic VAD eagerness, default `medium`
 - `GOOGLE_REALTIME_MODEL`: Gemini Live model, default `gemini-3.1-flash-live-preview`
-- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achird`
+- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achernar`
 - `REALTIME_TEMPERATURE`: realtime model temperature, default `0.6`
 - `REALTIME_ENABLE_AFFECTIVE_DIALOG`: Google realtime feature flag
 - `REALTIME_ENABLE_PROACTIVITY`: Google realtime feature flag
@@ -85,7 +85,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `openai_realtime`: uses the LiveKit OpenAI Realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live`: uses the LiveKit Google realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live` on `gemini-3.1-flash-live-preview` greets and prompts in its own voice via native `generate_reply(...)`; no separate worker TTS voice is used (requires the `charan632-dev/agents` Google plugin fork)
-- `Achird` is the default Gemini Live voice for Wingstop ordering because it sounds the most friendly and approachable for fast-food calls
+- `Achernar` is the default Gemini Live voice for Wingstop ordering — a warm, clear female voice. Other options: `Achird` (friendly and approachable), `Sulafat` (warmer hospitality tone), `Kore` (calmer, firmer tone).
 - good alternatives are `Sulafat` for a warmer hospitality tone and `Kore` for a calmer, firmer tone
 - `OPENAI_API_KEY` belongs only in the worker or shared server-side env files
 - `GOOGLE_API_KEY` belongs only in the worker or shared server-side env files

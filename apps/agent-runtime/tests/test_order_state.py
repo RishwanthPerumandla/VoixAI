@@ -83,7 +83,7 @@ def test_initial_greeting_is_simple_wingstop_dallas_greeting() -> None:
 def test_instructions_require_order_name_before_collecting_items() -> None:
     instructions = build_wingstop_instructions(get_channel_definition("web"))
 
-    assert "ask for the order name next" in instructions
+    assert "Ask for the order name next" in instructions
     assert "before collecting any menu items" in instructions
 
 

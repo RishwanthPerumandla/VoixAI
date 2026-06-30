@@ -168,11 +168,11 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
 
     - The backend catalog is the source of truth for item validity and pricing. Do not invent item validity or prices.
     - Do not confirm an order unless validation passed and the customer confirmed.
-    - Ask concise clarification questions when required slots (like flavor, side, drink) are missing.
+    - Ask concise clarification questions when required slots (like flavor, side, drink, dip) are missing.
     - If a customer changes an order, preserve valid choices (e.g., flavor, dip, cook preference) and mention removed invalid choices (e.g., piece preference when switching from classic to boneless).
-    - For combos, always ensure side and drink are selected before pricing or confirmation.
+    - For combos, always ensure side, drink, and dip are selected before pricing or confirmation.
     - Example: customer says "I want a 10 piece combo." Ask "Classic bone-in or boneless, and what flavor would you like?"
-    - After the chicken type and flavor, ask: "What side and drink would you like with the combo?"
+    - After the chicken type and flavor, ask: "What side, drink, and dip would you like with the combo?"
     - For group packs (meal for 2, family pack, crew pack, party pack), ask "Classic bone-in or boneless?" if the customer does not specify.
     - All flats and all drums are only available for classic bone-in wings, not boneless or tenders.
     - Flavor splits (half-and-half) are valid when the item supports 2+ flavors.
@@ -196,7 +196,7 @@ WINGSTOP_AGENT_INSTRUCTIONS = textwrap.dedent(
     - Use create_mock_order only after the customer has confirmed.
     - Use request_handoff for complaints, refund requests, or when the customer asks for a human.
     - Use wait_more if the customer is clearly thinking or pausing.
-    - For combos and wing meals, treat the included ranch or blue cheese as the combo dip selection, not as a separate extra dip, unless the customer asks for extra dips beyond what is included.
+    - Combos come with one included dip (e.g., ranch or blue cheese). Ask the customer which dip they want if they haven't specified one. Treat the included dip as the combo dip selection, not as a separate extra dip. Only charge for additional dips beyond the one included.
     - Flavor splits are allowed whenever the selected wing item supports more than one flavor. For example, a 10-piece order can be half Lemon Pepper and half Mango Habanero. Record both flavors instead of refusing the split.
 
     # Menu and understanding
@@ -272,8 +272,14 @@ def _order_payload(order: OrderState) -> dict[str, object]:
         "customer_name": order.customer_name or "",
         "phone": order.phone or "",
         "notes": order.notes or "",
+        "status": order.status,
+        "confirmed": order.confirmed,
         "pickup_time": order.pickup_time or "",
         "language": order.language or "",
+        "total_shown": order.total_shown,
+        "recap_readback": order.recap_readback,
+        "pos_validation_passed": order.pos_validation_passed,
+        "last_validation_errors": list(order.last_validation_errors),
     }
 
 
@@ -882,26 +888,68 @@ def _extract_recovery_name(text: str) -> str | None:
 
 
 def _extract_recovery_item_id(text: str) -> str | None:
+    # Try wing pattern first: "{count} {style} wings"
     match = re.search(
         r"\b(?P<count>6|six|8|eight|10|ten|15|fifteen|20|twenty|30|thirty|50|fifty)"
         r"\s+(?:(?P<style>classic|bone in|bone-in|boneless)\s+)?wings?\b",
         text,
         re.IGNORECASE,
     )
-    if not match:
-        return None
+    if match:
+        count = _NUMBER_TOKEN_TO_DIGITS.get(match.group("count").lower())
+        style = (match.group("style") or "").strip().lower()
+        if count is not None:
+            if style in {"classic", "bone in", "bone-in"}:
+                return _resolve_item_id(f"{count} bone in wings")
+            elif style == "boneless":
+                return _resolve_item_id(f"{count} boneless wings")
+            else:
+                return _resolve_item_id(f"{count} wings")
 
-    count = _NUMBER_TOKEN_TO_DIGITS.get(match.group("count").lower())
-    style = (match.group("style") or "").strip().lower()
-    if count is None:
-        return None
-    if style in {"classic", "bone in", "bone-in"}:
-        candidate = f"{count} bone in wings"
-    elif style == "boneless":
-        candidate = f"{count} boneless wings"
-    else:
-        candidate = f"{count} wings"
-    return _resolve_item_id(candidate)
+    # Try combo pattern: "{count} piece {style} combo" or "{style} {count} piece combo"
+    combo_match = re.search(
+        r"\b(?P<count>6|six|8|eight|10|ten|15|fifteen|20|twenty|30|thirty|50|fifty)"
+        r"\s+piece\s+(?:(?P<style1>classic|bone in|bone-in|boneless)\s+)?combo\b"
+        r"|(?P<style2>classic|bone in|bone-in|boneless)\s+"
+        r"(?P<count2>6|six|8|eight|10|ten|15|fifteen|20|twenty|30|thirty|50|fifty)\s+piece\s+combo\b",
+        text,
+        re.IGNORECASE,
+    )
+    if combo_match:
+        count = _NUMBER_TOKEN_TO_DIGITS.get(
+            (combo_match.group("count") or combo_match.group("count2") or "").lower()
+        )
+        style = (combo_match.group("style1") or combo_match.group("style2") or "").strip().lower()
+        if count is not None:
+            candidate = f"{count} piece {'classic' if style in {'classic', 'bone in', 'bone-in'} else 'boneless' if style == 'boneless' else ''} combo"
+            result = _resolve_item_id(candidate)
+            if result:
+                return result
+            # Fallback without "piece"
+            candidate = f"{count} {style} combo"
+            return _resolve_item_id(candidate)
+
+    return None
+
+
+def _extract_recovery_modifier_ids(texts: list[str], item_id: str) -> list[str]:
+    """Resolve modifier names from transcript text that are valid for the given item."""
+    found: list[str] = []
+    seen: set[str] = set()
+    for text in texts:
+        for word in re.split(r"[,;.\s]+", text):
+            word = word.strip().lower()
+            if not word or word in {"and", "or", "the", "a", "an", "with", "for", "to", "i"}:
+                continue
+            modifier_id = _resolve_modifier_id(word)
+            if modifier_id is None:
+                continue
+            if modifier_id in seen:
+                continue
+            if _modifier_allowed_for_item(item_id, modifier_id):
+                seen.add(modifier_id)
+                found.append(modifier_id)
+    return found
 
 
 def _extract_recovery_flavor_ids(text: str, *, max_flavors: int) -> list[str]:
@@ -968,6 +1016,10 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
                 )
             ]
             order.quantity = 1
+            # Recover combo modifiers (side, drink, dip) from transcript
+            modifier_ids = _extract_recovery_modifier_ids(texts_for_item, item_id)
+            if modifier_ids:
+                order.items[0].selected_modifier_ids = modifier_ids
             recovered = True
 
     _RESERVED_NAMES = frozenset({"pickup", "delivery", "pick up", "takeout"})
@@ -1032,6 +1084,14 @@ def _recover_order_from_transcript(session_state: Any) -> bool:
                     order.confirmed = True
                     recovered = True
 
+    if has_placement_claim:
+        if not order.recap_readback:
+            order.recap_readback = True
+            recovered = True
+        if not order.total_shown:
+            order.total_shown = True
+            recovered = True
+
     if recovered:
         logger.warning(
             "Recovered order state from transcript before placement",
@@ -1084,6 +1144,10 @@ async def maybe_autoplace_order(session_state: Any, assistant_text: str) -> None
 
     await _MUTEX.acquire()
     try:
+        # Double-check inside the mutex to prevent races with create_mock_order
+        if session_state.mock_order is not None:
+            return
+
         order = session_state.order
         decision = OrderStateMachine(order).authorize_submit()
         if (decision.validation_errors or decision.confirmation_reasons) and _recover_order_from_transcript(session_state):

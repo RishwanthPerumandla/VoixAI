@@ -2,59 +2,78 @@
 
 ## Prerequisites
 
-- Node.js 18 or newer
-- `pnpm`
-- Python 3.10 or newer
-- Docker Desktop (or Docker Engine + Compose v2) for the containerized path
-- LiveKit Cloud or a self-hosted LiveKit server
+- **Docker** (Docker Engine + Compose v2) — the only requirement for the containerized path
+- A provider API key: `OPENAI_API_KEY` and/or `GOOGLE_API_KEY`
+
+> **Note:** Local Node.js, Python, pnpm, and LiveKit are **not** needed when using Docker.
+> For manual non-Docker development, see the [Manual Setup](#4-manual-setup-non-docker) section below.
 
 ## Docker Quick Start
 
-If you want the fastest reproducible local run on a new machine, use Docker:
+The entire stack runs via Docker Compose — works on any system with Docker installed.
 
-1. Copy the root env file:
+1. Copy the root env file and add at least one provider key:
 
-   ```powershell
-   Copy-Item .env.example .env
+   ```bash
+   cp .env.example .env
    ```
 
-2. Add at least one provider key to `.env`:
+   Edit `.env` and set `OPENAI_API_KEY` and/or `GOOGLE_API_KEY`.
 
-   - `OPENAI_API_KEY` for `openai_realtime`
-   - `GOOGLE_API_KEY` for `gemini_live`
+2. Start everything:
 
-3. Start the full stack from the repo root:
-
-   ```powershell
-   docker compose up --build
+   ```bash
+   docker compose up --build -d
    ```
 
-4. Open `http://localhost:3000`.
+3. Seed the demo data (first time only):
 
-What the Docker stack includes:
+   ```bash
+   make seed
+   ```
 
-- a local LiveKit server on `ws://localhost:7880`
-- the FastAPI service on `http://localhost:8000`
-- the Python agent runtime connected to the internal Docker LiveKit hostname
-- the Next.js frontend on `http://localhost:3000`
+4. Open `http://localhost:3000` in your browser.
 
-Important Docker notes:
+To see live logs:
 
-- `docker compose` overrides the LiveKit connection details internally, so you do not need a separate hosted LiveKit project just to boot the local stack
-- the browser still needs a real model provider key to have an actual voice conversation
-- the API persists SQLite data in the `voixai-data` Docker volume
-- room-scoped fallback files are shared through the `voixai-shared` Docker volume
-
-To stop the stack:
-
-```powershell
-docker compose down
+```bash
+make logs
 ```
 
-To stop it and remove persisted local Docker data:
+To stop:
 
-```powershell
-docker compose down -v
+```bash
+make down
+```
+
+### What the Docker stack includes
+
+| Service | Access | Description |
+|---------|--------|-------------|
+| LiveKit | `ws://localhost:7880` | Local WebRTC server (bundled) |
+| API | `http://localhost:8000` | FastAPI order backend |
+| Agent Runtime | (internal) | Python LiveKit agent — connects to LiveKit |
+| Web | `http://localhost:3000` | Next.js frontend |
+
+### Important Docker notes
+
+- `docker compose` overrides the LiveKit connection details internally; no hosted LiveKit needed
+- The browser still needs a real model provider key for actual voice conversations
+- SQLite data persists in the `voixai-data` Docker volume
+- Room-scoped fallback files are shared through the `voixai-shared` Docker volume
+- The `.env` file is the **single** place to configure provider keys, voice provider, model choices, etc.
+
+### Useful Makefile commands
+
+```bash
+make up          # Build and start all services (daemon mode)
+make build       # Build images without starting
+make down        # Stop all services
+make logs        # Tail all logs
+make restart     # Rebuild and restart
+make seed        # Seed demo data
+make clean       # Remove containers, volumes, and images
+make help        # Show all commands
 ```
 
 ## 1. Configure environment files
@@ -238,13 +257,13 @@ To enable Gemini Live, set:
 VOICE_PROVIDER=gemini_live
 GOOGLE_API_KEY=...
 GOOGLE_REALTIME_MODEL=gemini-3.1-flash-live-preview
-GOOGLE_REALTIME_VOICE=Achird
+GOOGLE_REALTIME_VOICE=Achernar
 ```
 
 Gemini Live note:
 
 - `gemini-3.1-flash-live-preview` greets in its own voice via native `generate_reply(...)`, which requires the `charan632-dev/agents` Google plugin fork (it adds forced-`generate_reply` support for Gemini 3.1). If the stock PyPI plugin is installed instead, you get a duplicate greeting in two different voices. Ensure the fork is installed (see below).
-- `Achird` is the recommended default for Wingstop ordering. If you want a warmer hospitality feel, try `Sulafat`. If you want a calmer, firmer tone, try `Kore`.
+- `Achernar` is the recommended default for Wingstop ordering — a warm, clear female voice. Other options: `Achird` (friendly and approachable), `Sulafat` (warmer hospitality tone), `Kore` (calmer, firmer tone).
 
 ## 6. Start the API manually
 

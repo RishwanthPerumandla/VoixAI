@@ -15,7 +15,11 @@ dependencies = [
     "python-dotenv>=1.0,<2.0",
     "sqlalchemy>=2.0,<3.0",
     "uvicorn>=0.35,<1.0",
+    "voix-ordering",
 ]
 
-[tool.setuptools]
-py-modules = ["database", "main", "models", "seed", "services", "storage"]
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-dir]
+"" = "."
