@@ -187,6 +187,8 @@ class SessionState:
     last_intent_confidence: float | None = None
     last_router_slots: dict[str, object] = field(default_factory=dict)
     conversation_clarification_count: int = 0
+    user_speaking_started_at: float | None = None
+    last_assistant_started_at: float | None = None
     frustration_monitor: Any | None = field(default=None, repr=False, compare=False)
     handoff_handler: Any | None = field(default=None, repr=False, compare=False)
     handoff_message: str | None = None
@@ -1364,7 +1366,11 @@ async def my_agent(ctx: JobContext):
 
     def _on_user_state_changed(event: UserStateChangedEvent) -> None:
         _handle_user_state_change(event)
-        if event.new_state in {"speaking", "listening"}:
+        if event.new_state == "speaking":
+            session.userdata.user_speaking_started_at = time.time()
+            away_prompt_state["sent"] = False
+            session.userdata.waiting_for_customer = False
+        elif event.new_state == "listening":
             away_prompt_state["sent"] = False
             session.userdata.waiting_for_customer = False
         elif event.new_state == "away":
@@ -1372,6 +1378,21 @@ async def my_agent(ctx: JobContext):
 
     def _on_agent_state_changed(event: AgentStateChangedEvent) -> None:
         _handle_agent_state_change(event)
+        if event.new_state == "speaking":
+            # Calculate manual latency if SDK doesn't provide it
+            user_started = session.userdata.user_speaking_started_at
+            if user_started and session.userdata.assistant_turn_metrics is None:
+                manual_e2e = time.time() - user_started
+                session.userdata.assistant_turn_metrics = {
+                    "llm_ttft": None,
+                    "tts_ttfb": None,
+                    "e2e_latency": manual_e2e,
+                    "started_speaking_at": time.time(),
+                    "stopped_speaking_at": None,
+                }
+                asyncio.create_task(
+                    _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
+                )
 
     def _on_conversation_item(event: ConversationItemAddedEvent) -> None:
         _handle_conversation_item(event)
@@ -1404,15 +1425,14 @@ async def my_agent(ctx: JobContext):
 
         if item.role == "user":
             session.userdata.turn_count += 1
-            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+            # Collect user turn metrics for all providers
+            if metrics:
                 session.userdata.user_turn_metrics = {
-                    "transcription_delay": _metric_value(metrics.get("transcription_delay")) if metrics else None,
-                    "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")) if metrics else None,
+                    "transcription_delay": _metric_value(metrics.get("transcription_delay")),
+                    "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")),
                     "on_user_turn_completed_delay": _metric_value(
                         metrics.get("on_user_turn_completed_delay")
-                    )
-                    if metrics
-                    else None,
+                    ),
                 }
             else:
                 session.userdata.user_turn_metrics = None
@@ -1433,38 +1453,34 @@ async def my_agent(ctx: JobContext):
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
         elif item.role == "assistant":
-            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+            # Collect metrics for all voice providers
+            if metrics:
                 session.userdata.assistant_turn_metrics = {
-                    "llm_ttft": _metric_value(metrics.get("llm_node_ttft")) if metrics else None,
-                    "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")) if metrics else None,
-                    "e2e_latency": _metric_value(metrics.get("e2e_latency")) if metrics else None,
-                    "started_speaking_at": _metric_value(metrics.get("started_speaking_at"))
-                    if metrics
-                    else None,
-                    "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at"))
-                    if metrics
-                    else None,
+                    "llm_ttft": _metric_value(metrics.get("llm_node_ttft")),
+                    "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")),
+                    "e2e_latency": _metric_value(metrics.get("e2e_latency")),
+                    "started_speaking_at": _metric_value(metrics.get("started_speaking_at")),
+                    "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at")),
                 }
             else:
                 session.userdata.assistant_turn_metrics = None
 
-            # Record a latency sample for the classic path (fire-and-forget).
-            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
-                e2e = _metric_value(metrics.get("e2e_latency")) if metrics else None
-                if e2e is not None:
-                    asyncio.create_task(
-                        asyncio.to_thread(
-                            record_event,
-                            call_id=call_id,
-                            ts=time.time(),
-                            event_type="latency_sample",
-                            payload={
-                                "value_seconds": e2e,
-                                "phase": "assistant_turn",
-                                "voice_provider": VOICE_PROVIDER_CLASSIC,
-                            },
-                        )
+            # Record a latency sample (fire-and-forget).
+            e2e = _metric_value(metrics.get("e2e_latency")) if metrics else None
+            if e2e is not None:
+                asyncio.create_task(
+                    asyncio.to_thread(
+                        record_event,
+                        call_id=call_id,
+                        ts=time.time(),
+                        event_type="latency_sample",
+                        payload={
+                            "value_seconds": e2e,
+                            "phase": "assistant_turn",
+                            "voice_provider": runtime_config.voice_provider,
+                        },
                     )
+                )
 
             assistant_text = getattr(item, "text_content", "") or ""
             session.userdata.assistant_guardrail_violations = audit_assistant_response(

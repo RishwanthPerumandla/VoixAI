@@ -42,8 +42,9 @@ export function useIntelligence(
   useEffect(() => {
     if (!telemetrySnapshot) return;
 
-    if (telemetrySnapshot.reason === prevReasonRef.current) return;
-    prevReasonRef.current = telemetrySnapshot.reason;
+    const snapshotKey = `${telemetrySnapshot.reason}:${telemetrySnapshot.timestamp}`;
+    if (snapshotKey === prevReasonRef.current) return;
+    prevReasonRef.current = snapshotKey;
 
     const parsed = parseTelemetryToEvents(telemetrySnapshot, orderHashRef.current);
     orderHashRef.current = parsed.orderHash;
