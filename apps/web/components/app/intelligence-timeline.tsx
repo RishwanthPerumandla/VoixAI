@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence } from 'motion/react';
+import { memo } from 'react';
 import type { IntelligenceEvent } from '@/lib/intelligence/types';
 import { cn } from '@/lib/shadcn/utils';
 
@@ -40,27 +40,23 @@ const KIND_ICONS: Partial<Record<string, string>> = {
   system_message: ' ',
 };
 
-interface EventItemProps {
+const EventItem = memo(function EventItem({
+  event,
+  isLatest,
+}: {
   event: IntelligenceEvent;
   isLatest: boolean;
-}
-
-function EventItem({ event, isLatest }: EventItemProps) {
+}) {
   const styles = STATUS_STYLES[event.status] ?? STATUS_STYLES.info;
   const icon = KIND_ICONS[event.kind] ?? '•';
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 12, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
+    <div
       tabIndex={0}
       role="article"
       aria-label={`${event.label}: ${event.detail ?? ''}`}
       className={cn(
-        'relative rounded-[14px] border px-3 py-2.5 outline-none',
+        'relative rounded-[14px] border px-3 py-2.5 outline-none transition-colors',
         styles.bg,
         isLatest && 'ring-2 ring-indigo-200/50',
         'focus-visible:border-[color:var(--voix-accent)] focus-visible:ring-2 focus-visible:ring-[color:var(--voix-accent)]/30'
@@ -76,9 +72,9 @@ function EventItem({ event, isLatest }: EventItemProps) {
         </div>
         <span className={cn('h-2 w-2 shrink-0 rounded-full', styles.dot)} aria-hidden="true" />
       </div>
-    </motion.div>
+    </div>
   );
-}
+});
 
 interface IntelligenceTimelineProps {
   events: IntelligenceEvent[];
@@ -86,10 +82,10 @@ interface IntelligenceTimelineProps {
   maxVisible?: number;
 }
 
-export function IntelligenceTimeline({
+export const IntelligenceTimeline = memo(function IntelligenceTimeline({
   events,
   className,
-  maxVisible = 12,
+  maxVisible = 10,
 }: IntelligenceTimelineProps) {
   const visibleEvents = events.slice(-maxVisible);
   const latestId = visibleEvents[visibleEvents.length - 1]?.id;
@@ -101,15 +97,13 @@ export function IntelligenceTimeline({
       aria-label="Intelligence events"
       aria-live="polite"
     >
-      <AnimatePresence mode="popLayout">
-        {visibleEvents.map((event) => (
-          <EventItem
-            key={event.id}
-            event={event}
-            isLatest={event.id === latestId}
-          />
-        ))}
-      </AnimatePresence>
+      {visibleEvents.map((event) => (
+        <EventItem
+          key={event.id}
+          event={event}
+          isLatest={event.id === latestId}
+        />
+      ))}
 
       {events.length === 0 && (
         <div className="rounded-[14px] border border-dashed border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] p-4 text-center">
@@ -120,4 +114,4 @@ export function IntelligenceTimeline({
       )}
     </div>
   );
-}
+});

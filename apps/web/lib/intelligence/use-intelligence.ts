@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import type {
   BackendWorkflowStep,
@@ -14,8 +14,8 @@ import {
   type QuoteSnapshot,
 } from './quote-state-watcher';
 
-const MAX_EVENTS = 50;
-const MAX_EVENT_AGE_MS = 120_000;
+const MAX_EVENTS = 30;
+const MAX_EVENT_AGE_MS = 90_000;
 
 export interface UseIntelligenceResult {
   events: IntelligenceEvent[];
@@ -32,6 +32,7 @@ export function useIntelligence(
 ): UseIntelligenceResult {
   const orderHashRef = useRef('');
   const prevQuoteRef = useRef<QuoteSnapshot | null>(null);
+  const prevReasonRef = useRef('');
   const [events, setEvents] = useState<IntelligenceEvent[]>([]);
   const [workflowSteps, setWorkflowSteps] = useState<BackendWorkflowStep[]>([]);
   const [stage, setStage] = useState<WorkflowStage>('idle');
@@ -41,6 +42,9 @@ export function useIntelligence(
   useEffect(() => {
     if (!telemetrySnapshot) return;
 
+    if (telemetrySnapshot.reason === prevReasonRef.current) return;
+    prevReasonRef.current = telemetrySnapshot.reason;
+
     const parsed = parseTelemetryToEvents(telemetrySnapshot, orderHashRef.current);
     orderHashRef.current = parsed.orderHash;
 
@@ -48,12 +52,13 @@ export function useIntelligence(
     const quoteHasChanged = hasQuoteChanged(prevQuoteRef.current, newQuote);
     prevQuoteRef.current = newQuote;
 
-    setEvents((prev) => {
-      const merged = [...prev, ...parsed.events];
-      const cutoff = Date.now() - MAX_EVENT_AGE_MS;
-      const trimmed = merged.filter((e) => e.timestamp >= cutoff).slice(-MAX_EVENTS);
-      return trimmed;
-    });
+    if (parsed.events.length > 0) {
+      setEvents((prev) => {
+        const merged = [...prev, ...parsed.events];
+        const cutoff = Date.now() - MAX_EVENT_AGE_MS;
+        return merged.filter((e) => e.timestamp >= cutoff).slice(-MAX_EVENTS);
+      });
+    }
 
     setWorkflowSteps(parsed.workflowSteps);
     setStage(parsed.stage);

@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { memo, useEffect, useRef } from 'react';
 import type { UserFacingSessionState } from '@/components/app/session-status';
 import { TranscriptMessage } from '@/components/app/transcript-message';
 import { cn } from '@/lib/shadcn/utils';
@@ -30,60 +29,46 @@ function StateIndicator({ state }: { state: UserFacingSessionState }) {
   if (!label) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      className="flex items-center gap-2 px-4 py-2"
-    >
+    <div className="flex items-center gap-2 px-4 py-2">
       <div className="flex gap-1">
         {[0, 1, 2].map((i) => (
-          <motion.span
+          <span
             key={i}
-            className="h-1.5 w-1.5 rounded-full bg-[color:var(--voix-accent)]"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+            className="h-1.5 w-1.5 rounded-full bg-[color:var(--voix-accent)] animate-pulse"
+            style={{ animationDelay: `${i * 0.2}s` }}
           />
         ))}
       </div>
       <span className="text-xs text-[var(--voix-text-muted)]">{label}</span>
-    </motion.div>
+    </div>
   );
 }
 
 function EventIndicator({ event }: { event: IntelligenceEvent }) {
   if (event.kind === 'intent_detected' || event.kind === 'entity_extracted') {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="mx-4 flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5"
-      >
+      <div className="mx-4 flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5">
         <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
         <span className="text-xs font-medium text-indigo-700">
           {event.label}: {event.detail}
         </span>
-      </motion.div>
+      </div>
     );
   }
 
   if (event.kind === 'validation_error') {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="mx-4 flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5"
-      >
+      <div className="mx-4 flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
         <span className="text-xs font-medium text-amber-700">{event.detail}</span>
-      </motion.div>
+      </div>
     );
   }
 
   return null;
 }
 
-export function ConversationFeed({
+export const ConversationFeed = memo(function ConversationFeed({
   messages,
   state,
   latestEvent,
@@ -131,4 +116,4 @@ export function ConversationFeed({
       {latestEvent && <EventIndicator event={latestEvent} />}
     </div>
   );
-}
+});

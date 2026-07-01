@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { memo } from 'react';
 import { cn } from '@/lib/shadcn/utils';
 
 interface TranscriptMessageProps {
@@ -8,16 +8,13 @@ interface TranscriptMessageProps {
   message: string;
 }
 
-export function TranscriptMessage({ role, message }: TranscriptMessageProps) {
+export const TranscriptMessage = memo(function TranscriptMessage({ role, message }: TranscriptMessageProps) {
   const isAssistant = role === 'assistant';
 
   return (
-    <motion.article
+    <article
       className={cn('flex', isAssistant ? 'justify-start' : 'justify-end')}
       aria-label={isAssistant ? 'Assistant message' : 'Your message'}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: 'easeOut' }}
     >
       <div
         className={cn(
@@ -37,6 +34,6 @@ export function TranscriptMessage({ role, message }: TranscriptMessageProps) {
         </p>
         <p className="whitespace-pre-wrap">{message}</p>
       </div>
-    </motion.article>
+    </article>
   );
-}
+});

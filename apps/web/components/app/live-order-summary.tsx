@@ -1,7 +1,6 @@
 'use client';
 
 import { memo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import type { TelemetryOrderState, TelemetryPriceQuote } from '@/hooks/useSessionTelemetry';
 import { cn } from '@/lib/shadcn/utils';
 
@@ -11,7 +10,7 @@ interface LiveOrderSummaryProps {
   className?: string;
 }
 
-function OrderItem({
+const OrderItem = memo(function OrderItem({
   name,
   quantity,
   flavors,
@@ -23,11 +22,7 @@ function OrderItem({
   modifiers: string[];
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex items-start justify-between gap-2"
-    >
+    <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-[var(--voix-text-primary)]">
           {quantity}x {name}
@@ -38,9 +33,9 @@ function OrderItem({
           </p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
-}
+});
 
 export const LiveOrderSummary = memo(function LiveOrderSummary({
   order,
@@ -85,17 +80,15 @@ export const LiveOrderSummary = memo(function LiveOrderSummary({
 
       {hasItems && (
         <div className="mt-3 space-y-2.5">
-          <AnimatePresence mode="popLayout">
-            {items.map((item) => (
-              <OrderItem
-                key={item.line_id}
-                name={item.name}
-                quantity={item.quantity}
-                flavors={item.flavors}
-                modifiers={item.modifiers}
-              />
-            ))}
-          </AnimatePresence>
+          {items.map((item) => (
+            <OrderItem
+              key={item.line_id}
+              name={item.name}
+              quantity={item.quantity}
+              flavors={item.flavors}
+              modifiers={item.modifiers}
+            />
+          ))}
         </div>
       )}
 
