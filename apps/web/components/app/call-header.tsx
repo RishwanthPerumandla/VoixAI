@@ -2,6 +2,8 @@
 
 import { PhoneOffIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { LatencyIndicator } from '@/components/app/latency-indicator';
+import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import type { UserFacingSessionState } from '@/components/app/session-status';
 import { getSessionStatusContent, getSessionStatusTone } from '@/components/app/session-status';
 import { cn } from '@/lib/shadcn/utils';
@@ -18,11 +20,12 @@ const TONE_BADGE_CLASSES: Record<string, string> = {
 
 interface CallHeaderProps {
   state: UserFacingSessionState;
+  telemetrySnapshot: SessionTelemetrySnapshot | null;
   onEndCall: () => void;
   className?: string;
 }
 
-export function CallHeader({ state, onEndCall, className }: CallHeaderProps) {
+export function CallHeader({ state, telemetrySnapshot, onEndCall, className }: CallHeaderProps) {
   const copy = getSessionStatusContent(state);
   const tone = getSessionStatusTone(state);
   const isEnding = state === 'complete' || state === 'error';
@@ -45,7 +48,9 @@ export function CallHeader({ state, onEndCall, className }: CallHeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        <LatencyIndicator telemetrySnapshot={telemetrySnapshot} />
+
         <span
           aria-live="polite"
           className={cn(

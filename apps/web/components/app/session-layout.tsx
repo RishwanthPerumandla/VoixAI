@@ -193,6 +193,7 @@ export function SessionLayout({
         {/* Call Header */}
         <CallHeader
           state={userFacingState}
+          telemetrySnapshot={telemetrySnapshot}
           onEndCall={() => setConfirmEnd(true)}
         />
 
@@ -281,6 +282,7 @@ export function SessionLayout({
               stage={stage}
               stageLabel={stageLabel}
               eventCount={eventCount}
+              telemetrySnapshot={telemetrySnapshot}
             />
 
             {/* Scenario Workspace */}

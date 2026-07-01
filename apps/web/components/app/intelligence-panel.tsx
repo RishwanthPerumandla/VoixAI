@@ -1,9 +1,10 @@
 'use client';
 
 import type { BackendWorkflowStep, IntelligenceEvent, WorkflowStage } from '@/lib/intelligence/types';
-import { getWorkflowStageLabel } from '@/lib/intelligence/types';
+import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import { BackendWorkflowRail } from './backend-workflow-rail';
 import { IntelligenceTimeline } from './intelligence-timeline';
+import { LatencyStats } from './latency-indicator';
 import { cn } from '@/lib/shadcn/utils';
 
 interface IntelligencePanelProps {
@@ -12,6 +13,7 @@ interface IntelligencePanelProps {
   stage: WorkflowStage;
   stageLabel: string;
   eventCount: number;
+  telemetrySnapshot: SessionTelemetrySnapshot | null;
   className?: string;
 }
 
@@ -21,6 +23,7 @@ export function IntelligencePanel({
   stage,
   stageLabel,
   eventCount,
+  telemetrySnapshot,
   className,
 }: IntelligencePanelProps) {
   return (
@@ -30,6 +33,14 @@ export function IntelligencePanel({
         className
       )}
     >
+      {/* Latency Stats */}
+      <section
+        className="rounded-[20px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-4"
+        style={{ boxShadow: 'var(--voix-card-shadow)' }}
+      >
+        <LatencyStats telemetrySnapshot={telemetrySnapshot} />
+      </section>
+
       {/* Backend Pipeline */}
       <section
         className="rounded-[20px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-4"
