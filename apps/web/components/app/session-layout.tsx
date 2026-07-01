@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   useAgent,
   useChat,
@@ -110,6 +110,20 @@ export function SessionLayout({
   const ScenarioWorkspace = scenario.WorkspaceComponent;
   const ScenarioConfirmation = scenario.ConfirmationComponent;
 
+  const [escalated, setEscalated] = useState(false);
+
+  useEffect(() => {
+    if (!telemetrySnapshot) return;
+    const reason = telemetrySnapshot.reason;
+    if (reason === 'escalation' || reason === 'handoff_required') {
+      setEscalated(true);
+      const timer = setTimeout(() => {
+        onEndSession();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [telemetrySnapshot, onEndSession]);
+
   const handleEditOrder = async () => {
     await send('I want to change my order.');
   };
@@ -132,6 +146,32 @@ export function SessionLayout({
           onStartNewFlow={onEndSession}
           onBackToDemo={onEndSession}
         />
+      </div>
+    );
+  }
+
+  if (escalated) {
+    return (
+      <div className="dashboard-light min-h-svh w-full bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
+        <section className="mx-auto flex min-h-svh w-full max-w-[1440px] flex-col items-center justify-center px-4">
+          <div
+            className="w-full max-w-md rounded-[28px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-8 text-center"
+            style={{ boxShadow: 'var(--voix-card-shadow-hover)' }}
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+              <WarningIcon size={32} className="text-amber-600" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold text-[var(--voix-text-primary)]">
+              Call Escalated
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--voix-text-secondary)]">
+              Your call is being transferred to a manager. Please hold while we connect you.
+            </p>
+            <p className="mt-4 text-xs text-[var(--voix-text-muted)]">
+              This window will close automatically...
+            </p>
+          </div>
+        </section>
       </div>
     );
   }
