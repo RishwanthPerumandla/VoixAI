@@ -15,6 +15,7 @@ import { ConversationFeed } from '@/components/app/conversation-feed';
 import { DeveloperDetails } from '@/components/app/developer-details';
 import { IntelligencePanel } from '@/components/app/intelligence-panel';
 import { LiveOrderSummary } from '@/components/app/live-order-summary';
+import { LiveTranscriptLine } from '@/components/app/live-transcript-line';
 import { MinimalControls } from '@/components/app/minimal-controls';
 import { VoiceVisualizer } from '@/components/app/voice-visualizer';
 import { Button } from '@/components/ui/button';
@@ -158,6 +159,12 @@ export function SessionLayout({
               <VoiceVisualizer state={userFacingState} />
             </div>
 
+            {/* Live Transcript Line - shows latest message below visualizer */}
+            <LiveTranscriptLine
+              messages={transcriptEntries}
+              state={userFacingState}
+            />
+
             {deviceError && (
               <div className="rounded-[20px] border border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm font-semibold text-amber-800">Microphone access needed</p>
@@ -192,9 +199,9 @@ export function SessionLayout({
               priceQuote={telemetrySnapshot?.price_quote ?? null}
             />
 
-            {/* Conversation Feed */}
+            {/* Conversation Feed - Full scrollable history */}
             <div
-              className="flex min-h-0 flex-1 flex-col rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)]"
+              className="flex min-h-[300px] flex-1 flex-col rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)]"
               style={{ boxShadow: 'var(--voix-card-shadow)' }}
             >
               <div className="border-b border-[var(--voix-border-subtle)] px-4 py-3">

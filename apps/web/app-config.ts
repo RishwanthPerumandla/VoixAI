@@ -53,7 +53,7 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
     process.env.NEXT_PUBLIC_DEFAULT_VOICE_MODE ??
     process.env.VOICE_PROVIDER ??
     process.env.VOICE_ENGINE ??
-    'classic',
+    'gemini_live',
 
   supportsChatInput: true,
   supportsVideoInput: false,

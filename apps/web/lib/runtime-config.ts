@@ -144,7 +144,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
   },
 ];
 
-export const DEFAULT_RUNTIME_CONFIG = RUNTIME_PRESETS[0].config;
+export const DEFAULT_RUNTIME_CONFIG = RUNTIME_PRESETS.find((p) => p.id === 'gemini-live-voice')?.config ?? RUNTIME_PRESETS[0].config;
 
 export function getDefaultRuntimeConfig(voiceMode?: string | null): RuntimeConfig {
   const normalized = voiceMode?.trim().toLowerCase();
