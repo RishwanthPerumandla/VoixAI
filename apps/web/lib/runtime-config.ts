@@ -40,16 +40,6 @@ export const VOICE_ENGINE_OPTIONS: Array<{
   description: string;
 }> = [
   {
-    value: 'pipeline',
-    label: 'Classic Voice',
-    description: 'Separate speech recognition, reasoning, and voice synthesis for the most proven path.',
-  },
-  {
-    value: 'openai_realtime',
-    label: 'OpenAI Realtime',
-    description: 'Native OpenAI speech-to-speech for the fastest conversational feel.',
-  },
-  {
     value: 'gemini_live',
     label: 'Gemini Live',
     description: 'Native Gemini speech-to-speech with realtime audio and expressive turn taking.',
