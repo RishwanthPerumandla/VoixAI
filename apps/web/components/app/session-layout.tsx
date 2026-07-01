@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useAgent,
   useChat,
@@ -111,18 +111,27 @@ export function SessionLayout({
   const ScenarioConfirmation = scenario.ConfirmationComponent;
 
   const [escalated, setEscalated] = useState(false);
+  const escalationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (escalated) return;
     if (!telemetrySnapshot) return;
     const reason = telemetrySnapshot.reason;
     if (reason === 'escalation' || reason === 'handoff_required') {
       setEscalated(true);
-      const timer = setTimeout(() => {
+      escalationTimerRef.current = setTimeout(() => {
         onEndSession();
       }, 3000);
-      return () => clearTimeout(timer);
     }
-  }, [telemetrySnapshot, onEndSession]);
+  }, [telemetrySnapshot, onEndSession, escalated]);
+
+  useEffect(() => {
+    return () => {
+      if (escalationTimerRef.current) {
+        clearTimeout(escalationTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleEditOrder = async () => {
     await send('I want to change my order.');
