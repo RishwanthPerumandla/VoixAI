@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useAgent,
   useChat,
@@ -10,19 +10,21 @@ import {
 } from '@livekit/components-react';
 import type { ReceivedMessage } from '@livekit/components-react';
 import { WarningIcon } from '@phosphor-icons/react';
-import { AssistantStage } from '@/components/app/assistant-stage';
-import {
-  type ConversationEntry,
-  ConversationTranscript,
-} from '@/components/app/conversation-transcript';
+import { CallHeader } from '@/components/app/call-header';
+import { ConversationFeed } from '@/components/app/conversation-feed';
 import { DeveloperDetails } from '@/components/app/developer-details';
-import { getSessionStatusContent, getSessionStatusTone } from '@/components/app/session-status';
-import { VoiceControls } from '@/components/app/voice-controls';
+import { IntelligencePanel } from '@/components/app/intelligence-panel';
+import { LiveOrderSummary } from '@/components/app/live-order-summary';
+import { LiveTranscriptLine } from '@/components/app/live-transcript-line';
+import { MinimalControls } from '@/components/app/minimal-controls';
+import { VoiceVisualizer } from '@/components/app/voice-visualizer';
 import { Button } from '@/components/ui/button';
 import { useInputControls } from '@/hooks/agents-ui/use-agent-control-bar';
 import { synthesizeConfirmationSnapshot, useRoomOrder } from '@/hooks/useRoomOrder';
 import type { SessionTelemetrySnapshot } from '@/hooks/useSessionTelemetry';
 import { useVoicePresenceState } from '@/hooks/useVoicePresenceState';
+import { useIntelligence } from '@/lib/intelligence';
+import type { IntelligenceEvent } from '@/lib/intelligence/types';
 import type { ChannelConfig } from '@/lib/channel-config';
 import type { RuntimeConfig } from '@/lib/runtime-config';
 import { resolveScenarioCopy } from '@/lib/scenario-config';
@@ -37,23 +39,14 @@ interface SessionLayoutProps {
   onEndSession: () => void;
 }
 
-function getLatestAssistantMessage(messages: ConversationEntry[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === 'assistant') {
-      return messages[index].message;
-    }
-  }
-  return null;
-}
-
 function buildTranscriptEntries(
   sessionMessages: ReceivedMessage[],
   telemetrySnapshot: SessionTelemetrySnapshot | null
-): ConversationEntry[] {
+): Array<{ id: string; role: 'assistant' | 'user'; message: string }> {
   if (sessionMessages.length > 0) {
     return sessionMessages.map((entry) => ({
       id: entry.id,
-      role: entry.from?.isLocal ? 'user' : 'assistant',
+      role: entry.from?.isLocal ? 'user' as const : 'assistant' as const,
       message: entry.message,
     }));
   }
@@ -65,16 +58,15 @@ function buildTranscriptEntries(
   }));
 }
 
-const STATUS_TONE_CLASSES: Record<string, string> = {
-  teal: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  blue: 'border-sky-200 bg-sky-50 text-sky-700',
-  violet: 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  amber: 'border-amber-200 bg-amber-50 text-amber-700',
-  green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  rose: 'border-rose-200 bg-rose-50 text-rose-700',
-  slate:
-    'border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] text-[var(--voix-text-secondary)]',
-};
+function getLatestEventForFeed(events: IntelligenceEvent[]): IntelligenceEvent | undefined {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (e.kind === 'intent_detected' || e.kind === 'entity_extracted' || e.kind === 'validation_error') {
+      return e;
+    }
+  }
+  return undefined;
+}
 
 export function SessionLayout({
   scenario,
@@ -88,10 +80,7 @@ export function SessionLayout({
   const { messages } = useSessionMessages();
   const { send } = useChat();
   const agent = useAgent();
-  // Fallback path for the order-placed confirmation: if telemetry never delivers
-  // `mock_order` (flaky data channel), detect the placed order from the backend.
   const apiRoomOrder = useRoomOrder(room?.name, isConnected && !telemetrySnapshot?.mock_order);
-  const [showTranscript, setShowTranscript] = useState(true);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [deviceError, setDeviceError] = useState<Error | null>(null);
   const { microphoneTrack, microphoneToggle } = useInputControls({
@@ -107,12 +96,42 @@ export function SessionLayout({
     telemetrySnapshot,
     userLevel,
   });
-  const statusCopy = getSessionStatusContent(userFacingState);
-  const statusTone = getSessionStatusTone(userFacingState);
+
+  const {
+    events,
+    workflowSteps,
+    stage,
+    stageLabel,
+    quoteSnapshot,
+    eventCount,
+  } = useIntelligence(telemetrySnapshot);
+
   const transcriptEntries = buildTranscriptEntries(messages, telemetrySnapshot);
-  const latestAssistantPrompt = getLatestAssistantMessage(transcriptEntries);
   const ScenarioWorkspace = scenario.WorkspaceComponent;
   const ScenarioConfirmation = scenario.ConfirmationComponent;
+
+  const [escalated, setEscalated] = useState(false);
+  const escalationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (escalated) return;
+    if (!telemetrySnapshot) return;
+    const reason = telemetrySnapshot.reason;
+    if (reason === 'escalation' || reason === 'handoff_required') {
+      setEscalated(true);
+      escalationTimerRef.current = setTimeout(() => {
+        onEndSession();
+      }, 3000);
+    }
+  }, [telemetrySnapshot, onEndSession, escalated]);
+
+  useEffect(() => {
+    return () => {
+      if (escalationTimerRef.current) {
+        clearTimeout(escalationTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleEditOrder = async () => {
     await send('I want to change my order.');
@@ -122,8 +141,6 @@ export function SessionLayout({
     await send('confirm');
   };
 
-  // Prefer the live telemetry confirmation; fall back to the backend-detected
-  // order so the confirmation + auto-redirect still fire without the data channel.
   const confirmationSnapshot = telemetrySnapshot?.mock_order
     ? telemetrySnapshot
     : apiRoomOrder
@@ -142,114 +159,148 @@ export function SessionLayout({
     );
   }
 
+  if (escalated) {
+    return (
+      <div className="dashboard-light min-h-svh w-full bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
+        <section className="mx-auto flex min-h-svh w-full max-w-[1440px] flex-col items-center justify-center px-4">
+          <div
+            className="w-full max-w-md rounded-[28px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-8 text-center"
+            style={{ boxShadow: 'var(--voix-card-shadow-hover)' }}
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+              <WarningIcon size={32} className="text-amber-600" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold text-[var(--voix-text-primary)]">
+              Call Escalated
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--voix-text-secondary)]">
+              Your call is being transferred to a manager. Please hold while we connect you.
+            </p>
+            <p className="mt-4 text-xs text-[var(--voix-text-muted)]">
+              This window will close automatically...
+            </p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const latestEvent = getLatestEventForFeed(events);
+
   return (
     <div className="dashboard-light relative min-h-svh w-full bg-[var(--voix-bg-primary)] text-[var(--voix-text-primary)]">
-      <section className="mx-auto flex min-h-svh w-full max-w-7xl flex-col px-4 pt-8 pb-10 md:px-6 xl:px-8">
-        <header
-          className="rounded-[28px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-5 py-4"
-          style={{ boxShadow: 'var(--voix-card-shadow)' }}
-        >
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-[var(--voix-text-primary)]">
-                VoixAI session in progress
-              </p>
-              <p className="text-sm text-[var(--voix-text-secondary)]">
-                {resolveScenarioCopy(scenario.session.headerSubtitle, channel)}
-              </p>
-              <p className="mt-1 text-sm text-[var(--voix-text-muted)]">{statusCopy.helper}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                aria-live="polite"
-                className={[
-                  'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
-                  STATUS_TONE_CLASSES[statusTone] ?? STATUS_TONE_CLASSES.slate,
-                ].join(' ')}
-              >
-                <span className="h-2 w-2 rounded-full bg-current" />
-                {statusCopy.label}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setConfirmEnd(true)}
-                className="rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)]"
-              >
-                End order
-              </Button>
-            </div>
-          </div>
-        </header>
+      <section className="mx-auto flex min-h-svh w-full max-w-[1440px] flex-col px-4 pt-6 pb-8 md:px-6">
+        {/* Call Header */}
+        <CallHeader
+          state={userFacingState}
+          telemetrySnapshot={telemetrySnapshot}
+          onEndCall={() => setConfirmEnd(true)}
+        />
 
-        <div className="mt-4 grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        {/* Two-Panel Layout */}
+        <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_380px]">
+          {/* Left Panel: Voice Experience */}
           <main className="flex min-h-0 flex-col gap-4">
-            <AssistantStage state={userFacingState} latestAssistantPrompt={latestAssistantPrompt}>
-              {deviceError && (
-                <div className="w-full rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-left">
-                  <p className="text-base font-semibold text-amber-800">Microphone access needed</p>
-                  <p className="mt-2 text-sm leading-6 text-amber-700">
-                    {resolveScenarioCopy(scenario.session.permissionPrompt, channel)}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button
-                      type="button"
-                      onClick={() => void microphoneToggle.toggle(true)}
-                      className="rounded-full bg-[color:var(--voix-accent)] text-white hover:bg-[color:var(--voix-accent-hover)]"
-                    >
-                      Enable microphone
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowTranscript(true)}
-                      className="rounded-full border-[var(--voix-border-strong)] bg-[var(--voix-bg-elevated)] text-[var(--voix-text-secondary)] hover:bg-[var(--voix-bg-subtle)]"
-                    >
-                      Use text instead
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </AssistantStage>
+            {/* Voice Visualizer */}
+            <div
+              className="flex items-center justify-center rounded-[28px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] py-8"
+              style={{ boxShadow: 'var(--voix-card-shadow)' }}
+            >
+              <VoiceVisualizer state={userFacingState} />
+            </div>
 
-            <div className="grid gap-4">
-              <ConversationTranscript
+            {/* Live Transcript Line - shows latest message below visualizer */}
+            <LiveTranscriptLine
+              messages={transcriptEntries}
+              state={userFacingState}
+            />
+
+            {deviceError && (
+              <div className="rounded-[20px] border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-800">Microphone access needed</p>
+                <p className="mt-1 text-xs leading-5 text-amber-700">
+                  {resolveScenarioCopy(scenario.session.permissionPrompt, channel)}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void microphoneToggle.toggle(true)}
+                    className="rounded-full bg-[color:var(--voix-accent)] text-white hover:bg-[color:var(--voix-accent-hover)]"
+                  >
+                    Enable microphone
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void send('')}
+                    className="rounded-full border-[var(--voix-border-strong)] text-[var(--voix-text-secondary)]"
+                  >
+                    Use text instead
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Live Order Summary */}
+            <LiveOrderSummary
+              order={telemetrySnapshot?.order ?? null}
+              priceQuote={telemetrySnapshot?.price_quote ?? null}
+            />
+
+            {/* Conversation Feed - Full scrollable history */}
+            <div
+              className="flex min-h-[300px] flex-1 flex-col rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)]"
+              style={{ boxShadow: 'var(--voix-card-shadow)' }}
+            >
+              <div className="border-b border-[var(--voix-border-subtle)] px-4 py-3">
+                <p className="text-xs font-semibold text-[var(--voix-text-muted)] uppercase">
+                  Conversation
+                </p>
+              </div>
+              <ConversationFeed
                 messages={transcriptEntries}
                 state={userFacingState}
-                collapsed={!showTranscript}
-                onToggleCollapsed={() => setShowTranscript((value) => !value)}
-                footer={
-                  <VoiceControls
-                    microphoneEnabled={microphoneToggle.enabled}
-                    microphonePending={microphoneToggle.pending}
-                    onToggleMicrophone={microphoneToggle.toggle}
-                    onEndOrder={() => setConfirmEnd(true)}
-                  />
-                }
+                latestEvent={latestEvent}
               />
+              <div className="border-t border-[var(--voix-border-subtle)] px-4 py-3">
+                <MinimalControls
+                  microphoneEnabled={microphoneToggle.enabled}
+                  microphonePending={microphoneToggle.pending}
+                  onToggleMicrophone={microphoneToggle.toggle}
+                />
+              </div>
             </div>
           </main>
 
-          <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+          {/* Right Panel: Intelligence */}
+          <aside className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
+            <IntelligencePanel
+              events={events}
+              workflowSteps={workflowSteps}
+              stage={stage}
+              stageLabel={stageLabel}
+              eventCount={eventCount}
+              telemetrySnapshot={telemetrySnapshot}
+            />
+
+            {/* Scenario Workspace */}
             <section
-              className="rounded-[28px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-4"
+              className="rounded-[20px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] p-4"
               style={{ boxShadow: 'var(--voix-card-shadow)' }}
             >
-              <div className="px-2 pb-4">
-                <p className="text-sm font-semibold text-[var(--voix-text-primary)]">
+              <div className="mb-3">
+                <p className="text-xs font-semibold text-[var(--voix-text-muted)] uppercase">
                   {scenario.session.workspaceEyebrow}
                 </p>
-                <p className="mt-1 text-sm text-[var(--voix-text-secondary)]">
+                <p className="mt-1 text-xs text-[var(--voix-text-secondary)]">
                   {scenario.session.workspaceTitle}
                 </p>
-                <p className="mt-1 text-xs tracking-[0.16em] text-[var(--voix-text-muted)] uppercase">
-                  Channel: {channel.shortLabel}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[var(--voix-text-muted)]">
-                  {resolveScenarioCopy(scenario.session.workspaceDescription, channel)}
+                <p className="mt-0.5 text-[10px] tracking-wide text-[var(--voix-text-muted)]">
+                  {channel.shortLabel}
                 </p>
               </div>
-
               <ScenarioWorkspace
                 telemetrySnapshot={telemetrySnapshot}
                 userFacingState={userFacingState}
@@ -265,9 +316,10 @@ export function SessionLayout({
               telemetrySnapshot={telemetrySnapshot}
               rawState={agent.state}
             />
-          </div>
+          </aside>
         </div>
 
+        {/* End Call Dialog */}
         {confirmEnd && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm"

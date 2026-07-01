@@ -150,8 +150,12 @@ function isTelemetrySnapshot(value: unknown): value is SessionTelemetrySnapshot 
 export function useSessionTelemetry() {
   const { room } = useSessionContext();
   const [snapshot, setSnapshot] = React.useState<SessionTelemetrySnapshot | null>(null);
+  const prevSnapshotRef = React.useRef<string>('');
 
   React.useEffect(() => {
+    setSnapshot(null);
+    prevSnapshotRef.current = '';
+
     const decoder = new TextDecoder();
 
     const handleDataReceived = (
@@ -167,7 +171,17 @@ export function useSessionTelemetry() {
       try {
         const parsed = JSON.parse(decoder.decode(payload)) as unknown;
         if (isTelemetrySnapshot(parsed)) {
-          setSnapshot(parsed);
+          const serialized = JSON.stringify({
+            r: parsed.reason,
+            o: parsed.order,
+            p: parsed.price_quote,
+            m: parsed.mock_order,
+            t: parsed.timestamp,
+          });
+          if (serialized !== prevSnapshotRef.current) {
+            prevSnapshotRef.current = serialized;
+            setSnapshot(parsed);
+          }
         }
       } catch (error) {
         console.warn('Failed to parse VoixAI telemetry payload', error);

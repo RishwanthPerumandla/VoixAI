@@ -181,7 +181,7 @@
       "status": "collecting_order",
       "line_item_ids": ["chicken_sandwich"],
       "line_modifier_ids": [[]],
-      "validation_errors": ["Please choose pickup or delivery."],
+      "validation_errors": [],
       "archived_order_count": 1,
       "event_types": ["order_restarted", "item_added"]
     }

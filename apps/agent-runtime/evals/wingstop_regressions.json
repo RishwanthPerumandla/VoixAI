@@ -4,12 +4,6 @@
     "description": "An 8 piece classic wings order keeps its flavor after a later blank update call and can still be priced, reviewed, confirmed, and submitted.",
     "steps": [
       {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
-      {
         "tool": "set_customer_details",
         "kwargs": {
           "customer_name": "Rishi"
@@ -93,12 +87,6 @@
     "name": "combo_to_wings_correction_preserves_order_integrity",
     "description": "A customer starts with an 8 piece classic combo, then switches to wings-only with ranch. The corrected order must price and submit cleanly.",
     "steps": [
-      {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
       {
         "tool": "set_customer_details",
         "kwargs": {
@@ -192,12 +180,6 @@
     "name": "pickup_split_flavor_bone_in_correction_with_fries_and_ranch_submits_cleanly",
     "description": "A pickup order with split-flavor classic wings, fries, and ranch survives a temporary boneless correction and still prices and submits cleanly.",
     "steps": [
-      {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
       {
         "tool": "set_customer_details",
         "kwargs": {
@@ -312,12 +294,6 @@
     "description": "Pickup orders must not move into final review or submit without a customer name.",
     "steps": [
       {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
-      {
         "tool": "add_menu_item",
         "kwargs": {
           "item_name": "8 classic wings",
@@ -366,12 +342,6 @@
     "name": "cancel_fries_only_keeps_rest_of_order_intact",
     "description": "A user can remove fries without corrupting the rest of the order.",
     "steps": [
-      {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
       {
         "tool": "set_customer_details",
         "kwargs": {
@@ -427,12 +397,6 @@
     "description": "A user can cancel the whole order in one step.",
     "steps": [
       {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
-      {
         "tool": "add_menu_item",
         "kwargs": {
           "item_name": "8 classic wings",
@@ -464,12 +428,6 @@
     "description": "A start-over flow clears the active cart and allows a fresh order.",
     "steps": [
       {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
-      },
-      {
         "tool": "set_customer_details",
         "kwargs": {
           "customer_name": "Rishi"
@@ -488,12 +446,6 @@
         "response_contains": [
           "starting over"
         ]
-      },
-      {
-        "tool": "set_order_type",
-        "kwargs": {
-          "order_type": "pickup"
-        }
       },
       {
         "tool": "set_customer_details",
@@ -526,6 +478,146 @@
       ],
       "status": "collecting_order",
       "confirmed": false,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "combo_happy_path_single_call",
+    "description": "A complete 8 piece classic combo with flavor, side, and drink all passed in one add_menu_item call.",
+    "steps": [
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Sam"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "8 piece classic combo",
+          "flavors": "hot",
+          "modifiers": "fries, coke"
+        },
+        "response_contains": [
+          "8 Piece Classic Wing Combo",
+          "Regular Seasoned Fries",
+          "Coke"
+        ]
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "8 Piece Classic Wing Combo",
+          "Original Hot",
+          "Should I place it?"
+        ]
+      },
+      {
+        "tool": "set_confirmation_status",
+        "kwargs": {
+          "confirmed": true
+        }
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "Great, your order was placed."
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Sam",
+      "line_count": 1,
+      "line_item_ids": [
+        "combo_classic_8"
+      ],
+      "line_flavor_ids": [
+        ["original_hot"]
+      ],
+      "line_modifier_ids": [
+        ["regular_seasoned_fries", "coke"]
+      ],
+      "total": "$16.77",
+      "status": "completed",
+      "confirmed": true,
+      "validation_errors": []
+    }
+  },
+  {
+    "name": "combo_two_step_add_then_update",
+    "description": "A 10 piece boneless combo added without modifiers first, then side and drink attached via update_last_item.",
+    "steps": [
+      {
+        "tool": "set_customer_details",
+        "kwargs": {
+          "customer_name": "Sam"
+        }
+      },
+      {
+        "tool": "add_menu_item",
+        "kwargs": {
+          "item_name": "10 piece boneless combo",
+          "flavors": "lemon pepper"
+        },
+        "response_contains": [
+          "10 Piece Boneless Wing Combo",
+          "I still need:"
+        ]
+      },
+      {
+        "tool": "update_last_item",
+        "kwargs": {
+          "add_modifiers": "sprite, large seasoned fries"
+        },
+        "response_contains": [
+          "Large Seasoned Fries",
+          "Sprite"
+        ],
+        "response_not_contains": [
+          "Please choose no more than"
+        ]
+      },
+      {
+        "tool": "review_order_for_confirmation",
+        "kwargs": {},
+        "response_contains": [
+          "10 Piece Boneless Wing Combo",
+          "Should I place it?"
+        ]
+      },
+      {
+        "tool": "set_confirmation_status",
+        "kwargs": {
+          "confirmed": true
+        }
+      },
+      {
+        "tool": "create_mock_order",
+        "kwargs": {},
+        "response_contains": [
+          "Great, your order was placed."
+        ]
+      }
+    ],
+    "expected": {
+      "order_type": "pickup",
+      "customer_name": "Sam",
+      "line_count": 1,
+      "line_item_ids": [
+        "combo_boneless_10"
+      ],
+      "line_flavor_ids": [
+        ["lemon_pepper"]
+      ],
+      "line_modifier_ids": [
+        ["sprite", "large_seasoned_fries"]
+      ],
+      "total": "$20.55",
+      "status": "completed",
+      "confirmed": true,
       "validation_errors": []
     }
   }

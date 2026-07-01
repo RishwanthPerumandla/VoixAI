@@ -6,8 +6,10 @@ import { cn } from '@/lib/shadcn/utils';
 
 export interface WingstopOrderItem {
   name: string;
+  quantity: number;
   flavor?: string | null;
   style?: string | null;
+  modifiers?: string[];
   notes?: string | null;
 }
 
@@ -43,18 +45,35 @@ export function buildWingstopOrderItems(
 
   if (order.line_items && order.line_items.length > 0) {
     return order.line_items.map((item) => ({
-      name: item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name,
+      name: item.name,
+      quantity: item.quantity,
       flavor: item.flavors.length > 0 ? item.flavors.join(', ') : null,
       style: item.style,
-      notes: item.modifiers.length > 0 ? item.modifiers.join(', ') : item.notes,
+      modifiers: item.modifiers,
+      notes: item.notes,
     }));
   }
 
   return order.items.map((item) => ({
     name: toTitleCase(item),
+    quantity: 1,
     flavor: order.flavor,
     style: order.classic_or_boneless,
   }));
+}
+
+function buildItemDetailText(item: WingstopOrderItem, drink: string | null) {
+  const visibleModifiers = (item.modifiers ?? []).filter((modifier) => modifier !== drink);
+  const detailParts: string[] = [];
+
+  if (visibleModifiers.length > 0) {
+    detailParts.push(visibleModifiers.join(', '));
+  }
+  if (item.notes) {
+    detailParts.push(item.notes);
+  }
+
+  return detailParts.length > 0 ? detailParts.join(' | ') : null;
 }
 
 export function buildWingstopMissingDetails(snapshot: SessionTelemetrySnapshot | null) {
@@ -196,40 +215,39 @@ export function WingstopOrderPanel({
             </p>
           ) : (
             <div className="mt-3 space-y-3">
-              {items.map((item, index) => (
-                <article
-                  key={`${item.name}-${index}`}
-                  className="rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-medium text-[var(--voix-text-primary)]">
-                        1x {item.name}
-                      </p>
-                      {item.notes && (
-                        <p className="mt-2 text-sm text-[var(--voix-text-muted)]">{item.notes}</p>
+              {items.map((item, index) => {
+                const detailText = buildItemDetailText(item, drink);
+
+                return (
+                  <article
+                    key={`${item.name}-${index}`}
+                    className="rounded-[24px] border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-subtle)] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-medium text-[var(--voix-text-primary)]">
+                          {item.quantity}x {item.name}
+                        </p>
+                        {detailText && (
+                          <p className="mt-2 text-sm text-[var(--voix-text-muted)]">{detailText}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.flavor && (
+                        <span className="rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3 py-1 text-xs text-[var(--voix-text-secondary)]">
+                          {item.flavor}
+                        </span>
+                      )}
+                      {item.style && (
+                        <span className="rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3 py-1 text-xs text-[var(--voix-text-secondary)]">
+                          {item.style}
+                        </span>
                       )}
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {item.flavor && (
-                      <span className="rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3 py-1 text-xs text-[var(--voix-text-secondary)]">
-                        {item.flavor}
-                      </span>
-                    )}
-                    {item.style && (
-                      <span className="rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3 py-1 text-xs text-[var(--voix-text-secondary)]">
-                        {item.style}
-                      </span>
-                    )}
-                    {drink && (
-                      <span className="rounded-full border border-[var(--voix-border-subtle)] bg-[var(--voix-bg-elevated)] px-3 py-1 text-xs text-[var(--voix-text-secondary)]">
-                        {drink}
-                      </span>
-                    )}
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

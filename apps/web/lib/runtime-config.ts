@@ -40,16 +40,6 @@ export const VOICE_ENGINE_OPTIONS: Array<{
   description: string;
 }> = [
   {
-    value: 'pipeline',
-    label: 'Classic Voice',
-    description: 'Separate speech recognition, reasoning, and voice synthesis for the most proven path.',
-  },
-  {
-    value: 'openai_realtime',
-    label: 'OpenAI Realtime',
-    description: 'Native OpenAI speech-to-speech for the fastest conversational feel.',
-  },
-  {
     value: 'gemini_live',
     label: 'Gemini Live',
     description: 'Native Gemini speech-to-speech with realtime audio and expressive turn taking.',
@@ -71,7 +61,7 @@ export const GOOGLE_REALTIME_MODEL_OPTIONS = ['gemini-3.1-flash-live-preview'] a
 
 export const OPENAI_REALTIME_VOICE_OPTIONS = ['marin'] as const;
 
-export const GOOGLE_REALTIME_VOICE_OPTIONS = ['Achird', 'Sulafat', 'Kore'] as const;
+export const GOOGLE_REALTIME_VOICE_OPTIONS = ['Achernar', 'Achird', 'Sulafat', 'Kore'] as const;
 
 const buildConfig = (config: RuntimeConfig): RuntimeConfig => config;
 
@@ -89,7 +79,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-2.5-flash',
-      googleRealtimeVoice: 'Achird',
+      googleRealtimeVoice: 'Achernar',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,
@@ -111,7 +101,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-2.5-flash',
-      googleRealtimeVoice: 'Achird',
+      googleRealtimeVoice: 'Achernar',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,
@@ -133,7 +123,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
       openaiRealtimeVoice: 'marin',
       openaiRealtimeEagerness: 'medium',
       googleRealtimeModel: 'gemini-3.1-flash-live-preview',
-      googleRealtimeVoice: 'Achird',
+      googleRealtimeVoice: 'Achernar',
       realtimeTemperature: 0.6,
       realtimeEnableAffectiveDialog: false,
       realtimeEnableProactivity: false,
@@ -144,7 +134,7 @@ export const RUNTIME_PRESETS: RuntimePreset[] = [
   },
 ];
 
-export const DEFAULT_RUNTIME_CONFIG = RUNTIME_PRESETS[0].config;
+export const DEFAULT_RUNTIME_CONFIG = RUNTIME_PRESETS.find((p) => p.id === 'gemini-live-voice')?.config ?? RUNTIME_PRESETS[0].config;
 
 export function getDefaultRuntimeConfig(voiceMode?: string | null): RuntimeConfig {
   const normalized = voiceMode?.trim().toLowerCase();

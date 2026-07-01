@@ -20,7 +20,17 @@ from .intents import (
     INTENT_UNKNOWN,
     OrderIntent,
 )
-from .menu import MENU_ITEMS, OPTION_TO_GROUP_IDS, _normalize_lookup_key
+from .menu import (
+    MENU_ITEMS,
+    MODIFIER_GROUPS,
+    OPTION_TO_GROUP_IDS,
+    _normalize_lookup_key,
+    get_item_type,
+    get_item_template,
+    get_combo_template,
+    get_group_pack_template,
+    _get_max_flavors,
+)
 from .models import OrderEvent, OrderLineItem, OrderState
 from .serialization import serialize_order_state
 from .state_machine import OrderPhase, OrderStateMachine
@@ -146,7 +156,7 @@ def _clear_for_restart(order: OrderState) -> None:
     order.items = []
     order.modifiers = []
     order.quantity = 1
-    order.order_type = None
+    order.order_type = "pickup"
     order.customer_name = ""
     order.phone = ""
     order.notes = ""
@@ -203,6 +213,7 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
             order,
             intent.clarification_question or "I want to make sure I got that right. What would you like to change?",
         )
+        machine.mark_collecting()
         result.events = events + result.events
         return result
 
@@ -230,7 +241,7 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
         return ReducerResult(order=order, events=events, validation_errors=[])
 
     if intent.name == INTENT_RESTART_ORDER:
-        if order.items or order.order_type or order.customer_name:
+        if order.items or order.customer_name:
             order.archived_orders.append(serialize_order_state(copy.deepcopy(order)))
         _clear_for_restart(order)
         machine.reset_to_collecting()
@@ -245,30 +256,62 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
             result = _clarify(order, "Which item would you like to add?")
             result.events = events + result.events
             return result
-        line = OrderLineItem(
-            line_id=intent.target_line_id or f"line-{len(order.items) + 1}",
-            item_id=intent.replacement_item_id,
-            quantity=max(1, intent.quantity or 1),
-            selected_flavor_ids=list(intent.flavor_ids),
-            selected_modifier_ids=list(intent.add_modifier_ids),
-            notes=intent.notes or "",
-        )
-        removed_modifiers = _prune_invalid_modifiers(line)
-        order.items.append(line)
-        order.quantity = sum(existing_line.quantity for existing_line in order.items)
-        machine.reset_to_collecting()
-        events.append(_event("item_added", "Item added to order.", item_id=line.item_id, line_id=line.line_id))
-        for modifier_id in removed_modifiers:
-            events.append(
-                _event(
-                    "invalid_modifier_removed",
-                    "Removed modifier that was invalid for the selected item.",
-                    modifier_id=modifier_id,
-                    line_id=line.line_id,
+
+        # Dedup: if a line with the same item_id already exists, merge into it
+        # instead of creating a duplicate. This prevents the agent from
+        # accidentally adding the same combo/wings item twice.
+        existing_line = None
+        for existing in order.items:
+            if existing.item_id == intent.replacement_item_id:
+                existing_line = existing
+                break
+
+        if existing_line is not None:
+            existing_line.quantity = max(1, intent.quantity or existing_line.quantity)
+            if intent.flavor_ids:
+                existing_line.selected_flavor_ids = list(intent.flavor_ids)
+            merged_modifiers = list(existing_line.selected_modifier_ids)
+            for modifier_id in intent.add_modifier_ids:
+                if modifier_id not in merged_modifiers:
+                    merged_modifiers.append(modifier_id)
+            existing_line.selected_modifier_ids = merged_modifiers
+            if intent.notes:
+                existing_line.notes = intent.notes
+            removed_modifiers = _prune_invalid_modifiers(existing_line)
+            order.quantity = sum(l.quantity for l in order.items)
+            machine.reset_to_collecting()
+            events.append(_event("item_merged", "Merged into existing item instead of duplicating.", item_id=existing_line.item_id, line_id=existing_line.line_id))
+            for modifier_id in removed_modifiers:
+                events.append(
+                    _event("invalid_modifier_removed", "Removed modifier that was invalid.", modifier_id=modifier_id, line_id=existing_line.line_id)
                 )
+            if removed_modifiers:
+                order.metrics.correction_count += 1
+        else:
+            line = OrderLineItem(
+                line_id=intent.target_line_id or f"line-{len(order.items) + 1}",
+                item_id=intent.replacement_item_id,
+                quantity=max(1, intent.quantity or 1),
+                selected_flavor_ids=list(intent.flavor_ids),
+                selected_modifier_ids=list(intent.add_modifier_ids),
+                notes=intent.notes or "",
             )
-        if removed_modifiers:
-            order.metrics.correction_count += 1
+            removed_modifiers = _prune_invalid_modifiers(line)
+            order.items.append(line)
+            order.quantity = sum(existing_line.quantity for existing_line in order.items)
+            machine.reset_to_collecting()
+            events.append(_event("item_added", "Item added to order.", item_id=line.item_id, line_id=line.line_id))
+            for modifier_id in removed_modifiers:
+                events.append(
+                    _event(
+                        "invalid_modifier_removed",
+                        "Removed modifier that was invalid for the selected item.",
+                        modifier_id=modifier_id,
+                        line_id=line.line_id,
+                    )
+                )
+            if removed_modifiers:
+                order.metrics.correction_count += 1
     else:
         target_line = _find_target_line(order, intent)
         if target_line is None:
@@ -295,18 +338,70 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
                 result = _clarify(order, "What should I change that item to?")
                 result.events = events + result.events
                 return result
-            target_line.item_id = intent.replacement_item_id
+            old_item_id = target_line.item_id
+            new_item_id = intent.replacement_item_id
+            old_type = get_item_type(old_item_id)
+            new_type = get_item_type(new_item_id)
+
+            # Safe replacement: preserve valid fields, remove invalid ones
+            target_line.item_id = new_item_id
             if intent.quantity is not None:
                 target_line.quantity = max(1, intent.quantity)
             if intent.flavor_ids:
                 target_line.selected_flavor_ids = list(intent.flavor_ids)
             if intent.notes is not None:
                 target_line.notes = intent.notes
+
+            # Check flavor count against new max
+            new_max_flavors = _get_max_flavors(new_item_id)
+            if new_max_flavors > 0 and len(target_line.selected_flavor_ids) > new_max_flavors:
+                target_line.selected_flavor_ids = target_line.selected_flavor_ids[:new_max_flavors]
+                events.append(
+                    _event(
+                        "flavor_limit_adjusted",
+                        f"Reduced flavors to fit {new_max_flavors} max for new item.",
+                        old_count=len(target_line.selected_flavor_ids),
+                        new_count=new_max_flavors,
+                        line_id=target_line.line_id,
+                    )
+                )
+
             removed_modifiers = _prune_invalid_modifiers(target_line)
+
+            # Classic <-> Boneless: handle piece_preference
+            if old_type == "classic_wings" and new_type == "boneless_wings":
+                piece_mods = [m for m in target_line.selected_modifier_ids
+                              if "piece_preference" in OPTION_TO_GROUP_IDS.get(m, set())]
+                for pm in piece_mods:
+                    target_line.selected_modifier_ids.remove(pm)
+                    if pm not in removed_modifiers:
+                        removed_modifiers.append(pm)
+                events.append(
+                    _event(
+                        "invalid_modifier_removed",
+                        "Piece preference (all flats/all drums) is not available for boneless wings.",
+                        modifier_id="piece_preference",
+                        line_id=target_line.line_id,
+                    )
+                )
+
+            if old_type == "boneless_wings" and new_type == "classic_wings":
+                events.append(
+                    _event(
+                        "piece_preference_allowed",
+                        "Piece preference is now available for classic bone-in wings.",
+                        line_id=target_line.line_id,
+                    )
+                )
+
+            # Combo type change: preserve valid side/drink/dip
+            if old_type == new_type and old_type == "combo":
+                pass  # same combo type, preserve everything valid
+
             machine.reset_to_collecting()
             order.metrics.correction_count += 1
             events.append(
-                _event("item_replaced", "Item replaced on order.", item_id=target_line.item_id, line_id=target_line.line_id)
+                _event("item_replaced", "Item replaced on order.", item_id=target_line.item_id, line_id=target_line.line_id, old_item_id=old_item_id)
             )
             for modifier_id in removed_modifiers:
                 events.append(
@@ -320,6 +415,19 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
         else:
             if intent.name == INTENT_CHANGE_QUANTITY and intent.quantity is not None:
                 target_line.quantity = max(1, intent.quantity)
+                # If piece count changed, recompute max_flavors and trim
+                new_max_flavors = _get_max_flavors(target_line.item_id)
+                if new_max_flavors > 0 and len(target_line.selected_flavor_ids) > new_max_flavors:
+                    target_line.selected_flavor_ids = target_line.selected_flavor_ids[:new_max_flavors]
+                    events.append(
+                        _event(
+                            "flavor_limit_adjusted",
+                            f"Reduced flavors to fit {new_max_flavors} max for this size.",
+                            old_count=len(target_line.selected_flavor_ids),
+                            new_count=new_max_flavors,
+                            line_id=target_line.line_id,
+                        )
+                    )
                 order.metrics.correction_count += 1
             if intent.name in {INTENT_CHANGE_FLAVOR, INTENT_MODIFY_ITEM} and intent.flavor_ids:
                 target_line.selected_flavor_ids = list(intent.flavor_ids)
@@ -327,6 +435,26 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
             if intent.add_modifier_ids:
                 for modifier_id in intent.add_modifier_ids:
                     if modifier_id not in target_line.selected_modifier_ids:
+                        # Auto-replace when adding to a group already at capacity.
+                        for group_id in OPTION_TO_GROUP_IDS.get(modifier_id, set()):
+                            group = MODIFIER_GROUPS.get(group_id)
+                            if group is not None and group.max_selections > 0:
+                                existing = [
+                                    m for m in target_line.selected_modifier_ids
+                                    if group_id in OPTION_TO_GROUP_IDS.get(m, set())
+                                ]
+                                while len(existing) >= group.max_selections:
+                                    removed = existing.pop(0)
+                                    target_line.selected_modifier_ids.remove(removed)
+                                    events.append(
+                                        _event(
+                                            "modifier_replaced",
+                                            f"Replaced {removed} with {modifier_id} in {group_id}.",
+                                            modifier_id=modifier_id,
+                                            replaced_id=removed,
+                                            line_id=target_line.line_id,
+                                        )
+                                    )
                         target_line.selected_modifier_ids.append(modifier_id)
                         events.append(
                             _event("modifier_added", "Modifier added to item.", modifier_id=modifier_id, line_id=target_line.line_id)
@@ -366,6 +494,8 @@ def apply_order_intent(order: OrderState, intent: OrderIntent) -> ReducerResult:
     machine.start_validation()
     validation_errors = validate_order(order)
     machine.apply_validation(validation_errors)
+    if intent.name == INTENT_REMOVE_ITEM and not order.items:
+        machine.mark_collecting()
     if validation_errors:
         order.metrics.validation_failure_count += 1
         events.append(_event("validation_failed", "Validation failed after reducer mutation.", errors=list(validation_errors)))

@@ -136,3 +136,108 @@ async def test_observability_health_reports_components(storage: SqliteStorage) -
     names = {c.name for c in snapshot.components}
     assert "Order datastore" in names
     assert "Idempotency guard" in names
+
+
+# ── Transcript turns ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_append_transcript_turns(storage: SqliteStorage) -> None:
+    await api_main.start_call(api_main.CallStartRequest(call_id="call-t1", room_name="room-t"))
+    result = await api_main.append_call_turns(
+        "call-t1",
+        api_main.TurnAppendBatchRequest(
+            turns=[
+                api_main.TurnAppendRequest(speaker="assistant", text="Hello", state_node="GREETING"),
+                api_main.TurnAppendRequest(
+                    speaker="user", text="track my order", intent="track_order"
+                ),
+            ]
+        ),
+    )
+    assert result["inserted"] == 2
+
+    turns = await api_main.get_call_transcript("call-t1")
+    assert len(turns) == 2
+    assert turns[0].speaker == "assistant"
+    assert turns[0].state_node == "GREETING"
+    assert turns[1].speaker == "user"
+    assert turns[1].intent == "track_order"
+    assert turns[1].seq == 2
+
+
+@pytest.mark.asyncio
+async def test_append_turns_missing_call_returns_404(storage: SqliteStorage) -> None:
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await api_main.append_call_turns("no-such", api_main.TurnAppendBatchRequest(turns=[]))
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_transcript_missing_call_returns_404(storage: SqliteStorage) -> None:
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await api_main.get_call_transcript("no-such")
+    assert exc.value.status_code == 404
+
+
+# ── Analytics events ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_record_and_list_call_events(storage: SqliteStorage) -> None:
+    await api_main.start_call(api_main.CallStartRequest(call_id="call-e1", room_name="room-e"))
+    r1 = await api_main.record_call_event(
+        "call-e1",
+        api_main.EventRequest(ts=100.0, type="state_enter", payload={"node": "GREETING"}),
+    )
+    assert r1["status"] == "ok"
+
+    r2 = await api_main.record_call_event(
+        "call-e1",
+        api_main.EventRequest(ts=101.0, type="slot_filled", payload={"slot": "customer_name"}),
+    )
+    assert r2["status"] == "ok"
+
+    events = await api_main.get_call_events("call-e1")
+    assert len(events) == 2
+    assert events[0].type == "state_enter"
+    assert events[0].payload["node"] == "GREETING"
+    assert events[1].type == "slot_filled"
+
+
+@pytest.mark.asyncio
+async def test_record_event_missing_call_returns_404(storage: SqliteStorage) -> None:
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await api_main.record_call_event("no-such", api_main.EventRequest(ts=0, type="test"))
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_analytics_overview_includes_new_fields(storage: SqliteStorage) -> None:
+    await api_main.start_call(api_main.CallStartRequest(call_id="call-x", room_name="room-x"))
+    await api_main.update_call(
+        "call-x",
+        api_main.CallUpdateRequest(
+            status="completed", outcome="order_placed", duration_seconds=60.0,
+            ended_at=time.time(), turn_count=5, sentiment=0.8, order_number="WS-1",
+        ),
+    )
+    now = time.time()
+    storage.insert_event("call-x", now - 60, "latency_sample", {"value_seconds": 0.45})
+    storage.insert_event("call-x", now - 30, "latency_sample", {"value_seconds": 1.2})
+    storage.insert_event("call-x", now - 10, "latency_sample", {"value_seconds": 0.35})
+
+    overview = await api_main.analytics_overview(window_hours=24, buckets=6)
+    assert overview.total_calls >= 1
+    assert overview.completion_rate is not None
+    assert overview.aov is not None
+    assert overview.p50_latency_seconds is not None
+    assert overview.p95_latency_seconds is not None
+    assert isinstance(overview.intent_distribution, dict)
+    assert overview.abandonment_rate is not None

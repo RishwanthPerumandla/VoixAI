@@ -103,10 +103,7 @@
         "user": "Add 10 classic wings.",
         "expected": {
           "contains_items": ["classic_10"],
-          "validation_errors": [
-            "Please choose pickup or delivery.",
-            "Please choose a flavor for your wings."
-          ]
+          "validation_errors": ["Please choose a flavor for your wings."]
         }
       },
       {

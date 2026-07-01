@@ -51,8 +51,22 @@ from .menu import (
     _resolve_modifier_id,
     _selected_by_group,
     _split_csv,
+    get_catalog,
+    load_catalog,
 )
 from .models import (
+    Catalog,
+    CatalogFlavor,
+    CatalogModifierGroup,
+    CatalogModifierOption,
+    ComboTemplate,
+    ComboRules,
+    GroupPackTemplate,
+    GroupPackRules,
+    IncludedComponents,
+    ItemTemplate,
+    MainComponent,
+    RestaurantProfile,
     FlavorOption,
     MenuItem,
     MockOrder,
@@ -95,7 +109,20 @@ from .validation import (
 )
 
 __all__ = [
-    # models
+    # catalog models
+    "Catalog",
+    "CatalogFlavor",
+    "CatalogModifierGroup",
+    "CatalogModifierOption",
+    "ComboTemplate",
+    "ComboRules",
+    "GroupPackTemplate",
+    "GroupPackRules",
+    "IncludedComponents",
+    "ItemTemplate",
+    "MainComponent",
+    "RestaurantProfile",
+    # legacy models
     "FlavorOption",
     "ModifierOption",
     "ModifierGroup",
@@ -114,6 +141,8 @@ __all__ = [
     "MODIFIER_GROUPS",
     "MENU_ITEMS",
     "STORE_HOURS",
+    "get_catalog",
+    "load_catalog",
     # pricing
     "TAX_RATE",
     "build_price_quote",

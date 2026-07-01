@@ -53,16 +53,16 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
     process.env.NEXT_PUBLIC_DEFAULT_VOICE_MODE ??
     process.env.VOICE_PROVIDER ??
     process.env.VOICE_ENGINE ??
-    'classic',
+    'gemini_live',
 
   supportsChatInput: true,
   supportsVideoInput: false,
   supportsScreenShare: false,
   isPreConnectBufferEnabled: true,
 
-  logo: '/favicon.ico',
+  logo: '/favicon.svg',
   accent: '#c8642a',
-  logoDark: '/favicon.ico',
+  logoDark: '/favicon.svg',
   accentDark: '#ff9254',
   startButtonText: 'Start demo',
 

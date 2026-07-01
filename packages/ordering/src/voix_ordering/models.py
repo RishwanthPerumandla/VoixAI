@@ -9,6 +9,158 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
+
+
+# ── Catalog-level models ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RestaurantProfile:
+    name: str
+    scenario: str
+    disclaimer: str
+    currency: str
+    tax_rate: Decimal
+    default_ready_minutes: int
+    supports_pickup: bool
+    supports_delivery: bool
+
+
+@dataclass(frozen=True)
+class CatalogFlavor:
+    id: str
+    name: str
+    flavor_type: str
+    heat_level: int
+    available: bool = True
+    aliases: tuple[str, ...] = ()
+    allowed_for_item_types: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CatalogModifierOption:
+    id: str
+    name: str
+    price_delta: Decimal = Decimal("0.00")
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CatalogModifierGroup:
+    id: str
+    name: str
+    applies_to_item_types: tuple[str, ...] = ()
+    required: bool = False
+    max_select: int = 1
+    options: tuple[CatalogModifierOption, ...] = ()
+
+
+@dataclass(frozen=True)
+class MainComponent:
+    component_type: str
+    piece_count: int = 0
+    required: bool = True
+    allow_classic: bool = True
+    allow_boneless: bool = True
+
+
+@dataclass(frozen=True)
+class IncludedComponents:
+    side_count: int = 0
+    drink_count: int = 0
+    dip_count: int = 0
+
+
+@dataclass(frozen=True)
+class ComboRules:
+    allows_piece_preference: bool = False
+    allows_all_flats: bool = False
+    allows_all_drums: bool = False
+    requires_side: bool = True
+    requires_drink: bool = True
+
+
+@dataclass(frozen=True)
+class GroupPackRules:
+    allows_piece_preference: bool = False
+    requires_side: bool = False
+    requires_drink: bool = False
+    wing_type_required: bool = True
+
+
+@dataclass(frozen=True)
+class ItemTemplate:
+    id: str
+    name: str
+    category_id: str
+    item_type: str
+    base_price: Decimal
+    available: bool = True
+    piece_count: int | None = None
+    included_flavor_count: int = 0
+    included_dip_count: int = 0
+    max_flavors: int = 0
+    required_slots: tuple[str, ...] = ()
+    optional_slots: tuple[str, ...] = ()
+    modifier_group_ids: tuple[str, ...] = ()
+    prep_time_minutes: int = 15
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ComboTemplate:
+    id: str
+    name: str
+    category_id: str
+    item_type: str
+    base_price: Decimal
+    available: bool = True
+    main_component: MainComponent | None = None
+    included_components: IncludedComponents | None = None
+    max_flavors: int = 1
+    required_slots: tuple[str, ...] = ()
+    optional_slots: tuple[str, ...] = ()
+    modifier_group_ids: tuple[str, ...] = ()
+    rules: ComboRules | None = None
+    prep_time_minutes: int = 18
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GroupPackTemplate:
+    id: str
+    name: str
+    category_id: str
+    item_type: str
+    base_price: Decimal
+    available: bool = True
+    main_component: MainComponent | None = None
+    included_components: IncludedComponents | None = None
+    max_flavors: int = 2
+    serves: int = 2
+    required_slots: tuple[str, ...] = ()
+    optional_slots: tuple[str, ...] = ()
+    modifier_group_ids: tuple[str, ...] = ()
+    rules: GroupPackRules | None = None
+    prep_time_minutes: int = 22
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Catalog:
+    schema_version: str
+    restaurant_profile: RestaurantProfile
+    categories: tuple[dict[str, str], ...]  # id -> name
+    flavors: tuple[CatalogFlavor, ...]
+    modifier_groups: tuple[CatalogModifierGroup, ...]
+    item_templates: tuple[ItemTemplate, ...]
+    combo_templates: tuple[ComboTemplate, ...]
+    group_pack_templates: tuple[GroupPackTemplate, ...]
+    synonyms: tuple[dict[str, str], ...]
+
+
+# ── Legacy models (kept for backward compatibility) ──────────────────────
 
 
 @dataclass(frozen=True)
@@ -142,7 +294,7 @@ class OrderState:
     items: list[OrderLineItem] = field(default_factory=list)
     modifiers: list[str] = field(default_factory=list)
     quantity: int = 1
-    order_type: str | None = None
+    order_type: str = "pickup"
     customer_name: str = ""
     phone: str = ""
     notes: str = ""

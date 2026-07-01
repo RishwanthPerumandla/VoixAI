@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import random
+from uuid import uuid4
 
 from .menu import MENU_ITEMS, _flavor_names, _modifier_names
 from .models import MockOrder, OrderState, PriceQuote
@@ -21,8 +21,6 @@ def _missing_confirmation_reasons(order: OrderState) -> list[str]:
         reasons.append("the final recap has not been read back")
     if not order.pos_validation_passed:
         reasons.append("POS validation has not passed")
-    if not order.order_type:
-        reasons.append("the order type is missing")
     if order.order_type == "pickup" and not order.customer_name.strip():
         reasons.append("the pickup name is missing")
     return reasons
@@ -59,7 +57,7 @@ def build_confirmation_summary(order: OrderState, price_quote: PriceQuote | None
     return (
         f"Your order is {', '.join(item_parts)}. "
         f"Total is {quote.total}. "
-        f"This is for {order.order_type}.{customer_text} "
+        f"This is a pickup order.{customer_text} "
         f"Should I place it?"
     )
 
@@ -88,7 +86,7 @@ def _build_kitchen_ticket(order: OrderState, price_quote: PriceQuote, order_numb
 
 def create_mock_order(order: OrderState, price_quote: PriceQuote | None = None) -> MockOrder:
     quote = price_quote or build_price_quote(order)
-    order_number = f"MOCK-{random.randint(10001, 99999)}"
+    order_number = f"MOCK-{uuid4().hex[:12].upper()}"
     summary = summarize_order_state(order)
     return MockOrder(
         order_number=order_number,

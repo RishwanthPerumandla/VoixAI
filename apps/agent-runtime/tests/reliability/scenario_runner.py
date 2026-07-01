@@ -100,15 +100,6 @@ class ScenarioResult:
     last_clarification_question: str | None = None
 
 
-def _find_order_type(text: str) -> str | None:
-    normalized = _normalize_lookup_key(text)
-    if "pickup" in normalized:
-        return "pickup"
-    if "delivery" in normalized:
-        return "delivery"
-    return None
-
-
 def _find_customer_name(text: str) -> str | None:
     patterns = (
         r"\bfor (?P<name>[A-Za-z][A-Za-z'-]*)\b",
@@ -125,26 +116,36 @@ def _find_customer_name(text: str) -> str | None:
     return None
 
 
-def _collect_flavors(text: str) -> list[str]:
+def _collect_catalog_matches(text: str, source: dict[str, Any]) -> list[str]:
     lowered = text.lower()
-    flavor_ids: list[str] = []
-    for flavor in FLAVOR_OPTIONS.values():
-        aliases = (flavor.display_name, *flavor.aliases)
-        if any(alias.lower() in lowered for alias in aliases):
-            if flavor.id not in flavor_ids:
-                flavor_ids.append(flavor.id)
-    return flavor_ids
+    candidates: list[tuple[int, str, str]] = []
+    for value_id, value in source.items():
+        aliases = (value.display_name, *value.aliases)
+        for alias in aliases:
+            normalized = alias.strip().lower()
+            if normalized:
+                candidates.append((len(normalized), normalized, value_id))
+
+    matches: list[str] = []
+    occupied_spans: list[tuple[int, int]] = []
+    for _, candidate, value_id in sorted(candidates, reverse=True):
+        for match in re.finditer(rf"\b{re.escape(candidate)}\b", lowered):
+            span = match.span()
+            if any(max(span[0], used[0]) < min(span[1], used[1]) for used in occupied_spans):
+                continue
+            if value_id not in matches:
+                matches.append(value_id)
+            occupied_spans.append(span)
+            break
+    return matches
+
+
+def _collect_flavors(text: str) -> list[str]:
+    return _collect_catalog_matches(text, FLAVOR_OPTIONS)
 
 
 def _collect_modifiers(text: str) -> list[str]:
-    lowered = text.lower()
-    modifier_ids: list[str] = []
-    for modifier in MODIFIER_OPTIONS.values():
-        aliases = (modifier.display_name, *modifier.aliases)
-        if any(alias.lower() in lowered for alias in aliases):
-            if modifier.id not in modifier_ids:
-                modifier_ids.append(modifier.id)
-    return modifier_ids
+    return _collect_catalog_matches(text, MODIFIER_OPTIONS)
 
 
 def _resolve_item_phrase(text: str) -> str | None:
@@ -213,6 +214,19 @@ def _is_place_request(normalized_text: str) -> bool:
     )
 
 
+def _is_ready_to_order(normalized_text: str) -> bool:
+    return _contains_phrase(
+        normalized_text,
+        "ready to order",
+        "im ready",
+        "i am ready",
+        "lets order",
+        "let's order",
+        "id like to order",
+        "i'd like to order",
+    )
+
+
 def _find_removal_target(user_text: str, normalized_text: str) -> str:
     target = _resolve_item_phrase(user_text)
     if target is not None:
@@ -253,6 +267,8 @@ class ReliabilityScenarioRunner:
         self.session_state.publish_snapshot = publish_snapshot  # type: ignore[method-assign]
 
     def reset(self, initial_state: dict[str, Any] | None = None) -> None:
+        from scenarios.wingstop import reset_backend_circuit_breaker
+        reset_backend_circuit_breaker()
         self.session_state = SessionState()
         self.context = SimpleNamespace(userdata=self.session_state)
         self._snapshot_reasons = []
@@ -264,7 +280,8 @@ class ReliabilityScenarioRunner:
         setattr(self.session_state, "_last_priced_subtotal", None)
         initial_state = initial_state or {}
         order = self.session_state.order
-        order.order_type = initial_state.get("order_type")
+        if "order_type" in initial_state:
+            order.order_type = initial_state["order_type"]
         order.customer_name = initial_state.get("customer_name", "")
         order.phone = initial_state.get("phone", "")
         order.language = initial_state.get("language", "english")
@@ -350,10 +367,7 @@ class ReliabilityScenarioRunner:
         responses: list[str] = []
         item_phrase = _resolve_item_phrase(user_text)
 
-        order_type = _find_order_type(user_text)
         customer_name = _find_customer_name(user_text)
-        if order_type is not None:
-            responses.append(await self.assistant.set_order_type(self.context, order_type))
         if customer_name is not None:
             responses.append(
                 await self.assistant.set_customer_details(
@@ -395,6 +409,9 @@ class ReliabilityScenarioRunner:
                 ),
             )
             self.session_state.order = result.order
+            if not self.session_state.order.items:
+                self.session_state.order.status = "idle"
+                self.session_state.order.metrics.final_status = "idle"
             self.session_state.mock_order = None
             self.session_state.price_quote = None
             return result.clarification_question or AMBIGUOUS_PHRASES[normalized]
@@ -404,6 +421,14 @@ class ReliabilityScenarioRunner:
             return " ".join(part for part in responses if part)
 
         if _is_review_request(normalized):
+            responses.append(await self.assistant.review_order_for_confirmation(self.context))
+            return " ".join(part for part in responses if part)
+
+        if _is_ready_to_order(normalized):
+            if self.session_state.order.status == "completed":
+                return summarize_order_state(self.session_state.order)
+            if self.session_state.price_quote is None:
+                responses.append(await self.assistant.price_order(self.context))
             responses.append(await self.assistant.review_order_for_confirmation(self.context))
             return " ".join(part for part in responses if part)
 

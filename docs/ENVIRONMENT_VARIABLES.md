@@ -20,13 +20,15 @@ The root env file is shared local-development configuration for the API and work
 - `OPENAI_REALTIME_VOICE`: OpenAI Realtime voice, default `alloy`
 - `OPENAI_REALTIME_EAGERNESS`: OpenAI semantic VAD eagerness, default `medium`
 - `GOOGLE_REALTIME_MODEL`: Gemini Live model, default `gemini-3.1-flash-live-preview`
-- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achird`
+- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achernar`
 - `REALTIME_TEMPERATURE`: realtime model temperature, default `0.6`
 - `REALTIME_ENABLE_AFFECTIVE_DIALOG`: Google realtime feature flag
 - `REALTIME_ENABLE_PROACTIVITY`: Google realtime feature flag
 - `WEB_PORT`: local web port, default `3000`
 - `API_PORT`: local API port, default `8000`
 - `VOIXAI_API_URL`: agent telemetry endpoint, default `http://127.0.0.1:8000`
+- `DATABASE_URL`: optional SQLAlchemy database URL for `apps/api`; leave empty for SQLite or set a Postgres URL in dev/prod
+- `VOIXAI_DB_PATH`: SQLite fallback path when `DATABASE_URL` is unset, default `.voixai/voixai.db`
 
 Docker note:
 
@@ -72,7 +74,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `OPENAI_REALTIME_VOICE`: OpenAI Realtime voice, default `alloy`
 - `OPENAI_REALTIME_EAGERNESS`: OpenAI semantic VAD eagerness, default `medium`
 - `GOOGLE_REALTIME_MODEL`: Gemini Live model, default `gemini-3.1-flash-live-preview`
-- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achird`
+- `GOOGLE_REALTIME_VOICE`: Gemini Live voice, default `Achernar`
 - `REALTIME_TEMPERATURE`: realtime model temperature, default `0.6`
 - `REALTIME_ENABLE_AFFECTIVE_DIALOG`: Google realtime feature flag
 - `REALTIME_ENABLE_PROACTIVITY`: Google realtime feature flag
@@ -83,7 +85,7 @@ The runtime can start in classic, OpenAI Realtime, or Gemini Live depending on e
 - `openai_realtime`: uses the LiveKit OpenAI Realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live`: uses the LiveKit Google realtime plugin inside the Python worker while the browser still connects only to LiveKit
 - `gemini_live` on `gemini-3.1-flash-live-preview` greets and prompts in its own voice via native `generate_reply(...)`; no separate worker TTS voice is used (requires the `charan632-dev/agents` Google plugin fork)
-- `Achird` is the default Gemini Live voice for Wingstop ordering because it sounds the most friendly and approachable for fast-food calls
+- `Achernar` is the default Gemini Live voice for Wingstop ordering — a warm, clear female voice. Other options: `Achird` (friendly and approachable), `Sulafat` (warmer hospitality tone), `Kore` (calmer, firmer tone).
 - good alternatives are `Sulafat` for a warmer hospitality tone and `Kore` for a calmer, firmer tone
 - `OPENAI_API_KEY` belongs only in the worker or shared server-side env files
 - `GOOGLE_API_KEY` belongs only in the worker or shared server-side env files
@@ -116,7 +118,9 @@ and not just the worker startup provider log.
 - `API_PORT`: API bind port
 - `ALLOWED_ORIGINS`: comma-separated browser origins allowed to call the API
 - `ALLOWED_ORIGIN_REGEX`: optional regex allowlist for browser origins
-- `VOIXAI_DB_PATH`: optional SQLite path for persisted orders/calls/sessions; defaults to `.voixai/voixai.db`
+- `DATABASE_URL`: SQLAlchemy URL for the API database. Use Postgres for dev/prod, for example `postgresql+psycopg://voixai:voixai@localhost:5432/voixai`
+- `VOIXAI_DATABASE_URL`: optional VoixAI-specific alias for `DATABASE_URL`
+- `VOIXAI_DB_PATH`: optional SQLite path used only when `DATABASE_URL`/`VOIXAI_DATABASE_URL` are unset; defaults to `.voixai/voixai.db`
 
 Local development note:
 
@@ -126,4 +130,10 @@ Local development note:
 
 The API uses these variables to mint browser participant tokens, persist room-scoped runtime config, connect the web client to a fresh room for each new order, and dispatch the Python agent by name.
 
-For the current Wingstop scenario, the API also serves the backend-backed menu lookup, order validation, and pricing endpoints used by the agent runtime.
+For the current Wingstop scenario, the API also serves the backend-backed menu lookup, order validation, pricing, and Phase 1 persistence endpoints used by the agent runtime.
+
+Phase 1 persistence note:
+
+- `apps/api` uses SQLAlchemy models and Alembic migrations.
+- SQLite remains the deterministic offline/test path.
+- Postgres is selected by setting `DATABASE_URL`; no provider API keys are needed for persistence tests.

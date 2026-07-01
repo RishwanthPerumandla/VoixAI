@@ -1,0 +1,1748 @@
+{
+  "schema_version": "2.0",
+  "restaurant_profile": {
+    "name": "Voix Wings Demo",
+    "scenario": "wingstop_style_inbound_ordering",
+    "disclaimer": "Demo catalog for VoixAI reliability testing. Not an official Wingstop menu.",
+    "currency": "USD",
+    "tax_rate": 0.0825,
+    "default_ready_minutes": 20,
+    "supports_pickup": true,
+    "supports_delivery": false
+  },
+  "categories": [
+    {
+      "id": "specials",
+      "name": "Specials"
+    },
+    {
+      "id": "wing_combos",
+      "name": "Wing Combos"
+    },
+    {
+      "id": "wings_by_the_piece",
+      "name": "Wings By The Piece"
+    },
+    {
+      "id": "boneless_wings",
+      "name": "Boneless Wings"
+    },
+    {
+      "id": "crispy_tenders",
+      "name": "Crispy Tenders"
+    },
+    {
+      "id": "chicken_sandwich",
+      "name": "Chicken Sandwich"
+    },
+    {
+      "id": "group_packs",
+      "name": "Group Packs"
+    },
+    {
+      "id": "fries",
+      "name": "Fries"
+    },
+    {
+      "id": "sides",
+      "name": "Sides"
+    },
+    {
+      "id": "dips",
+      "name": "Dips"
+    },
+    {
+      "id": "drinks",
+      "name": "Drinks"
+    },
+    {
+      "id": "desserts",
+      "name": "Desserts"
+    }
+  ],
+  "flavors": [
+    {
+      "id": "plain",
+      "name": "Plain",
+      "flavor_type": "none",
+      "heat_level": 0,
+      "available": true,
+      "aliases": ["no sauce"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "lemon_pepper",
+      "name": "Lemon Pepper",
+      "flavor_type": "dry_rub",
+      "heat_level": 1,
+      "available": true,
+      "aliases": ["lemon pepper"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "garlic_parmesan",
+      "name": "Garlic Parmesan",
+      "flavor_type": "dry_rub",
+      "heat_level": 1,
+      "available": true,
+      "aliases": ["garlic parm", "garlic parmesan"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "mild",
+      "name": "Mild",
+      "flavor_type": "sauce",
+      "heat_level": 1,
+      "available": true,
+      "aliases": [],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "original_hot",
+      "name": "Original Hot",
+      "flavor_type": "sauce",
+      "heat_level": 3,
+      "available": true,
+      "aliases": ["hot", "original hot"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "cajun",
+      "name": "Cajun",
+      "flavor_type": "sauce",
+      "heat_level": 3,
+      "available": true,
+      "aliases": ["original cajun", "cajun rub"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "louisiana_rub",
+      "name": "Louisiana Rub",
+      "flavor_type": "dry_rub",
+      "heat_level": 2,
+      "available": true,
+      "aliases": ["voodoo rub"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "hickory_smoked_bbq",
+      "name": "Hickory Smoked BBQ",
+      "flavor_type": "sauce",
+      "heat_level": 1,
+      "available": true,
+      "aliases": ["bbq", "barbecue"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "hawaiian",
+      "name": "Hawaiian",
+      "flavor_type": "sauce",
+      "heat_level": 1,
+      "available": true,
+      "aliases": [],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "mango_habanero",
+      "name": "Mango Habanero",
+      "flavor_type": "sauce",
+      "heat_level": 4,
+      "available": true,
+      "aliases": ["mango hab", "mango habanero"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "spicy_korean_q",
+      "name": "Spicy Korean Q",
+      "flavor_type": "sauce",
+      "heat_level": 3,
+      "available": true,
+      "aliases": ["korean", "korean q"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "atomic",
+      "name": "Atomic",
+      "flavor_type": "sauce",
+      "heat_level": 5,
+      "available": true,
+      "aliases": [],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    },
+    {
+      "id": "hot_honey_rub",
+      "name": "Hot Honey Rub",
+      "flavor_type": "dry_rub",
+      "heat_level": 2,
+      "available": true,
+      "aliases": ["hot honey", "hot honey rub"],
+      "allowed_for_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich"]
+    }
+  ],
+  "modifier_groups": [
+    {
+      "id": "piece_preference",
+      "name": "Wing Piece Preference",
+      "applies_to_item_types": ["classic_wings"],
+      "required": false,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "mixed",
+          "name": "Mixed Pieces",
+          "price_delta": 0.0,
+          "aliases": ["mixed pieces", "regular pieces"]
+        },
+        {
+          "id": "all_flats",
+          "name": "All Flats",
+          "price_delta": 1.99,
+          "aliases": ["all flats", "flats only"]
+        },
+        {
+          "id": "all_drums",
+          "name": "All Drums",
+          "price_delta": 1.99,
+          "aliases": ["all drums", "drums only"]
+        }
+      ]
+    },
+    {
+      "id": "wing_cook_preference",
+      "name": "Wing Cook Preference",
+      "applies_to_item_types": ["classic_wings", "boneless_wings", "crispy_tenders"],
+      "required": false,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "regular_cook",
+          "name": "Regular Cook",
+          "price_delta": 0.0,
+          "aliases": ["regular", "regular cook"]
+        },
+        {
+          "id": "well_done",
+          "name": "Well Done",
+          "price_delta": 0.0,
+          "aliases": ["well done"]
+        },
+        {
+          "id": "extra_crispy",
+          "name": "Extra Crispy",
+          "price_delta": 0.0,
+          "aliases": ["extra crispy"]
+        }
+      ]
+    },
+    {
+      "id": "dip_selection",
+      "name": "Dip Selection",
+      "applies_to_item_types": ["classic_wings", "boneless_wings", "crispy_tenders", "chicken_sandwich", "combos", "group_packs", "veggie_sticks"],
+      "required": false,
+      "max_select": 4,
+      "options": [
+        {
+          "id": "ranch",
+          "name": "Ranch",
+          "price_delta": 0.0,
+          "aliases": ["ranch", "add ranch"]
+        },
+        {
+          "id": "blue_cheese",
+          "name": "Blue Cheese",
+          "price_delta": 0.0,
+          "aliases": ["blue cheese", "bleu cheese"]
+        },
+        {
+          "id": "honey_mustard",
+          "name": "Honey Mustard",
+          "price_delta": 0.0,
+          "aliases": ["honey mustard"]
+        },
+        {
+          "id": "cheese_sauce",
+          "name": "Cheese Sauce",
+          "price_delta": 0.0,
+          "aliases": ["cheese", "cheese sauce"]
+        }
+      ]
+    },
+    {
+      "id": "combo_side_selection",
+      "name": "Combo Side Selection",
+      "applies_to_item_types": ["combos"],
+      "required": true,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "regular_seasoned_fries",
+          "name": "Regular Seasoned Fries",
+          "price_delta": 0.0,
+          "aliases": ["fries", "regular fries"]
+        },
+        {
+          "id": "large_seasoned_fries",
+          "name": "Large Seasoned Fries",
+          "price_delta": 1.99,
+          "aliases": ["large fries"]
+        },
+        {
+          "id": "veggie_sticks",
+          "name": "Veggie Sticks",
+          "price_delta": 0.0,
+          "aliases": ["veggies", "veggie sticks"]
+        },
+        {
+          "id": "cajun_fried_corn",
+          "name": "Cajun Fried Corn",
+          "price_delta": 1.49,
+          "aliases": ["corn", "fried corn"]
+        },
+        {
+          "id": "cheese_fries",
+          "name": "Cheese Fries",
+          "price_delta": 2.50,
+          "aliases": ["cheese fries"]
+        },
+        {
+          "id": "louisiana_voodoo_fries",
+          "name": "Louisiana Voodoo Fries",
+          "price_delta": 3.00,
+          "aliases": ["voodoo fries"]
+        },
+        {
+          "id": "buffalo_ranch_fries",
+          "name": "Buffalo Ranch Fries",
+          "price_delta": 3.00,
+          "aliases": ["buffalo ranch fries"]
+        }
+      ]
+    },
+    {
+      "id": "combo_drink_selection",
+      "name": "Combo Drink Selection",
+      "applies_to_item_types": ["combos"],
+      "required": true,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "coke",
+          "name": "Coke",
+          "price_delta": 0.0,
+          "aliases": ["coca cola", "coca-cola"]
+        },
+        {
+          "id": "diet_coke",
+          "name": "Diet Coke",
+          "price_delta": 0.0,
+          "aliases": ["diet coke", "diet coca cola"]
+        },
+        {
+          "id": "sprite",
+          "name": "Sprite",
+          "price_delta": 0.0,
+          "aliases": []
+        },
+        {
+          "id": "dr_pepper",
+          "name": "Dr Pepper",
+          "price_delta": 0.0,
+          "aliases": ["doctor pepper"]
+        },
+        {
+          "id": "lemonade",
+          "name": "Lemonade",
+          "price_delta": 0.0,
+          "aliases": []
+        },
+        {
+          "id": "iced_tea",
+          "name": "Iced Tea",
+          "price_delta": 0.0,
+          "aliases": ["sweet tea", "ice tea"]
+        },
+        {
+          "id": "bottled_water",
+          "name": "Bottled Water",
+          "price_delta": 0.0,
+          "aliases": ["water", "bottled water"]
+        }
+      ]
+    },
+    {
+      "id": "fry_cook_preference",
+      "name": "Fry Cook Preference",
+      "applies_to_item_types": ["fries"],
+      "required": false,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "regular_cook",
+          "name": "Regular Cook",
+          "price_delta": 0.0,
+          "aliases": ["regular", "regular cook"]
+        },
+        {
+          "id": "well_done",
+          "name": "Well Done",
+          "price_delta": 0.0,
+          "aliases": ["well done"]
+        },
+        {
+          "id": "extra_crispy",
+          "name": "Extra Crispy",
+          "price_delta": 0.0,
+          "aliases": ["extra crispy"]
+        }
+      ]
+    },
+    {
+      "id": "fry_seasoning_level",
+      "name": "Fry Seasoning Level",
+      "applies_to_item_types": ["fries"],
+      "required": false,
+      "max_select": 1,
+      "options": [
+        {
+          "id": "regular_seasoning",
+          "name": "Regular Seasoning",
+          "price_delta": 0.0,
+          "aliases": ["regular", "regular seasoning"]
+        },
+        {
+          "id": "light_seasoning",
+          "name": "Light Seasoning",
+          "price_delta": 0.0,
+          "aliases": ["light", "light seasoning"]
+        },
+        {
+          "id": "extra_seasoning",
+          "name": "Extra Seasoning",
+          "price_delta": 0.0,
+          "aliases": ["extra", "extra seasoning"]
+        },
+        {
+          "id": "no_seasoning",
+          "name": "No Seasoning",
+          "price_delta": 0.0,
+          "aliases": ["none", "no seasoning"]
+        }
+      ]
+    },
+    {
+      "id": "fry_add_ons",
+      "name": "Fry Add-Ons",
+      "applies_to_item_types": ["fries"],
+      "required": false,
+      "max_select": 4,
+      "options": [
+        {
+          "id": "cheese_sauce",
+          "name": "Cheese Sauce",
+          "price_delta": 1.49,
+          "aliases": ["cheese", "cheese sauce"]
+        },
+        {
+          "id": "ranch",
+          "name": "Ranch",
+          "price_delta": 1.49,
+          "aliases": ["ranch"]
+        },
+        {
+          "id": "buffalo_ranch",
+          "name": "Buffalo Ranch",
+          "price_delta": 1.49,
+          "aliases": ["buffalo ranch"]
+        },
+        {
+          "id": "cajun_seasoning",
+          "name": "Cajun Seasoning",
+          "price_delta": 0.99,
+          "aliases": ["cajun", "cajun seasoning"]
+        }
+      ]
+    }
+  ],
+  "item_templates": [
+    {
+      "id": "classic_wings_6",
+      "name": "6 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 8.99,
+      "available": true,
+      "piece_count": 6,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 16,
+      "aliases": ["6 bone in wings", "six bone in wings", "6 regular wings", "six classic wings"]
+    },
+    {
+      "id": "classic_wings_8",
+      "name": "8 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 11.49,
+      "available": true,
+      "piece_count": 8,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 16,
+      "aliases": ["8 bone in wings", "eight bone in wings", "8 regular wings", "eight classic wings"]
+    },
+    {
+      "id": "classic_wings_10",
+      "name": "10 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 13.99,
+      "available": true,
+      "piece_count": 10,
+      "included_flavor_count": 2,
+      "included_dip_count": 1,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 17,
+      "aliases": ["10 bone in wings", "ten bone in wings", "10 regular wings", "ten classic wings"]
+    },
+    {
+      "id": "classic_wings_15",
+      "name": "15 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 20.99,
+      "available": true,
+      "piece_count": 15,
+      "included_flavor_count": 2,
+      "included_dip_count": 2,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 18,
+      "aliases": ["15 bone in wings", "fifteen bone in wings", "15 regular wings", "fifteen classic wings"]
+    },
+    {
+      "id": "classic_wings_20",
+      "name": "20 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 27.99,
+      "available": true,
+      "piece_count": 20,
+      "included_flavor_count": 3,
+      "included_dip_count": 2,
+      "max_flavors": 3,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 20,
+      "aliases": ["20 bone in wings", "twenty bone in wings", "20 regular wings", "twenty classic wings"]
+    },
+    {
+      "id": "classic_wings_30",
+      "name": "30 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 40.99,
+      "available": true,
+      "piece_count": 30,
+      "included_flavor_count": 3,
+      "included_dip_count": 3,
+      "max_flavors": 3,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 24,
+      "aliases": ["30 bone in wings", "thirty bone in wings", "30 regular wings", "thirty classic wings"]
+    },
+    {
+      "id": "classic_wings_50",
+      "name": "50 Classic Wings",
+      "category_id": "wings_by_the_piece",
+      "item_type": "classic_wings",
+      "base_price": 66.99,
+      "available": true,
+      "piece_count": 50,
+      "included_flavor_count": 4,
+      "included_dip_count": 4,
+      "max_flavors": 4,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 30,
+      "aliases": ["50 bone in wings", "fifty bone in wings", "50 regular wings", "fifty classic wings"]
+    },
+    {
+      "id": "boneless_wings_6",
+      "name": "6 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 7.99,
+      "available": true,
+      "piece_count": 6,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 15,
+      "aliases": ["6 boneless wings", "six boneless wings", "6 naked wings"]
+    },
+    {
+      "id": "boneless_wings_8",
+      "name": "8 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 10.49,
+      "available": true,
+      "piece_count": 8,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 15,
+      "aliases": ["8 boneless wings", "eight boneless wings", "8 naked wings"]
+    },
+    {
+      "id": "boneless_wings_10",
+      "name": "10 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 12.99,
+      "available": true,
+      "piece_count": 10,
+      "included_flavor_count": 2,
+      "included_dip_count": 1,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 16,
+      "aliases": ["10 boneless wings", "ten boneless wings", "10 naked wings"]
+    },
+    {
+      "id": "boneless_wings_15",
+      "name": "15 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 18.99,
+      "available": true,
+      "piece_count": 15,
+      "included_flavor_count": 2,
+      "included_dip_count": 2,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 17,
+      "aliases": ["15 boneless wings", "fifteen boneless wings", "15 naked wings"]
+    },
+    {
+      "id": "boneless_wings_20",
+      "name": "20 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 24.99,
+      "available": true,
+      "piece_count": 20,
+      "included_flavor_count": 3,
+      "included_dip_count": 2,
+      "max_flavors": 3,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 19,
+      "aliases": ["20 boneless wings", "twenty boneless wings", "20 naked wings"]
+    },
+    {
+      "id": "boneless_wings_30",
+      "name": "30 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 36.99,
+      "available": true,
+      "piece_count": 30,
+      "included_flavor_count": 3,
+      "included_dip_count": 3,
+      "max_flavors": 3,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 23,
+      "aliases": ["30 boneless wings", "thirty boneless wings", "30 naked wings"]
+    },
+    {
+      "id": "boneless_wings_50",
+      "name": "50 Boneless Wings",
+      "category_id": "boneless_wings",
+      "item_type": "boneless_wings",
+      "base_price": 58.99,
+      "available": true,
+      "piece_count": 50,
+      "included_flavor_count": 4,
+      "included_dip_count": 4,
+      "max_flavors": 4,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 28,
+      "aliases": ["50 boneless wings", "fifty boneless wings", "50 naked wings"]
+    },
+    {
+      "id": "crispy_tenders_3",
+      "name": "3 Crispy Tenders",
+      "category_id": "crispy_tenders",
+      "item_type": "crispy_tenders",
+      "base_price": 7.49,
+      "available": true,
+      "piece_count": 3,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 15,
+      "aliases": ["3 tenders", "three tenders", "3 strips"]
+    },
+    {
+      "id": "crispy_tenders_4",
+      "name": "4 Crispy Tenders",
+      "category_id": "crispy_tenders",
+      "item_type": "crispy_tenders",
+      "base_price": 9.49,
+      "available": true,
+      "piece_count": 4,
+      "included_flavor_count": 1,
+      "included_dip_count": 1,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 15,
+      "aliases": ["4 tenders", "four tenders", "4 strips"]
+    },
+    {
+      "id": "crispy_tenders_6",
+      "name": "6 Crispy Tenders",
+      "category_id": "crispy_tenders",
+      "item_type": "crispy_tenders",
+      "base_price": 13.49,
+      "available": true,
+      "piece_count": 6,
+      "included_flavor_count": 2,
+      "included_dip_count": 1,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 17,
+      "aliases": ["6 tenders", "six tenders", "6 strips"]
+    },
+    {
+      "id": "crispy_tenders_10",
+      "name": "10 Crispy Tenders",
+      "category_id": "crispy_tenders",
+      "item_type": "crispy_tenders",
+      "base_price": 21.99,
+      "available": true,
+      "piece_count": 10,
+      "included_flavor_count": 2,
+      "included_dip_count": 2,
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection"],
+      "prep_time_minutes": 22,
+      "aliases": ["10 tenders", "ten tenders", "10 strips"]
+    },
+    {
+      "id": "chicken_sandwich",
+      "name": "Chicken Sandwich",
+      "category_id": "chicken_sandwich",
+      "item_type": "chicken_sandwich",
+      "base_price": 6.99,
+      "available": true,
+      "piece_count": 1,
+      "included_flavor_count": 1,
+      "included_dip_count": 0,
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection"],
+      "optional_slots": ["dip_selection"],
+      "modifier_group_ids": ["dip_selection"],
+      "prep_time_minutes": 14,
+      "aliases": ["chicken sandwich", "sandwich"]
+    },
+    {
+      "id": "regular_seasoned_fries",
+      "name": "Regular Seasoned Fries",
+      "category_id": "fries",
+      "item_type": "fries",
+      "base_price": 3.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "modifier_group_ids": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "prep_time_minutes": 10,
+      "aliases": ["regular fries", "fries", "seasoned fries"]
+    },
+    {
+      "id": "large_seasoned_fries",
+      "name": "Large Seasoned Fries",
+      "category_id": "fries",
+      "item_type": "fries",
+      "base_price": 5.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "modifier_group_ids": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "prep_time_minutes": 11,
+      "aliases": ["large fries", "big fries"]
+    },
+    {
+      "id": "cheese_fries",
+      "name": "Cheese Fries",
+      "category_id": "fries",
+      "item_type": "fries",
+      "base_price": 5.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "modifier_group_ids": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "prep_time_minutes": 11,
+      "aliases": ["cheese fries"]
+    },
+    {
+      "id": "louisiana_voodoo_fries",
+      "name": "Louisiana Voodoo Fries",
+      "category_id": "fries",
+      "item_type": "fries",
+      "base_price": 6.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "modifier_group_ids": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "prep_time_minutes": 12,
+      "aliases": ["voodoo fries"]
+    },
+    {
+      "id": "buffalo_ranch_fries",
+      "name": "Buffalo Ranch Fries",
+      "category_id": "fries",
+      "item_type": "fries",
+      "base_price": 6.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "modifier_group_ids": ["fry_cook_preference", "fry_seasoning_level", "fry_add_ons"],
+      "prep_time_minutes": 12,
+      "aliases": ["buffalo ranch fries"]
+    },
+    {
+      "id": "veggie_sticks",
+      "name": "Veggie Sticks",
+      "category_id": "sides",
+      "item_type": "sides",
+      "base_price": 3.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": ["dip_selection"],
+      "modifier_group_ids": ["dip_selection"],
+      "prep_time_minutes": 5,
+      "aliases": ["veggies", "veggie sticks"]
+    },
+    {
+      "id": "cajun_fried_corn",
+      "name": "Cajun Fried Corn",
+      "category_id": "sides",
+      "item_type": "sides",
+      "base_price": 4.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 8,
+      "aliases": ["corn", "fried corn"]
+    },
+    {
+      "id": "baked_rolls",
+      "name": "Baked Rolls",
+      "category_id": "sides",
+      "item_type": "sides",
+      "base_price": 3.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 6,
+      "aliases": ["rolls", "baked roll"]
+    },
+    {
+      "id": "regular_ranch",
+      "name": "Regular Ranch",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 1.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["ranch", "small ranch", "regular ranch"]
+    },
+    {
+      "id": "large_ranch",
+      "name": "Large Ranch",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 4.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["large ranch", "big ranch"]
+    },
+    {
+      "id": "regular_blue_cheese",
+      "name": "Regular Blue Cheese",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 1.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["blue cheese", "regular blue cheese", "small blue cheese"]
+    },
+    {
+      "id": "large_blue_cheese",
+      "name": "Large Blue Cheese",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 4.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["large blue cheese", "big blue cheese"]
+    },
+    {
+      "id": "regular_honey_mustard",
+      "name": "Regular Honey Mustard",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 1.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["honey mustard", "regular honey mustard"]
+    },
+    {
+      "id": "regular_cheese_sauce",
+      "name": "Regular Cheese Sauce",
+      "category_id": "dips",
+      "item_type": "dips",
+      "base_price": 1.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 0,
+      "aliases": ["cheese sauce", "regular cheese sauce"]
+    },
+    {
+      "id": "fountain_drink_20oz",
+      "name": "Fountain Drink 20oz",
+      "category_id": "drinks",
+      "item_type": "drinks",
+      "base_price": 2.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 1,
+      "aliases": ["20 oz drink", "small drink", "20oz fountain", "fountain drink"]
+    },
+    {
+      "id": "fountain_drink_32oz",
+      "name": "Fountain Drink 32oz",
+      "category_id": "drinks",
+      "item_type": "drinks",
+      "base_price": 3.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 1,
+      "aliases": ["32 oz drink", "large drink", "32oz fountain", "large fountain"]
+    },
+    {
+      "id": "bottled_water",
+      "name": "Bottled Water",
+      "category_id": "drinks",
+      "item_type": "drinks",
+      "base_price": 2.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 1,
+      "aliases": ["water", "bottled water"]
+    },
+    {
+      "id": "brownie",
+      "name": "Brownie",
+      "category_id": "desserts",
+      "item_type": "desserts",
+      "base_price": 2.99,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 1,
+      "aliases": ["brownie"]
+    },
+    {
+      "id": "triple_chocolate_chunk_brownie",
+      "name": "Triple Chocolate Chunk Brownie",
+      "category_id": "desserts",
+      "item_type": "desserts",
+      "base_price": 3.49,
+      "available": true,
+      "required_slots": [],
+      "optional_slots": [],
+      "modifier_group_ids": [],
+      "prep_time_minutes": 1,
+      "aliases": ["triple chocolate brownie", "chocolate chunk brownie"]
+    }
+  ],
+  "combo_templates": [
+    {
+      "id": "classic_combo_6",
+      "name": "6 Piece Classic Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 12.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_wings",
+        "piece_count": 6,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 18,
+      "aliases": ["6 wing combo", "6 piece classic combo", "six wing combo", "classic wing combo"]
+    },
+    {
+      "id": "classic_combo_8",
+      "name": "8 Piece Classic Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 15.49,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_wings",
+        "piece_count": 8,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 18,
+      "aliases": ["8 wing combo", "8 piece classic combo", "eight wing combo"]
+    },
+    {
+      "id": "classic_combo_10",
+      "name": "10 Piece Classic Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 17.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_wings",
+        "piece_count": 10,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 19,
+      "aliases": ["10 wing combo", "10 piece classic combo", "ten wing combo"]
+    },
+    {
+      "id": "boneless_combo_6",
+      "name": "6 Piece Boneless Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 11.99,
+      "available": true,
+      "main_component": {
+        "component_type": "boneless_wings",
+        "piece_count": 6,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 17,
+      "aliases": ["6 boneless wing combo", "six boneless combo", "6 boneless combo"]
+    },
+    {
+      "id": "boneless_combo_8",
+      "name": "8 Piece Boneless Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 14.49,
+      "available": true,
+      "main_component": {
+        "component_type": "boneless_wings",
+        "piece_count": 8,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 18,
+      "aliases": ["8 boneless wing combo", "eight boneless combo", "8 boneless combo"]
+    },
+    {
+      "id": "boneless_combo_10",
+      "name": "10 Piece Boneless Wing Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 16.99,
+      "available": true,
+      "main_component": {
+        "component_type": "boneless_wings",
+        "piece_count": 10,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 2,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 19,
+      "aliases": ["10 boneless wing combo", "ten boneless combo", "10 boneless combo"]
+    },
+    {
+      "id": "tenders_combo_3",
+      "name": "3 Piece Tenders Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 11.49,
+      "available": true,
+      "main_component": {
+        "component_type": "crispy_tenders",
+        "piece_count": 3,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 17,
+      "aliases": ["3 tender combo", "three tender combo", "3 strip combo"]
+    },
+    {
+      "id": "tenders_combo_4",
+      "name": "4 Piece Tenders Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 13.49,
+      "available": true,
+      "main_component": {
+        "component_type": "crispy_tenders",
+        "piece_count": 4,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 1
+      },
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["wing_cook_preference", "dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 17,
+      "aliases": ["4 tender combo", "four tender combo", "4 strip combo"]
+    },
+    {
+      "id": "chicken_sandwich_combo",
+      "name": "Chicken Sandwich Combo",
+      "category_id": "wing_combos",
+      "item_type": "combo",
+      "base_price": 10.99,
+      "available": true,
+      "main_component": {
+        "component_type": "chicken_sandwich",
+        "piece_count": 1,
+        "required": true
+      },
+      "included_components": {
+        "side_count": 1,
+        "drink_count": 1,
+        "dip_count": 0
+      },
+      "max_flavors": 1,
+      "required_slots": ["flavor_selection", "combo_side_selection", "combo_drink_selection"],
+      "optional_slots": ["dip_selection"],
+      "modifier_group_ids": ["dip_selection", "combo_side_selection", "combo_drink_selection"],
+      "rules": {
+        "allows_piece_preference": false,
+        "allows_all_flats": false,
+        "allows_all_drums": false,
+        "requires_side": true,
+        "requires_drink": true
+      },
+      "prep_time_minutes": 16,
+      "aliases": ["chicken sandwich combo", "sandwich combo"]
+    }
+  ],
+  "group_pack_templates": [
+    {
+      "id": "meal_for_2_15pc",
+      "name": "15 Piece Meal for 2",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 29.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 15,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 2,
+        "dip_count": 2
+      },
+      "max_flavors": 2,
+      "serves": 2,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 22,
+      "aliases": ["meal for 2", "15 piece meal for 2", "15 pc meal for 2"]
+    },
+    {
+      "id": "family_pack_24pc",
+      "name": "24 Piece Family Pack",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 42.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 24,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 3,
+        "dip_count": 3
+      },
+      "max_flavors": 3,
+      "serves": 4,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 24,
+      "aliases": ["family pack", "24 piece family pack", "24 pc family pack"]
+    },
+    {
+      "id": "crew_pack_30pc",
+      "name": "30 Piece Crew Pack",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 52.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 30,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 3,
+        "dip_count": 3
+      },
+      "max_flavors": 3,
+      "serves": 5,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 26,
+      "aliases": ["crew pack", "30 piece crew pack", "30 pc crew pack"]
+    },
+    {
+      "id": "party_pack_50pc",
+      "name": "50 Piece Party Pack",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 84.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 50,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 4,
+        "dip_count": 4
+      },
+      "max_flavors": 4,
+      "serves": 8,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 30,
+      "aliases": ["party pack", "50 piece party pack", "50 pc party pack"]
+    },
+    {
+      "id": "party_pack_75pc",
+      "name": "75 Piece Party Pack",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 119.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 75,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 5,
+        "dip_count": 5
+      },
+      "max_flavors": 5,
+      "serves": 12,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 35,
+      "aliases": ["75 piece party pack", "75 pc party pack"]
+    },
+    {
+      "id": "party_pack_100pc",
+      "name": "100 Piece Party Pack",
+      "category_id": "group_packs",
+      "item_type": "group_pack",
+      "base_price": 159.99,
+      "available": true,
+      "main_component": {
+        "component_type": "classic_or_boneless_choice",
+        "piece_count": 100,
+        "required": true,
+        "allow_classic": true,
+        "allow_boneless": true
+      },
+      "included_components": {
+        "side_count": 6,
+        "dip_count": 6
+      },
+      "max_flavors": 6,
+      "serves": 16,
+      "required_slots": ["flavor_selection", "combo_side_selection"],
+      "optional_slots": ["piece_preference", "wing_cook_preference", "dip_selection"],
+      "modifier_group_ids": ["piece_preference", "wing_cook_preference", "dip_selection", "combo_side_selection"],
+      "rules": {
+        "allows_piece_preference": true,
+        "allows_all_flats": true,
+        "allows_all_drums": true,
+        "requires_side": true,
+        "requires_drink": false,
+        "wing_type_required": true
+      },
+      "prep_time_minutes": 40,
+      "aliases": ["100 piece party pack", "100 pc party pack", "hundred piece pack"]
+    }
+  ],
+  "validation_rules": [
+    {
+      "id": "required_slots_filled",
+      "description": "All required_slots must be filled before pricing/confirmation",
+      "severity": "error"
+    },
+    {
+      "id": "item_exists",
+      "description": "Referenced item must exist in catalog",
+      "severity": "error"
+    },
+    {
+      "id": "item_available",
+      "description": "Item must be marked as available",
+      "severity": "error"
+    },
+    {
+      "id": "flavor_exists",
+      "description": "Referenced flavor must exist in catalog",
+      "severity": "error"
+    },
+    {
+      "id": "flavor_available",
+      "description": "Flavor must be marked as available",
+      "severity": "error"
+    },
+    {
+      "id": "flavor_allowed_for_item_type",
+      "description": "Flavor must be allowed for the item type being ordered",
+      "severity": "error"
+    },
+    {
+      "id": "flavor_count_within_max",
+      "description": "Number of flavors selected must not exceed max_flavors for the item",
+      "severity": "error"
+    },
+    {
+      "id": "modifier_exists",
+      "description": "Referenced modifier option must exist in catalog",
+      "severity": "error"
+    },
+    {
+      "id": "modifier_available",
+      "description": "Modifier option must be available",
+      "severity": "error"
+    },
+    {
+      "id": "modifier_allowed_for_item_type",
+      "description": "Modifier group must be applicable to the item type being ordered",
+      "severity": "error"
+    },
+    {
+      "id": "all_flats_allowed_only_for_classic_wings",
+      "description": "All flats piece preference is only available for classic bone-in wings",
+      "severity": "error"
+    },
+    {
+      "id": "all_drums_allowed_only_for_classic_wings",
+      "description": "All drums piece preference is only available for classic bone-in wings",
+      "severity": "error"
+    },
+    {
+      "id": "piece_preference_allowed_only_for_classic_wings",
+      "description": "Piece preference modifier is only available for classic bone-in wings",
+      "severity": "error"
+    },
+    {
+      "id": "cook_preference_valid_for_item_type",
+      "description": "Cook preference must be valid for the selected item type",
+      "severity": "error"
+    },
+    {
+      "id": "combo_requires_side",
+      "description": "Combo orders must include a side selection",
+      "severity": "error"
+    },
+    {
+      "id": "combo_requires_drink",
+      "description": "Combo orders must include a drink selection",
+      "severity": "error"
+    },
+    {
+      "id": "group_pack_requires_wing_type",
+      "description": "Group pack orders must specify classic or boneless wing type",
+      "severity": "error"
+    },
+    {
+      "id": "group_pack_flavor_limit",
+      "description": "Group pack flavor count must not exceed max_flavors",
+      "severity": "error"
+    },
+    {
+      "id": "fries_cannot_have_wing_flavor",
+      "description": "Fry items cannot have wing flavor selections applied",
+      "severity": "error"
+    },
+    {
+      "id": "drinks_cannot_have_cook_preference",
+      "description": "Drink items cannot have cook preference modifiers applied",
+      "severity": "error"
+    },
+    {
+      "id": "desserts_cannot_have_cook_preference",
+      "description": "Dessert items cannot have cook preference modifiers applied",
+      "severity": "error"
+    },
+    {
+      "id": "half_and_half_valid_when_max_flavors_ge_2",
+      "description": "Half and half flavor split is only valid when max_flavors is at least 2",
+      "severity": "warning"
+    }
+  ],
+  "pricing_rules": [
+    {
+      "id": "base_price",
+      "description": "Item priced at catalog base_price",
+      "rule_type": "base"
+    },
+    {
+      "id": "piece_preference_upcharge",
+      "description": "All flats and all drums piece preference selections incur an additional charge",
+      "rule_type": "modifier_upcharge"
+    },
+    {
+      "id": "side_upgrade",
+      "description": "Upgrading to a premium side option in a combo incurs additional charge",
+      "rule_type": "modifier_upcharge"
+    },
+    {
+      "id": "extra_dips_beyond_included",
+      "description": "Dips ordered beyond the included_dip_count are charged individually",
+      "rule_type": "modifier_upcharge"
+    },
+    {
+      "id": "fry_add_ons",
+      "description": "Fry add-on selections incur additional charges",
+      "rule_type": "modifier_upcharge"
+    },
+    {
+      "id": "tax_applied",
+      "description": "Tax is applied at the configured tax_rate on the subtotal",
+      "rule_type": "calculation"
+    },
+    {
+      "id": "quantity_multiplied",
+      "description": "Line item total is base price plus modifier deltas multiplied by quantity",
+      "rule_type": "calculation"
+    }
+  ],
+  "synonyms": [
+    {
+      "input": "bone in",
+      "maps_to": "classic_wings"
+    },
+    {
+      "input": "bone-in",
+      "maps_to": "classic_wings"
+    },
+    {
+      "input": "regular wings",
+      "maps_to": "classic_wings"
+    },
+    {
+      "input": "traditional wings",
+      "maps_to": "classic_wings"
+    },
+    {
+      "input": "naked wings",
+      "maps_to": "boneless_wings"
+    },
+    {
+      "input": "strips",
+      "maps_to": "crispy_tenders"
+    },
+    {
+      "input": "tenders",
+      "maps_to": "crispy_tenders"
+    },
+    {
+      "input": "fries",
+      "maps_to": "regular_seasoned_fries"
+    },
+    {
+      "input": "large fries",
+      "maps_to": "large_seasoned_fries"
+    },
+    {
+      "input": "corn",
+      "maps_to": "cajun_fried_corn"
+    },
+    {
+      "input": "rolls",
+      "maps_to": "baked_rolls"
+    },
+    {
+      "input": "coke",
+      "maps_to": "coke"
+    },
+    {
+      "input": "water",
+      "maps_to": "bottled_water"
+    },
+    {
+      "input": "soda",
+      "maps_to": "combo_drink_selection"
+    },
+    {
+      "input": "drink",
+      "maps_to": "combo_drink_selection"
+    },
+    {
+      "input": "side",
+      "maps_to": "combo_side_selection"
+    },
+    {
+      "input": "dip",
+      "maps_to": "dip_selection"
+    },
+    {
+      "input": "sauce",
+      "maps_to": "dip_selection"
+    }
+  ]
+}

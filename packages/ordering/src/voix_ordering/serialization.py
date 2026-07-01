@@ -17,9 +17,9 @@ from .state_machine import derive_phase
 
 def _get_primary_style(order: OrderState) -> str | None:
     for line in order.items:
-        style = MENU_ITEMS[line.item_id].order_style
-        if style:
-            return style
+        item = MENU_ITEMS.get(line.item_id)
+        if item and item.order_style:
+            return item.order_style
     return None
 
 
@@ -32,8 +32,8 @@ def _get_primary_flavor(order: OrderState) -> str | None:
 
 def _get_primary_drink(order: OrderState) -> str | None:
     for line in order.items:
-        menu_item = MENU_ITEMS[line.item_id]
-        if menu_item.item_kind == "drink":
+        menu_item = MENU_ITEMS.get(line.item_id)
+        if menu_item and menu_item.item_kind == "drink":
             return menu_item.display_name
 
         for modifier_id in line.selected_modifier_ids:
@@ -43,17 +43,17 @@ def _get_primary_drink(order: OrderState) -> str | None:
 
 
 def _serialize_line_item(line: OrderLineItem) -> dict[str, object]:
-    menu_item = MENU_ITEMS[line.item_id]
+    menu_item = MENU_ITEMS.get(line.item_id)
     return {
         "line_id": line.line_id,
         "item_id": line.item_id,
-        "name": menu_item.display_name,
-        "category": menu_item.category,
+        "name": menu_item.display_name if menu_item else line.item_id,
+        "category": menu_item.category if menu_item else "unknown",
         "quantity": line.quantity,
         "flavors": _flavor_names(line.selected_flavor_ids),
         "modifiers": _modifier_names(line.selected_modifier_ids),
         "notes": line.notes or None,
-        "style": menu_item.order_style,
+        "style": menu_item.order_style if menu_item else None,
     }
 
 
@@ -66,7 +66,7 @@ def serialize_order_state(order: OrderState, *, include_history: bool = True) ->
     embeds prior snapshots, and the payload grows exponentially per mutation.
     """
     payload: dict[str, object] = {
-        "items": [MENU_ITEMS[line.item_id].display_name for line in order.items],
+        "items": [MENU_ITEMS[line.item_id].display_name if line.item_id in MENU_ITEMS else line.item_id for line in order.items],
         "line_items": [_serialize_line_item(line) for line in order.items],
         "modifiers": order.modifiers,
         "quantity": sum(line.quantity for line in order.items) or order.quantity,
@@ -102,8 +102,9 @@ def summarize_order_state(order: OrderState) -> str:
 
     line_summaries: list[str] = []
     for line in order.items:
-        menu_item = MENU_ITEMS[line.item_id]
-        detail_parts: list[str] = [f"{line.quantity} {menu_item.display_name}"]
+        menu_item = MENU_ITEMS.get(line.item_id)
+        item_name = menu_item.display_name if menu_item else line.item_id
+        detail_parts: list[str] = [f"{line.quantity} {item_name}"]
         flavors = _flavor_names(line.selected_flavor_ids)
         modifiers = _modifier_names(line.selected_modifier_ids)
         if flavors:

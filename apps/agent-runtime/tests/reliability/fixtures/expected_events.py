@@ -41,5 +41,9 @@ PRIMARY_CATEGORIES = [
     "confirmation_gate",
     "pricing_repricing",
     "session_lifecycle",
+    "split_flavor",
+    "mid_order_correction",
+    "escalation",
+    "idempotent_confirm",
 ]
 

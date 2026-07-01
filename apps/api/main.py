@@ -3,8 +3,9 @@ import hashlib
 import json
 import logging
 import os
-import random
+import re
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,8 +17,6 @@ from livekit.api import AccessToken, VideoGrants
 from livekit.protocol.agent_dispatch import RoomAgentDispatch
 from livekit.protocol.room import RoomConfiguration
 
-# The ordering domain (menu, pricing, validation, order state) is the single
-# source of truth, shared with the agent runtime via the `voix-ordering` package.
 from voix_ordering import (
     FLAVOR_OPTIONS,
     MENU_ITEMS,
@@ -39,7 +38,18 @@ from voix_ordering.menu import (
 )
 from voix_ordering.validation import _validation_errors_for_line
 
-from storage import CallRecord, DuplicateKeyError, OrderRecord, build_storage
+from services import (
+    ConversationSessionService,
+    CustomerService,
+    MenuSeedService,
+    OrderService,
+    StoreService,
+    format_money,
+    line_inputs_from_quote,
+    make_public_code,
+    normalize_phone,
+)
+from storage import CallRecord, OrderRecord, build_storage
 
 logger = logging.getLogger("voixai.api")
 
@@ -56,6 +66,7 @@ load_dotenv(ROOT_DIR / "apps" / "agent-runtime" / ".env")
 load_dotenv(API_DIR / ".env", override=True)
 
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")
+LIVEKIT_PUBLIC_URL = os.getenv("LIVEKIT_PUBLIC_URL", LIVEKIT_URL)
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 AGENT_NAME = os.getenv("AGENT_NAME", "my-agent")
@@ -177,8 +188,8 @@ class OrderSubmitResponse(BaseModel):
 
 
 def _session_config_path(room_name: str) -> Path:
-    safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in room_name).strip("-")
-    return SESSION_CONFIG_DIR / f"{safe_name or 'default-room'}.json"
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", room_name).strip("-") or "default-room"
+    return SESSION_CONFIG_DIR / f"{safe_name}.json"
 
 
 def _order_state_from_payload(payload: OrderPayload) -> OrderState:
@@ -217,6 +228,18 @@ def _closest_menu_suggestions(raw_name: str) -> list[str]:
     return suggest_item_names(raw_name, limit=3)
 
 
+def _api_validation_messages(errors: list[str]) -> list[str]:
+    messages: list[str] = []
+    for error in errors:
+        if error.startswith("combo_side_selection is required"):
+            messages.append("This combo requires a side selection.")
+        elif error.startswith("combo_drink_selection is required"):
+            messages.append("This combo requires a drink selection.")
+        else:
+            messages.append(error)
+    return messages
+
+
 def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:
     canonical = json.dumps(payload.model_dump(mode="json"), sort_keys=True)
     digest = hashlib.sha256(f"{room_name}\n{canonical}".encode("utf-8")).hexdigest()
@@ -224,7 +247,7 @@ def _derive_idempotency_key(room_name: str, payload: OrderPayload) -> str:
 
 
 def _new_order_number() -> str:
-    return f"MOCK-{random.randint(10001, 99999)}"
+    return f"MOCK-{uuid4().hex[:12].upper()}"
 
 
 def _order_record_to_response(record: OrderRecord, *, idempotent_replay: bool) -> "OrderSubmitResponse":
@@ -297,7 +320,84 @@ class CallSummary(BaseModel):
 
 class CallDetail(CallSummary):
     transcript: list[TranscriptTurn] = Field(default_factory=list)
+    recording_url: str | None = None
+    call_intent: str | None = None
     error: str | None = None
+
+
+class TurnAppendRequest(BaseModel):
+    speaker: str = Field(min_length=1)
+    text: str = ""
+    ts_start: float | None = None
+    ts_end: float | None = None
+    stt_confidence: float | None = None
+    state_node: str | None = None
+    intent: str | None = None
+
+
+class TurnResponse(BaseModel):
+    id: str
+    seq: int
+    speaker: str
+    text: str
+    ts_start: float | None = None
+    ts_end: float | None = None
+    stt_confidence: float | None = None
+    state_node: str | None = None
+    intent: str | None = None
+
+
+class EventRequest(BaseModel):
+    ts: float
+    type: str = Field(min_length=1)
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class EventResponse(BaseModel):
+    id: str
+    call_id: str
+    ts: float
+    type: str
+    payload: dict[str, object]
+
+
+class ConversationSessionResponse(BaseModel):
+    call_id: str
+    room_name: str
+    current_node: str | None = None
+    outcome: str | None = None
+
+
+class ConversationNodeUpdateRequest(BaseModel):
+    room_name: str = Field(min_length=1)
+    current_node: str = Field(min_length=1)
+
+
+class ConversationIdentifyRequest(BaseModel):
+    call_id: str = Field(min_length=1)
+    room_name: str = Field(min_length=1)
+    caller_id: str | None = None
+    phone: str | None = None
+
+
+class ConversationIdentifyResponse(BaseModel):
+    call_id: str
+    room_name: str
+    current_node: str | None = None
+    customer_id: str | None = None
+    phone: str | None = None
+    name: str | None = None
+    is_returning: bool = False
+    last_order_code: str | None = None
+    last_order_summary: str | None = None
+
+
+class ConversationNameRequest(BaseModel):
+    call_id: str = Field(min_length=1)
+    room_name: str = Field(min_length=1)
+    customer_id: str | None = None
+    phone: str | None = None
+    name: str = Field(min_length=1)
 
 
 class CallListResponse(BaseModel):
@@ -345,15 +445,21 @@ class AnalyticsOverview(BaseModel):
     failed_calls: int
     success_rate: float
     containment_rate: float
+    completion_rate: float
     orders_placed: int
     revenue_total: str
+    aov: str
     avg_duration_seconds: float
     avg_turns: float
     avg_sentiment: float | None
+    p50_latency_seconds: float | None
+    p95_latency_seconds: float | None
     transfers: int
     abandoned: int
+    abandonment_rate: float
     outcomes: dict[str, int]
     sentiment_breakdown: dict[str, int]
+    intent_distribution: dict[str, int]
     series: list[TimeBucket]
 
 
@@ -405,14 +511,44 @@ def _call_to_detail(record: CallRecord) -> CallDetail:
     return CallDetail(
         **_call_to_summary(record).model_dump(),
         transcript=[TranscriptTurn(**t) for t in turns if isinstance(t, dict)],
+        recording_url=record.recording_url,
+        call_intent=record.call_intent,
         error=record.error,
     )
+
+
+def _conversation_session_to_response(row) -> ConversationSessionResponse:
+    return ConversationSessionResponse(
+        call_id=row.call_id,
+        room_name=row.room_name,
+        current_node=row.current_node,
+        outcome=row.outcome,
+    )
+
+
+def _latest_order_summary(order) -> str | None:
+    if order is None:
+        return None
+    return f"{order.public_code} ({order.status}, total {format_money(order.total)}, ETA {order.eta_minutes} minutes)"
 
 
 _SERVER_STARTED_AT = time.time()
 
 
-app = FastAPI(title="VoixAI MVP API", version="0.2.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    from kitchen_ticker import KitchenTicker
+
+    storage = build_storage()
+    ticker = KitchenTicker(session_factory=storage._Session)
+    ticker.start()
+    try:
+        yield
+    finally:
+        await ticker.stop()
+
+
+app = FastAPI(title="VoixAI MVP API", version="0.2.0", lifespan=_lifespan)
 allow_origins = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
 allow_origin_regex = ALLOWED_ORIGIN_REGEX
 
@@ -488,7 +624,7 @@ async def resolve_menu_selection(payload: MenuResolveRequest) -> MenuResolveResp
             selected_modifier_ids=modifier_ids,
             notes=(payload.special_instructions or "").strip(),
         )
-        line_errors = _validation_errors_for_line(line)
+        line_errors = _api_validation_messages(_validation_errors_for_line(line))
 
     return MenuResolveResponse(
         item_id=item_id,
@@ -556,12 +692,84 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
 
     key = payload.idempotency_key or _derive_idempotency_key(payload.room_name, payload.order)
 
+    # Check for existing idempotent replay before building the record.
     existing = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
     if existing is not None:
         return _order_record_to_response(existing, idempotent_replay=True)
 
     quote = build_price_quote(order)
     order_json = json.dumps(payload.order.model_dump(mode="json"))
+    order_payload = payload.order.model_dump(mode="json")
+
+    if hasattr(ORDER_STORAGE, "_Session"):
+        for _ in range(5):
+            try:
+                with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+                    existing_order = OrderService(session)._by_idempotency_key(key)
+                    if existing_order is not None:
+                        record = OrderRecord(
+                            order_number=existing_order.public_code,
+                            idempotency_key=existing_order.idempotency_key or key,
+                            room_name=existing_order.room_name or payload.room_name,
+                            status=existing_order.status,
+                            subtotal=f"${existing_order.subtotal:,.2f}",
+                            tax=f"${existing_order.tax:,.2f}",
+                            total=f"${existing_order.total:,.2f}",
+                            eta_minutes=existing_order.eta_minutes,
+                            order_json=existing_order.order_json,
+                            kitchen_ticket=existing_order.kitchen_ticket,
+                            created_at=(existing_order.placed_at or existing_order.updated_at).timestamp(),
+                        )
+                        return _order_record_to_response(record, idempotent_replay=True)
+
+                    MenuSeedService(session).seed_menu()
+                    store = StoreService(session).get_default_store()
+                    customer = None
+                    if payload.order.phone.strip():
+                        customer = CustomerService(session).upsert_by_phone(
+                            payload.order.phone,
+                            name=payload.order.customer_name,
+                            preferred_language=payload.order.language,
+                        )
+                    order_number = make_public_code(session)
+                    kitchen_ticket = _build_kitchen_ticket(order, quote, order_number)
+                    draft = OrderService(session).create_draft(
+                        public_code=order_number,
+                        customer=customer,
+                        store=store,
+                        room_name=payload.room_name,
+                        idempotency_key=key,
+                    )
+                    OrderService(session).mutate_lines(
+                        draft,
+                        line_inputs_from_quote(order_payload, quote.line_items),
+                        subtotal=quote.subtotal,
+                        tax=quote.tax,
+                        total=quote.total,
+                        eta_minutes=quote.eta_minutes,
+                        order_json=order_json,
+                        kitchen_ticket=kitchen_ticket,
+                    )
+                    confirmed = OrderService(session).confirm(draft, idempotency_key=key)
+                    session.commit()
+                    logger.info("Persisted order %s for room %s", confirmed.public_code, payload.room_name)
+                    record = OrderRecord(
+                        order_number=confirmed.public_code,
+                        idempotency_key=confirmed.idempotency_key or key,
+                        room_name=confirmed.room_name or payload.room_name,
+                        status=confirmed.status,
+                        subtotal=f"${confirmed.subtotal:,.2f}",
+                        tax=f"${confirmed.tax:,.2f}",
+                        total=f"${confirmed.total:,.2f}",
+                        eta_minutes=confirmed.eta_minutes,
+                        order_json=confirmed.order_json,
+                        kitchen_ticket=confirmed.kitchen_ticket,
+                        created_at=(confirmed.placed_at or confirmed.updated_at).timestamp(),
+                    )
+                    return _order_record_to_response(record, idempotent_replay=False)
+            except Exception:
+                logger.exception("SQLAlchemy order persist failed; retrying if possible")
+        raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
 
     for _ in range(5):
         order_number = _new_order_number()
@@ -578,17 +786,15 @@ async def submit_order(payload: OrderSubmitRequest) -> OrderSubmitResponse:
             kitchen_ticket=_build_kitchen_ticket(order, quote, order_number),
             created_at=time.time(),
         )
-        try:
-            await asyncio.to_thread(ORDER_STORAGE.insert_order, candidate)
-        except DuplicateKeyError:
-            # Either the idempotency key was written concurrently (replay) or the
-            # random order number collided (retry with a new one).
-            replay = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
-            if replay is not None:
-                return _order_record_to_response(replay, idempotent_replay=True)
-            continue
-        logger.info("Persisted order %s for room %s", candidate.order_number, candidate.room_name)
-        return _order_record_to_response(candidate, idempotent_replay=False)
+        result = await asyncio.to_thread(ORDER_STORAGE.insert_order, candidate)
+        if result is not None:
+            logger.info("Persisted order %s for room %s", candidate.order_number, candidate.room_name)
+            return _order_record_to_response(candidate, idempotent_replay=False)
+        # INSERT OR IGNORE returned rowcount 0 — either a concurrent idempotent
+        # replay beat us, or an astronomically unlikely UUID collision.
+        replay = await asyncio.to_thread(ORDER_STORAGE.get_order_by_idempotency_key, key)
+        if replay is not None:
+            return _order_record_to_response(replay, idempotent_replay=True)
 
     raise HTTPException(status_code=500, detail="Could not persist the order. Please retry.")
 
@@ -658,6 +864,108 @@ async def get_order(order_number: str) -> OrderSubmitResponse:
     return _order_record_to_response(record, idempotent_replay=False)
 
 
+@app.get("/api/conversation/sessions/{call_id}", response_model=ConversationSessionResponse)
+async def get_conversation_session(call_id: str) -> ConversationSessionResponse:
+    def _get():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            from models import CallSession
+            from sqlalchemy import select
+
+            row = session.scalar(select(CallSession).where(CallSession.call_id == call_id))
+            return _conversation_session_to_response(row) if row else None
+
+    record = await asyncio.to_thread(_get)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Conversation session not found.")
+    return record
+
+
+@app.patch("/api/conversation/sessions/{call_id}/node", response_model=ConversationSessionResponse)
+async def update_conversation_node(
+    call_id: str,
+    payload: ConversationNodeUpdateRequest,
+) -> ConversationSessionResponse:
+    def _update():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            row = ConversationSessionService(session).set_current_node(
+                call_id=call_id,
+                room_name=payload.room_name,
+                current_node=payload.current_node,
+            )
+            session.commit()
+            return _conversation_session_to_response(row)
+
+    return await asyncio.to_thread(_update)
+
+
+@app.post("/api/conversation/identify", response_model=ConversationIdentifyResponse)
+async def identify_conversation_caller(
+    payload: ConversationIdentifyRequest,
+) -> ConversationIdentifyResponse:
+    def _identify():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            call_session, customer, is_returning, latest_order = ConversationSessionService(session).identify(
+                call_id=payload.call_id,
+                room_name=payload.room_name,
+                caller_id=payload.caller_id,
+                phone=payload.phone,
+            )
+            call_session.current_node = "IDENTIFY"
+            session.commit()
+            return ConversationIdentifyResponse(
+                call_id=call_session.call_id,
+                room_name=call_session.room_name,
+                current_node=call_session.current_node,
+                customer_id=customer.id if customer else None,
+                phone=customer.phone if customer else normalize_phone(payload.phone or payload.caller_id),
+                name=customer.name if customer else None,
+                is_returning=is_returning,
+                last_order_code=latest_order.public_code if latest_order else None,
+                last_order_summary=_latest_order_summary(latest_order),
+            )
+
+    return await asyncio.to_thread(_identify)
+
+
+@app.post("/api/conversation/name", response_model=ConversationIdentifyResponse)
+async def persist_conversation_name(
+    payload: ConversationNameRequest,
+) -> ConversationIdentifyResponse:
+    def _persist_name():
+        with ORDER_STORAGE._lock, ORDER_STORAGE._Session() as session:  # type: ignore[attr-defined]
+            conversation = ConversationSessionService(session).start_or_resume(
+                call_id=payload.call_id,
+                room_name=payload.room_name,
+                current_node="IDENTIFY",
+            )
+            customer = None
+            if payload.customer_id:
+                from models import Customer
+
+                customer = session.get(Customer, payload.customer_id)
+            if customer is None:
+                phone = normalize_phone(payload.phone)
+                if not phone:
+                    raise HTTPException(status_code=422, detail="A phone number is required to persist the caller name.")
+                customer = CustomerService(session).upsert_by_phone(phone)
+            customer = CustomerService(session).attach_name(customer.id, payload.name)
+            latest_order = OrderService(session).get_latest_by_phone(customer.phone)
+            session.commit()
+            return ConversationIdentifyResponse(
+                call_id=conversation.call_id,
+                room_name=conversation.room_name,
+                current_node=conversation.current_node,
+                customer_id=customer.id,
+                phone=customer.phone,
+                name=customer.name,
+                is_returning=True,
+                last_order_code=latest_order.public_code if latest_order else None,
+                last_order_summary=_latest_order_summary(latest_order),
+            )
+
+    return await asyncio.to_thread(_persist_name)
+
+
 @app.post("/api/calls", response_model=CallDetail)
 async def start_call(payload: CallStartRequest) -> CallDetail:
     """Open a call record at session start. Idempotent on ``call_id`` — a retried
@@ -668,29 +976,30 @@ async def start_call(payload: CallStartRequest) -> CallDetail:
 
     now = time.time()
     record = CallRecord(
-        call_id=payload.call_id,
-        room_name=payload.room_name,
-        scenario=payload.scenario,
-        channel=payload.channel,
-        voice_provider=payload.voice_provider,
-        llm_model=payload.llm_model,
-        status="in_progress",
-        outcome="unknown",
-        started_at=payload.started_at or now,
-        ended_at=None,
-        duration_seconds=None,
-        turn_count=0,
-        sentiment=None,
-        language=payload.language,
-        order_number=None,
-        transcript_json="[]",
-        guardrail_violations=0,
-        error=None,
-        created_at=now,
-    )
-    try:
-        await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
-    except DuplicateKeyError:
+            call_id=payload.call_id,
+            room_name=payload.room_name,
+            scenario=payload.scenario,
+            channel=payload.channel,
+            voice_provider=payload.voice_provider,
+            llm_model=payload.llm_model,
+            status="in_progress",
+            outcome="unknown",
+            call_intent=None,
+            started_at=payload.started_at or now,
+            ended_at=None,
+            duration_seconds=None,
+            turn_count=0,
+            sentiment=None,
+            language=payload.language,
+            order_number=None,
+            recording_url=None,
+            transcript_json="[]",
+            guardrail_violations=0,
+            error=None,
+            created_at=now,
+        )
+    result = await asyncio.to_thread(ORDER_STORAGE.insert_call, record)
+    if result is None:
         replay = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, payload.call_id)
         if replay is not None:
             return _call_to_detail(replay)
@@ -744,6 +1053,77 @@ async def get_call(call_id: str) -> CallDetail:
     return _call_to_detail(record)
 
 
+# ── Transcript turns (per-turn persistence) ──────────────────────────────
+
+
+class TurnAppendBatchRequest(BaseModel):
+    turns: list[TurnAppendRequest]
+
+
+@app.post("/api/calls/{call_id}/turns", status_code=201)
+async def append_call_turns(call_id: str, payload: TurnAppendBatchRequest) -> dict[str, int]:
+    """Append one or more transcript turns. The caller supplies the seq number."""
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    next_seq = await asyncio.to_thread(ORDER_STORAGE.count_turns, call_id)
+    inserted = 0
+    for i, turn in enumerate(payload.turns):
+        ok = await asyncio.to_thread(
+            ORDER_STORAGE.insert_turn,
+            call_id,
+            next_seq + i + 1,
+            turn.speaker,
+            turn.text,
+            ts_start=turn.ts_start,
+            ts_end=turn.ts_end,
+            stt_confidence=turn.stt_confidence,
+            state_node=turn.state_node,
+            intent=turn.intent,
+        )
+        if ok:
+            inserted += 1
+    return {"inserted": inserted}
+
+
+@app.get("/api/calls/{call_id}/transcript", response_model=list[TurnResponse])
+async def get_call_transcript(call_id: str) -> list[TurnResponse]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    turns = await asyncio.to_thread(ORDER_STORAGE.list_turns, call_id)
+    return [TurnResponse(**t) for t in turns]
+
+
+# ── Analytics events ──────────────────────────────────────────────────────
+
+
+@app.post("/api/calls/{call_id}/events", status_code=201)
+async def record_call_event(call_id: str, payload: EventRequest) -> dict[str, str]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    ok = await asyncio.to_thread(
+        ORDER_STORAGE.insert_event,
+        call_id,
+        payload.ts,
+        payload.type,
+        dict(payload.payload),
+    )
+    if not ok:
+        raise HTTPException(status_code=409, detail="Event could not be recorded.")
+    return {"status": "ok"}
+
+
+@app.get("/api/calls/{call_id}/events", response_model=list[EventResponse])
+async def get_call_events(call_id: str) -> list[EventResponse]:
+    existing = await asyncio.to_thread(ORDER_STORAGE.get_call_by_id, call_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Call not found.")
+    events = await asyncio.to_thread(ORDER_STORAGE.list_events, call_id=call_id)
+    return [EventResponse(**e) for e in events]
+
+
 def _money_to_float(value: str) -> float:
     try:
         return float(str(value).replace("$", "").replace(",", "").strip() or 0)
@@ -771,8 +1151,8 @@ async def analytics_overview(
 
     durations = [r.duration_seconds for r in records if r.duration_seconds is not None]
     avg_duration = sum(durations) / len(durations) if durations else 0.0
-    turns = [r.turn_count for r in records if r.turn_count]
-    avg_turns = sum(turns) / len(turns) if turns else 0.0
+    turns_list = [r.turn_count for r in records if r.turn_count]
+    avg_turns = sum(turns_list) / len(turns_list) if turns_list else 0.0
     sentiments = [r.sentiment for r in records if r.sentiment is not None]
     avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else None
 
@@ -798,6 +1178,20 @@ async def analytics_overview(
         if order is not None:
             revenue += _money_to_float(order.total)
 
+    aov = revenue / orders_placed if orders_placed else 0.0
+
+    # Latency samples from call_events.
+    latency_samples = await asyncio.to_thread(ORDER_STORAGE.get_latency_samples, since)
+    p50 = None
+    p95 = None
+    if latency_samples:
+        sorted_lat = sorted(latency_samples)
+        p50 = sorted_lat[len(sorted_lat) // 2]
+        p95 = sorted_lat[int(len(sorted_lat) * 0.95) - 1]
+
+    # Intent distribution from call_sessions.call_intent.
+    intent_distribution = await asyncio.to_thread(ORDER_STORAGE.get_intent_distribution, since)
+
     # Time series buckets across the window.
     bucket_span = (window_hours * 3600) / buckets
     series: list[TimeBucket] = []
@@ -818,6 +1212,8 @@ async def analytics_overview(
 
     success_rate = (completed / len(finished)) if finished else 0.0
     containment_rate = (1 - (transfers / len(finished))) if finished else 0.0
+    completion_rate = orders_placed / total if total else 0.0
+    abandonment_rate = abandoned / total if total else 0.0
 
     return AnalyticsOverview(
         window_hours=window_hours,
@@ -827,15 +1223,21 @@ async def analytics_overview(
         failed_calls=failed,
         success_rate=round(success_rate, 4),
         containment_rate=round(containment_rate, 4),
+        completion_rate=round(completion_rate, 4),
         orders_placed=orders_placed,
         revenue_total=f"${revenue:,.2f}",
+        aov=f"${aov:,.2f}",
         avg_duration_seconds=round(avg_duration, 1),
         avg_turns=round(avg_turns, 1),
         avg_sentiment=round(avg_sentiment, 3) if avg_sentiment is not None else None,
+        p50_latency_seconds=round(p50, 3) if p50 is not None else None,
+        p95_latency_seconds=round(p95, 3) if p95 is not None else None,
         transfers=transfers,
         abandoned=abandoned,
+        abandonment_rate=round(abandonment_rate, 4),
         outcomes=outcomes,
         sentiment_breakdown=sentiment_breakdown,
+        intent_distribution=intent_distribution,
         series=series,
     )
 
@@ -959,7 +1361,7 @@ async def create_livekit_token(payload: TokenRequest) -> TokenResponse:
     )
 
     return TokenResponse(
-        livekit_url=LIVEKIT_URL,
+        livekit_url=LIVEKIT_PUBLIC_URL,
         token=token,
         room_name=payload.room_name,
     )

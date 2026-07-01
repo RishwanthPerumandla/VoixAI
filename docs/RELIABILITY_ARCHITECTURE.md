@@ -9,6 +9,19 @@ VoixAI now treats conversation and order truth as separate concerns.
 - The reducer owns state mutation.
 - Validation runs after every mutation.
 - The state machine owns lifecycle status and submit authorization.
+- The catalog at `apps/api/data/wingstop_demo_catalog.json` owns menu truth.
+
+## Catalog-Driven Validation
+
+The menu catalog replaces ad-hoc menu logic with structured validation:
+
+- **Item templates** define required slots, optional slots, max flavors, and modifier group associations. The LLM no longer needs to "know" what an item allows — it reads slot definitions from the catalog.
+- **Combo templates** encode the main component, included side/drink/dip counts, and rules (e.g., whether all-flats is allowed). Combo requirements like "must include a side and drink" are enforced by the validation engine, not prompt engineering.
+- **Modifier groups** declare which item types they apply to, whether they are required, and max selection counts. The validation engine checks modifier validity against the group definitions, eliminating item-modifier mismatch bugs.
+- **Flavors** carry an `allowed_for_item_types` list so the same flavor database serves wings, tenders, sandwiches, and fries — each with its own permitted set.
+- **Synonyms** normalize customer input ("bone in" → "classic_wings") at the catalog level so item lookups are consistent across the codebase.
+
+The validation engine in `packages/ordering/src/voix_ordering/validation.py` reads the catalog directly rather than duplicating rules in Python code. This means a menu change (new combo, new modifier, new flavor restriction) is a JSON edit — no Python changes required.
 
 ## Lifecycle
 

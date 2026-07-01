@@ -8,8 +8,18 @@ version = "0.1.0"
 description = "Minimal FastAPI service for VoixAI MVP Phase 0"
 requires-python = ">=3.10"
 dependencies = [
+    "alembic>=1.13,<2.0",
     "fastapi>=0.116,<1.0",
     "livekit-api>=1.0.7,<2.0",
+    "psycopg[binary]>=3.1,<4.0",
     "python-dotenv>=1.0,<2.0",
+    "sqlalchemy>=2.0,<3.0",
     "uvicorn>=0.35,<1.0",
+    "voix-ordering",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-dir]
+"" = "."

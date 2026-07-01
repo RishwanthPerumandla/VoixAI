@@ -7,7 +7,7 @@ import json
 import time
 import re
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -30,8 +30,12 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
-from call_recorder import finalize_call, open_call
+from call_recorder import append_turn, finalize_call, open_call, record_event
 from channels import CHANNEL_REGISTRY, DEFAULT_CHANNEL_ID, get_channel_definition
+from conversation_core.api_repository import ApiConversationRepository
+from conversation_core.frustration_monitor import FrustrationConfig, FrustrationMonitor
+from conversation_core.handoff import HANDOFF_MESSAGE, build_handoff_handler
+from conversation_core.state_machine import ConversationContext, ConversationStateMachine, InMemoryConversationRepository
 from scenarios import DEFAULT_SCENARIO_ID, SCENARIO_REGISTRY, get_scenario_definition
 from scenarios.wingstop import (
     MockOrder,
@@ -77,7 +81,7 @@ OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
 OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
 OPENAI_REALTIME_EAGERNESS = os.getenv("OPENAI_REALTIME_EAGERNESS", "medium")
 GOOGLE_REALTIME_MODEL = os.getenv("GOOGLE_REALTIME_MODEL", "gemini-3.1-flash-live-preview")
-GOOGLE_REALTIME_VOICE = os.getenv("GOOGLE_REALTIME_VOICE", "Achird")
+GOOGLE_REALTIME_VOICE = os.getenv("GOOGLE_REALTIME_VOICE", "Achernar")
 REALTIME_TEMPERATURE = float(os.getenv("REALTIME_TEMPERATURE", "0.6"))
 REALTIME_ENABLE_AFFECTIVE_DIALOG = (
     os.getenv("REALTIME_ENABLE_AFFECTIVE_DIALOG", "false").strip().lower() == "true"
@@ -85,6 +89,12 @@ REALTIME_ENABLE_AFFECTIVE_DIALOG = (
 REALTIME_ENABLE_PROACTIVITY = (
     os.getenv("REALTIME_ENABLE_PROACTIVITY", "false").strip().lower() == "true"
 )
+# Frustration / escalation thresholds
+FRUSTRATION_HARD_TRIGGER_MIN_SCORE = float(os.getenv("FRUSTRATION_HARD_TRIGGER_MIN_SCORE", "0.85"))
+FRUSTRATION_ESCALATION_MIN_SCORE = float(os.getenv("FRUSTRATION_ESCALATION_MIN_SCORE", "0.60"))
+FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION = int(os.getenv("FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION", "8"))
+FRUSTRATION_MONITOR_MIN_TURNS = int(os.getenv("FRUSTRATION_MONITOR_MIN_TURNS", "3"))
+FRUSTRATION_SUSPICIOUS_COOLDOWN = int(os.getenv("FRUSTRATION_SUSPICIOUS_COOLDOWN", "300"))
 TELEMETRY_TOPIC = "voixai.telemetry"
 # Tools `await` snapshot publishing, so cap it hard — telemetry must never stall
 # a live turn even if the LiveKit data publisher is unhealthy.
@@ -150,6 +160,7 @@ class SessionState:
     scenario_id: str = DEFAULT_SCENARIO_ID
     channel_id: str = DEFAULT_CHANNEL_ID
     order: OrderState = field(default_factory=OrderState)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     price_quote: PriceQuote | None = None
     mock_order: MockOrder | None = None
     user_turn_metrics: dict[str, float | None] | None = None
@@ -168,6 +179,19 @@ class SessionState:
     telemetry_publish_failures: int = 0
     telemetry_cooldown_until: float = 0.0
     placement_failure_count: int = 0
+    conversation_context: ConversationContext | None = None
+    conversation_core: Any | None = field(default=None, repr=False, compare=False)
+    conversation_node: str | None = None
+    order_sub_node: str | None = None
+    last_intent: str | None = None
+    last_intent_confidence: float | None = None
+    last_router_slots: dict[str, object] = field(default_factory=dict)
+    conversation_clarification_count: int = 0
+    user_speaking_started_at: float | None = None
+    last_assistant_started_at: float | None = None
+    frustration_monitor: Any | None = field(default=None, repr=False, compare=False)
+    handoff_handler: Any | None = field(default=None, repr=False, compare=False)
+    handoff_message: str | None = None
 
     async def publish_snapshot(self, *, reason: str) -> None:
         await _publish_session_snapshot(self, reason=reason)
@@ -197,6 +221,9 @@ class RuntimeConfig:
     requested_voice_provider: str | None = None
     requested_voice_engine: str | None = None
     fallback_reason: str | None = None
+    caller_id: str | None = None
+    caller_phone: str | None = None
+    frustration_config: FrustrationConfig = field(default_factory=FrustrationConfig)
 
 def _session_config_path(room_name: str) -> Path:
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", room_name).strip("-") or "default-room"
@@ -284,6 +311,12 @@ def _runtime_config_from_payload(payload: Mapping[str, object] | None) -> Runtim
         requested_voice_engine=(
             str(payload["voice_engine"]).strip().lower() if payload.get("voice_engine") else None
         ),
+        caller_id=str(payload["caller_id"]).strip() if payload.get("caller_id") else None,
+        caller_phone=(
+            str(payload.get("caller_phone", payload.get("phone", ""))).strip()
+            if payload.get("caller_phone") or payload.get("phone")
+            else None
+        ),
     )
 
 
@@ -363,6 +396,7 @@ def _runtime_profile_payload(runtime_config: RuntimeConfig) -> dict[str, object]
         "preset_label": runtime_config.preset_label,
         "comparison_label": runtime_config.comparison_label,
         "fallback_reason": runtime_config.fallback_reason,
+        "caller_id_present": bool(runtime_config.caller_id or runtime_config.caller_phone),
     }
 
 
@@ -380,6 +414,14 @@ def _snapshot_payload(session_state: SessionState, *, reason: str) -> dict[str, 
         "runtime_profile": session_state.runtime_profile,
         "user_turn_metrics": session_state.user_turn_metrics,
         "assistant_turn_metrics": session_state.assistant_turn_metrics,
+        "conversation": {
+            "current_node": session_state.conversation_node,
+            "order_sub_node": session_state.order_sub_node,
+            "last_intent": session_state.last_intent,
+            "last_intent_confidence": session_state.last_intent_confidence,
+            "last_router_slots": dict(session_state.last_router_slots),
+            "clarification_count": session_state.conversation_clarification_count,
+        },
         "transcript": list(session_state.transcript[-60:]),
     }
     payload.update(scenario.snapshot_builder(session_state))
@@ -599,6 +641,13 @@ def _runtime_config_from_env() -> RuntimeConfig:
         comparison_label=comparison_label,
         requested_voice_provider=requested_provider,
         requested_voice_engine=os.getenv("VOICE_ENGINE", "").strip().lower() or None,
+        frustration_config=FrustrationConfig(
+            hard_trigger_min_score=FRUSTRATION_HARD_TRIGGER_MIN_SCORE,
+            escalation_min_score=FRUSTRATION_ESCALATION_MIN_SCORE,
+            max_turns_before_escalation=FRUSTRATION_MAX_TURNS_BEFORE_ESCALATION,
+            monitor_min_turns=FRUSTRATION_MONITOR_MIN_TURNS,
+            suspicious_cooldown_seconds=FRUSTRATION_SUSPICIOUS_COOLDOWN,
+        ),
     )
 
 
@@ -683,7 +732,7 @@ def _log_provider_startup(runtime_config: RuntimeConfig) -> None:
 
 
 def _resolve_runtime_config(runtime_config: RuntimeConfig) -> RuntimeConfig:
-    resolved = RuntimeConfig(**asdict(runtime_config))
+    resolved = replace(runtime_config)
     if resolved.scenario_id not in SCENARIO_REGISTRY:
         logger.warning(
             "Unsupported scenario `%s`. Falling back to `%s`.",
@@ -1068,6 +1117,164 @@ def _trigger_initial_greeting(
     )
 
 
+def _build_conversation_state_machine() -> ConversationStateMachine:
+    repository = ApiConversationRepository()
+    return ConversationStateMachine(repository=repository)
+
+
+def _conversation_context_from_session(
+    *,
+    call_id: str,
+    room_name: str,
+    runtime_config: RuntimeConfig,
+) -> ConversationContext:
+    return ConversationContext(
+        call_id=call_id,
+        room_name=room_name,
+        caller_id=runtime_config.caller_id,
+        caller_phone=runtime_config.caller_phone,
+    )
+
+
+def _apply_conversation_action(
+    session_state: SessionState,
+    context: ConversationContext,
+    action,
+) -> None:
+    session_state.conversation_context = context
+    session_state.conversation_node = action.node.value
+    session_state.order_sub_node = context.order_sub_node
+    session_state.conversation_clarification_count = context.clarification_count
+    if action.router_result is not None:
+        session_state.last_intent = action.router_result.intent.value
+        session_state.last_intent_confidence = action.router_result.confidence
+        session_state.last_router_slots = dict(action.router_result.slots)
+    if context.customer_name and not session_state.order.customer_name:
+        session_state.order.customer_name = context.customer_name
+    if context.caller_phone and not session_state.order.phone:
+        session_state.order.phone = context.caller_phone
+
+
+async def _start_conversation_core(
+    session_state: SessionState,
+    *,
+    call_id: str,
+    room_name: str,
+    runtime_config: RuntimeConfig,
+) -> str:
+    fsm = _build_conversation_state_machine()
+    context = _conversation_context_from_session(
+        call_id=call_id,
+        room_name=room_name,
+        runtime_config=runtime_config,
+    )
+    try:
+        action = await asyncio.to_thread(fsm.start, context)
+    except Exception:
+        logger.exception("Conversation core startup failed; using default greeting")
+        fsm = ConversationStateMachine(repository=InMemoryConversationRepository())
+        context = _conversation_context_from_session(
+            call_id=call_id,
+            room_name=room_name,
+            runtime_config=runtime_config,
+        )
+        action = fsm.start(context)
+    session_state.conversation_core = fsm
+    context._order_state = session_state.order  # noqa — for OrderSubFSM access
+    _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, action.telemetry_events)
+    return action.message.strip() or build_initial_greeting(get_channel_definition(session_state.channel_id))
+
+
+async def _route_caller_turn(
+    session_state: SessionState,
+    turn_text: str,
+    session: Any = None,
+) -> None:
+    fsm = getattr(session_state, "conversation_core", None)
+    context = session_state.conversation_context
+    if fsm is None or context is None:
+        return
+
+    monitor = session_state.frustration_monitor
+    if monitor is not None:
+        call_duration = time.time() - (session_state.call_started_at or time.time())
+        monitor.update_turn(
+            text=turn_text,
+            state_node=context.current_node.value if context.current_node else None,
+            order_has_items=bool(session_state.order.items),
+            call_duration=call_duration,
+        )
+
+    await _check_frustration_escalation(session_state, fsm, context, turn_text, session)
+    if context.outcome == "escalated":
+        return
+
+    try:
+        action = await asyncio.to_thread(fsm.handle_turn, context, turn_text)
+    except Exception:
+        logger.debug("Conversation routing failed for caller turn", exc_info=True)
+        return
+    _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, getattr(action, "telemetry_events", ()))
+    await session_state.publish_snapshot(reason="conversation_routed")
+
+
+async def _check_frustration_escalation(
+    session_state: SessionState,
+    fsm: ConversationStateMachine,
+    context: ConversationContext,
+    turn_text: str,
+    session: Any | None = None,
+) -> None:
+    monitor = session_state.frustration_monitor
+    if monitor is None:
+        return
+    if context.outcome:
+        return
+    call_duration = time.time() - (session_state.call_started_at or time.time())
+    decision = monitor.evaluate(
+        text=turn_text,
+        call_duration=call_duration,
+    )
+    if decision is None:
+        return
+
+    action = fsm.force_escalate(context, decision)
+    fsm.record_escalation(context, decision)
+    _apply_conversation_action(session_state, context, action)
+    _emit_fsm_events(session_state, action.telemetry_events)
+    session_state.handoff_message = HANDOFF_MESSAGE
+    if session is not None:
+        try:
+            session.say(HANDOFF_MESSAGE)
+        except Exception:
+            pass
+    await session_state.publish_snapshot(reason="escalation")
+
+
+def _emit_fsm_events(session_state: SessionState, events: tuple[dict[str, object], ...]) -> None:
+    if not events:
+        return
+    call_id = session_state.call_id
+    if not call_id:
+        return
+    now = time.time()
+    for event in events:
+        event_type = str(event.get("type", ""))
+        if not event_type:
+            continue
+        asyncio.create_task(
+            asyncio.to_thread(
+                record_event,
+                call_id=call_id,
+                ts=now,
+                event_type=event_type,
+                payload=dict(event),
+            )
+        )
+
+
 server = AgentServer(num_idle_processes=1)
 
 _preload_optional_realtime_plugins()
@@ -1159,7 +1366,11 @@ async def my_agent(ctx: JobContext):
 
     def _on_user_state_changed(event: UserStateChangedEvent) -> None:
         _handle_user_state_change(event)
-        if event.new_state in {"speaking", "listening"}:
+        if event.new_state == "speaking":
+            session.userdata.user_speaking_started_at = time.time()
+            away_prompt_state["sent"] = False
+            session.userdata.waiting_for_customer = False
+        elif event.new_state == "listening":
             away_prompt_state["sent"] = False
             session.userdata.waiting_for_customer = False
         elif event.new_state == "away":
@@ -1167,6 +1378,21 @@ async def my_agent(ctx: JobContext):
 
     def _on_agent_state_changed(event: AgentStateChangedEvent) -> None:
         _handle_agent_state_change(event)
+        if event.new_state == "speaking":
+            # Calculate manual latency if SDK doesn't provide it
+            user_started = session.userdata.user_speaking_started_at
+            if user_started and session.userdata.assistant_turn_metrics is None:
+                manual_e2e = time.time() - user_started
+                session.userdata.assistant_turn_metrics = {
+                    "llm_ttft": None,
+                    "tts_ttfb": None,
+                    "e2e_latency": manual_e2e,
+                    "started_speaking_at": time.time(),
+                    "stopped_speaking_at": None,
+                }
+                asyncio.create_task(
+                    _publish_session_snapshot(session.userdata, reason="assistant_turn_metrics")
+                )
 
     def _on_conversation_item(event: ConversationItemAddedEvent) -> None:
         _handle_conversation_item(event)
@@ -1178,23 +1404,35 @@ async def my_agent(ctx: JobContext):
         # we only record user/assistant text turns.
         turn_text = (getattr(item, "text_content", "") or "").strip()
         if turn_text and item.role in {"user", "assistant"}:
+            now_ts = time.time()
             session.userdata.transcript.append(
-                {"role": item.role, "text": turn_text, "ts": time.time()}
+                {"role": item.role, "text": turn_text, "ts": now_ts}
+            )
+            # Persist per-turn (fire-and-forget, best-effort).
+            asyncio.create_task(
+                asyncio.to_thread(
+                    append_turn,
+                    call_id=call_id,
+                    speaker=item.role,
+                    text=turn_text,
+                    ts_start=now_ts,
+                    state_node=session.userdata.conversation_node,
+                    intent=session.userdata.last_intent,
+                )
             )
 
         metrics = item.metrics if isinstance(item.metrics, Mapping) else None
 
         if item.role == "user":
             session.userdata.turn_count += 1
-            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+            # Collect user turn metrics for all providers
+            if metrics:
                 session.userdata.user_turn_metrics = {
-                    "transcription_delay": _metric_value(metrics.get("transcription_delay")) if metrics else None,
-                    "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")) if metrics else None,
+                    "transcription_delay": _metric_value(metrics.get("transcription_delay")),
+                    "end_of_turn_delay": _metric_value(metrics.get("end_of_turn_delay")),
                     "on_user_turn_completed_delay": _metric_value(
                         metrics.get("on_user_turn_completed_delay")
-                    )
-                    if metrics
-                    else None,
+                    ),
                 }
             else:
                 session.userdata.user_turn_metrics = None
@@ -1205,30 +1443,45 @@ async def my_agent(ctx: JobContext):
                     if customer_requested_handoff(turn_text)
                     else "Customer sounded frustrated during the order."
                 )
-
-                async def _force_handoff_response() -> None:
-                    await force_handoff(session.userdata, reason=reason, complaint=complaint)
-                    _respond_with_handoff(session, runtime_config)
-
-                asyncio.create_task(_force_handoff_response())
+                asyncio.create_task(force_handoff(session.userdata, reason=reason, complaint=complaint))
+                try:
+                    session.say(HANDOFF_MESSAGE)
+                except Exception:
+                    pass
+            asyncio.create_task(_route_caller_turn(session.userdata, turn_text, session))
             asyncio.create_task(
                 _publish_session_snapshot(session.userdata, reason="user_turn_metrics")
             )
         elif item.role == "assistant":
-            if runtime_config.voice_provider == VOICE_PROVIDER_CLASSIC:
+            # Collect metrics for all voice providers
+            if metrics:
                 session.userdata.assistant_turn_metrics = {
-                    "llm_ttft": _metric_value(metrics.get("llm_node_ttft")) if metrics else None,
-                    "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")) if metrics else None,
-                    "e2e_latency": _metric_value(metrics.get("e2e_latency")) if metrics else None,
-                    "started_speaking_at": _metric_value(metrics.get("started_speaking_at"))
-                    if metrics
-                    else None,
-                    "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at"))
-                    if metrics
-                    else None,
+                    "llm_ttft": _metric_value(metrics.get("llm_node_ttft")),
+                    "tts_ttfb": _metric_value(metrics.get("tts_node_ttfb")),
+                    "e2e_latency": _metric_value(metrics.get("e2e_latency")),
+                    "started_speaking_at": _metric_value(metrics.get("started_speaking_at")),
+                    "stopped_speaking_at": _metric_value(metrics.get("stopped_speaking_at")),
                 }
             else:
                 session.userdata.assistant_turn_metrics = None
+
+            # Record a latency sample (fire-and-forget).
+            e2e = _metric_value(metrics.get("e2e_latency")) if metrics else None
+            if e2e is not None:
+                asyncio.create_task(
+                    asyncio.to_thread(
+                        record_event,
+                        call_id=call_id,
+                        ts=time.time(),
+                        event_type="latency_sample",
+                        payload={
+                            "value_seconds": e2e,
+                            "phase": "assistant_turn",
+                            "voice_provider": runtime_config.voice_provider,
+                        },
+                    )
+                )
+
             assistant_text = getattr(item, "text_content", "") or ""
             session.userdata.assistant_guardrail_violations = audit_assistant_response(
                 assistant_text,
@@ -1263,6 +1516,11 @@ async def my_agent(ctx: JobContext):
     call_started_at = time.time()
     session.userdata.call_id = call_id
     session.userdata.call_started_at = call_started_at
+    session.userdata.frustration_monitor = FrustrationMonitor(
+        handoff_handler=build_handoff_handler(),
+        config=runtime_config.frustration_config,
+    )
+    session.userdata.handoff_handler = build_handoff_handler()
 
     asyncio.create_task(
         asyncio.to_thread(
@@ -1305,10 +1563,16 @@ async def my_agent(ctx: JobContext):
         room_options=_build_room_options(),
     )
     OrderStateMachine(session.userdata.order).start_greeting()
+    greeting_text = await _start_conversation_core(
+        session.userdata,
+        call_id=call_id,
+        room_name=ctx.room.name,
+        runtime_config=runtime_config,
+    )
     _trigger_initial_greeting(
         session,
         runtime_config,
-        build_initial_greeting(channel),
+        greeting_text,
     )
     await _publish_session_snapshot(session.userdata, reason="session_started")
 
