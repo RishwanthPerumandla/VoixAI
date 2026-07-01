@@ -85,7 +85,7 @@ services:
         - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
         - NEXT_PUBLIC_LIVEKIT_ROOM_NAME=voixai-mvp-demo
         - NEXT_PUBLIC_PARTICIPANT_NAME=web-user
-        - NEXT_PUBLIC_DEFAULT_VOICE_MODE=openai_realtime
+        - NEXT_PUBLIC_DEFAULT_VOICE_MODE=gemini_live
         - NEXT_PUBLIC_AGENT_NAME=my-agent
     ports:
       - "3000:3000"

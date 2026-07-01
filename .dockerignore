@@ -56,3 +56,8 @@ scripts/
 **/tests/
 **/evals/
 **/reliability/
+
+# Web-specific
+apps/web/.next
+apps/web/.turbo
+apps/web/.env.local
