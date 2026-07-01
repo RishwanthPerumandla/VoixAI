@@ -60,9 +60,9 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   supportsScreenShare: false,
   isPreConnectBufferEnabled: true,
 
-  logo: '/favicon.ico',
+  logo: '/favicon.svg',
   accent: '#c8642a',
-  logoDark: '/favicon.ico',
+  logoDark: '/favicon.svg',
   accentDark: '#ff9254',
   startButtonText: 'Start demo',
 
